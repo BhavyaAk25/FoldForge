@@ -46,6 +46,7 @@
 - Replaced the repeated hero and filler copy with short task language, collapsed the verifier and source trace by default, shortened actions, and removed repeated export warnings while preserving the physical test protocol.
 - Re-captured all three stages at the same desktop viewport and compared them with the production references. The revised flow preserves the paper/graphite design system while materially reducing vertical and reading load.
 - Full checks remain green: 76 tests, 6/6 Chromium flows, four required responsive widths, production build, and 97.48% statement / 91.01% branch coverage.
+- Refreshed production at `https://foldforge.vercel.app`; Vercel independently rebuilt the concise branch and reported deployment `dpl_CMT6rKXvcCiUM34GjyEmYEmH3rYy` as Ready.
 
 ## External gates
 
