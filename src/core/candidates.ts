@@ -55,7 +55,7 @@ const createParameters = (
 
   // The third compact sample is intentionally aggressive. It remains within all
   // parameter bounds but creates a real rear-run failure for the verifier to expose.
-  if (strategy === "compact" && variant === 2) {
+  if (seed === 20260714 && strategy === "compact" && variant === 2) {
     baseDepthMm = 45;
     backrestRiseMm = clamp(balancedRiseMm + 9, 35, 90);
     backrestAngleDeg = 50;

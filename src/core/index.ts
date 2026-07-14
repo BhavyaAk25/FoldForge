@@ -6,6 +6,7 @@ export * from "./export/fold";
 export * from "./export/svg";
 export * from "./geometry";
 export * from "./math";
+export * from "./repair";
 export * from "./result";
 export * from "./schemas";
 export * from "./scoring";

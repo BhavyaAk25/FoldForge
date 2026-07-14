@@ -135,6 +135,7 @@ describe("ordered deterministic verification", () => {
       backrestRiseMm: 50,
       backrestAngleDeg: 50,
       frontToeDepthMm: 10,
+      lipHeightMm: 18,
     };
     const report = verifyCandidate(
       candidateWith(parameters, "angle-failure"),
@@ -173,8 +174,17 @@ describe("ordered deterministic verification", () => {
       objectDepthMm: 30,
       objectMassG: 500,
       sheetHeightMm: 500,
+      targetViewingAngleDeg: 75,
     };
-    const report = verifyCandidate(baseCandidate, constraint);
+    const parameters: CandidateParameters = {
+      ...baseCandidate.parameters,
+      backrestAngleDeg: 75,
+      lipHeightMm: 11,
+    };
+    const report = verifyCandidate(
+      candidateWith(parameters, "stability-failure"),
+      constraint,
+    );
     expect(report.hardFailures).toEqual(["stability.support_polygon"]);
     expect(report.frontStabilityMarginMm).toBeLessThan(0);
   });

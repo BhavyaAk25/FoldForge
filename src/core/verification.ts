@@ -227,6 +227,29 @@ export const verifyCandidate = (
     ],
   });
 
+  const requiredLipHeightMm = Math.min(
+    18,
+    Math.max(
+      8,
+      constraint.objectDepthMm *
+        Math.cos(degreesToRadians(candidate.parameters.backrestAngleDeg)) +
+        3,
+    ),
+  );
+  const lipValid = candidate.parameters.lipHeightMm >= requiredLipHeightMm;
+  runner.run({
+    id: "retention.lip",
+    label: "Front-lip retention height",
+    passed: lipValid,
+    actual: round(candidate.parameters.lipHeightMm, 3),
+    expected: `at least ${round(requiredLipHeightMm, 3)} mm for the device depth`,
+    passMessage:
+      "The front lip meets the geometric retention-height heuristic.",
+    failMessage:
+      "The front lip is too short for the device depth at this angle.",
+    geometryRefs: ["panel-lip", "crease-base-lip"],
+  });
+
   const creaseCountValid =
     candidate.geometry.flat.creases.length <=
       constraint.maximumActiveCreaseCount &&

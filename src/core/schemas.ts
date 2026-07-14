@@ -22,7 +22,7 @@ export const DesignConstraintSchema = z
     sheetHeightMm: z.number().finite().min(250).max(500),
     printableMarginMm: boundedNumber(3, 15),
     materialProfile: z.enum(["cover_65lb", "cover_80lb", "cover_110lb"]),
-    maximumActiveCreaseCount: z.number().int().min(5).max(12),
+    maximumActiveCreaseCount: z.number().int().min(0).max(12),
     cutsAllowed: z.boolean(),
     maximumCutCount: z.number().int().min(0).max(8),
     glueAllowed: z.boolean(),
