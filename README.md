@@ -6,6 +6,8 @@ Tell FoldForge what you need to prop up and how. With live access enabled, FoldF
 
 > Describe it. Verify it. Fold it.
 
+Production: [foldforge.vercel.app](https://foldforge.vercel.app) — deployed in deterministic offline mode while live GPT-5.6 access remains gated.
+
 ## Supported scope
 
 FoldForge supports one procedural family: a continuous-strip, dual-tab, fold-flat stand for phones and light tablets up to 500 g. It varies width, base depth, backrest rise and angle, lip, tabs, and clearances within documented bounds.
@@ -104,7 +106,7 @@ FoldForge builds on the vocabulary and interchange goals of the [FOLD specificat
 
 The full GPT-5.6 Sol integration, strict prompts, schemas, safety identifier, access gate, and mocked/offline contracts are implemented. Live calls are deliberately disabled until usable API credits and model access are confirmed. GPT-5.6 Sol does not currently list free-tier API access, so local or hosted software must not imply a compliant live run until that external gate is cleared.
 
-The hosted URL will be added after Vercel authentication. Live mode cannot become active unless the API key, explicit opt-in, access code, and 32-character cookie secret are all present. The landing page remains public; the access code protects only paid model calls. Live routes also use bounded JSON bodies, best-effort per-instance rate limits, no SDK retries, and a 60-second SDK timeout; provider-side spend limits remain required for production.
+Production is deployed at [foldforge.vercel.app](https://foldforge.vercel.app). Live mode cannot become active unless the API key, explicit opt-in, access code, and 32-character cookie secret are all present. The hosted deployment deliberately sets `ENABLE_LIVE_OPENAI=false`, so it uses deterministic structured controls and cannot make paid model calls. The landing page remains public; the access code protects only paid model calls after live mode is explicitly enabled. Live routes also use bounded JSON bodies, best-effort per-instance rate limits, no SDK retries, and a 60-second SDK timeout; provider-side spend limits remain required for production.
 
 ## License
 

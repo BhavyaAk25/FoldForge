@@ -32,8 +32,14 @@
 - Re-ran the complete release matrix after hardening: 76 tests, 97.48% statement and 91.01% branch coverage, 1,000 seeded properties, all offline eval groups, 5/5 Chromium flows, exact artifact verification, production build, licence inventory, and dependency audit all pass.
 - Exercised the repaired candidate through selected-candidate export and the native print save sheet, then cancelled without writing or printing.
 
+## 2026-07-14 — production deployment
+
+- Confirmed Vercel CLI authentication, created and linked the `foldforge` project, and stored the API key, access code, and cookie-signing secret as sensitive production variables without printing their values.
+- Kept `ENABLE_LIVE_OPENAI=false` as an explicit production safety gate because usable GPT-5.6 credits/model access are not yet confirmed.
+- Vercel independently installed the locked dependencies, compiled Next.js, passed TypeScript, generated all routes, and reported deployment `dpl_CYAbwBjhNnZMNKB8BhgYdDfyBVtL` as Ready.
+- Production is aliased at `https://foldforge.vercel.app`. GitHub automatic deployment could not be attached by the CLI, but authenticated production deployment is complete.
+
 ## External gates
 
 - Physical validation is awaiting the user and remains separate from software completion.
-- Vercel deployment depends on authenticated CLI access.
 - Production live-model verification depends on GPT-5.6 Sol access and usable credits. No paid API call has been made.

@@ -9,13 +9,13 @@
 | Workshop UI, preview, exports          | Complete      | browser matrix and 5 Playwright flows             |
 | Full eval and independent review       | Complete      | all serious findings fixed; release matrix passes |
 | GitHub and draft PR                    | Complete      | public `BhavyaAk25/FoldForge`, draft PR #1        |
-| Vercel and submission package          | Auth blocked  | Vercel device login requires user interaction     |
+| Vercel and submission package          | Deployed      | production `foldforge.vercel.app` is ready        |
 | Physical prototype                     | Awaiting user | signed physical protocol result                   |
 
 ## Dependencies and blockers
 
 - Secure `OPENAI_API_KEY` is stored locally. Live calls remain gated on usable credit, model access, and explicit `ENABLE_LIVE_OPENAI=true` opt-in.
-- GitHub and Vercel authentication may require user interaction; local work continues independently.
+- Vercel production is deployed through the authenticated CLI. Automatic GitHub-to-Vercel deployment remains unlinked and is not required for the current production release.
 - Physical printing is deliberately deferred without blocking software.
 
 ## Validation cadence
