@@ -6,7 +6,7 @@
 | Deterministic geometry and kill test   | Complete      | mutation tests, artifact verifier, coverage       |
 | GPT-5.6 constraint compiler            | Offline ready | 25-case contract eval; live access blocked        |
 | Bounded repair loop                    | Complete      | 11 seeded fixtures, bounded exhaustion            |
-| Workshop UI, preview, exports          | Complete      | browser matrix and 5 Playwright flows             |
+| Workshop UI, preview, exports          | Complete      | concise audit and 6 Playwright flows              |
 | Full eval and independent review       | Complete      | all serious findings fixed; release matrix passes |
 | GitHub and draft PR                    | Complete      | public `BhavyaAk25/FoldForge`, draft PR #1        |
 | Vercel and submission package          | Deployed      | production `foldforge.vercel.app` is ready        |

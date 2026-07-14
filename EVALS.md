@@ -27,11 +27,11 @@
 | Repairable failures fixed within 3 cycles    |                              100% |          ≥80% | Pass   |
 | End-to-end pipeline                          |                           15 / 15 |      ≥12 / 15 | Pass   |
 | Full-feedback repair ablation                |                   100% vs 0% / 0% | material lift | Pass   |
-| Browser flows                                |                             5 / 5 |           all | Pass   |
+| Browser flows                                |                             6 / 6 |           all | Pass   |
 | Core statement / branch coverage             |                   97.81% / 91.05% |   ≥95% / ≥90% | Pass   |
 | Production dependency audit                  |           0 known vulnerabilities |        0 high | Pass   |
 
-The browser suite covers generation, real failure highlighting, two-cycle repair, refresh restore, exact selected-candidate finalization, stage focus/scroll landing, SVG/FOLD downloads, 1440/1280/768/390 px layouts, keyboard focus visibility, persistent sound preference, reduced motion, and malformed API data. Manual rendered inspection confirmed no horizontal overflow at any required width. Native print handling reached the operating-system save sheet from the verified export guide and was cancelled without writing a file.
+The browser suite covers editable prompt notes in controls mode, generation, real failure highlighting, two-cycle repair, refresh restore, exact selected-candidate finalization, stage focus/scroll landing, SVG/FOLD downloads, 1440/1280/768/390 px layouts, keyboard focus visibility, persistent sound preference, reduced motion, and malformed API data. Manual rendered inspection confirmed no horizontal overflow at any required width. Native print handling reached the operating-system save sheet from the verified export guide and was cancelled without writing a file.
 
 The final coverage run records 97.48% overall statements, 91.01% overall branches, 98.42% functions, and 98.29% lines. `src/core` records 97.81% statements, 91.05% branches, 98.13% functions, and 98.61% lines. Machine-readable reports are generated under ignored `artifacts/evals/` so evaluation output does not become application source.
 

@@ -126,7 +126,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(270px, 360px);
   gap: clamp(40px, 8vw, 130px);
   align-items: end;
-  padding: clamp(56px, 8vw, 120px) 0 clamp(46px, 6vw, 84px);
+  padding: clamp(42px, 6vw, 82px) 0 clamp(34px, 4vw, 58px);
 }
 
 .eyebrow {
@@ -141,9 +141,9 @@
 }
 
 .hero h1 {
-  max-width: 850px;
+  max-width: 920px;
   margin: 0;
-  font-size: clamp(2.7rem, 6vw, 6.6rem);
+  font-size: clamp(2.7rem, 6vw, 5.8rem);
   font-weight: 520;
   letter-spacing: -0.07em;
   line-height: 0.94;
@@ -151,7 +151,7 @@
 
 .hero > div > p:last-child {
   max-width: 760px;
-  margin: 30px 0 0;
+  margin: 22px 0 0;
   color: var(--muted);
   font-size: clamp(1rem, 1.5vw, 1.22rem);
   line-height: 1.6;
@@ -338,7 +338,7 @@
 .promptCard {
   display: flex;
   flex-direction: column;
-  min-height: 420px;
+  min-height: 330px;
   padding: 24px;
 }
 
@@ -369,11 +369,6 @@
 .accessBar input:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 3px;
-}
-
-.promptCard textarea:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
 }
 
 .promptModeNote,
@@ -491,24 +486,16 @@
   font-size: 0.68rem;
 }
 
-.constraintSummary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 1px;
+.specifyAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
   margin-top: 18px;
   border: 1px solid var(--border);
-  background: var(--border);
-}
-
-.constraintSummary > div {
-  display: grid;
-  gap: 5px;
-  justify-content: center;
-  padding: 20px;
   background: var(--surface-raised);
 }
 
-.constraintSummary span,
 .measurementGrid span,
 .scaleCard > span,
 .failureCard > span,
@@ -522,8 +509,17 @@
   text-transform: uppercase;
 }
 
-.constraintSummary strong {
-  font-size: 0.82rem;
+.specifyAction p {
+  margin: 0;
+  padding: 0 20px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.specifyAction .primaryButton {
+  min-width: 230px;
+  border-width: 0 0 0 1px;
 }
 
 .primaryButton,
@@ -833,6 +829,7 @@
 .inspectorHeading {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  list-style: none;
 }
 
 .inspectorHeading span {
@@ -848,6 +845,29 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.checkList summary,
+.tracePanel summary,
+.profileNote summary {
+  cursor: pointer;
+}
+
+.checkList summary::-webkit-details-marker,
+.tracePanel summary::-webkit-details-marker {
+  display: none;
+}
+
+.checkList summary::after,
+.tracePanel summary::after {
+  content: "+";
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.checkList[open] summary::after,
+.tracePanel[open] summary::after {
+  content: "−";
 }
 
 .checkList li {
@@ -901,6 +921,8 @@
 
 .tracePanel {
   margin-top: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
 }
 
 .tracePanel ol {
@@ -991,6 +1013,10 @@
   font-size: clamp(1.7rem, 3vw, 3rem);
 }
 
+.designName {
+  text-transform: capitalize;
+}
+
 .exportActions {
   flex-wrap: wrap;
   margin-top: 24px;
@@ -1048,8 +1074,7 @@
 }
 
 .legend,
-.instructions,
-.limitations ul {
+.instructions {
   margin: 22px 0 0;
   padding: 0;
 }
@@ -1094,6 +1119,19 @@
   border-top: 1px solid var(--border);
 }
 
+.profileNote summary {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.profileNote p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .instructions {
   counter-reset: instruction;
   display: grid;
@@ -1134,11 +1172,10 @@
   color: var(--warning);
 }
 
-.limitations ul {
-  display: grid;
-  gap: 10px;
+.limitations > p {
+  margin: 0;
   color: #6d4c20;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   line-height: 1.5;
 }
 
@@ -1161,14 +1198,6 @@
 
   .promptCard {
     min-height: 320px;
-  }
-
-  .constraintSummary {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .constraintSummary > button {
-    grid-column: 1 / -1;
   }
 
   .checkList ol {
@@ -1245,13 +1274,22 @@
     border-bottom: 0;
   }
 
-  .measurementGrid,
-  .constraintSummary {
+  .measurementGrid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .constraintSummary > button {
-    grid-column: 1 / -1;
+  .specifyAction {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .specifyAction p {
+    padding: 16px 18px 0;
+  }
+
+  .specifyAction .primaryButton {
+    width: 100%;
+    border-width: 1px 0 0;
   }
 
   .previewToolbar {
@@ -1298,13 +1336,8 @@
   }
 
   .fieldGrid,
-  .measurementGrid,
-  .constraintSummary {
+  .measurementGrid {
     grid-template-columns: 1fr;
-  }
-
-  .constraintSummary > button {
-    grid-column: auto;
   }
 
   .controlsCard fieldset,

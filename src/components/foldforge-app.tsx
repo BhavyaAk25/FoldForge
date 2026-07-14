@@ -527,7 +527,7 @@ export function FoldForgeApp() {
   };
 
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} id="top">
       <p
         className={styles.srOnly}
         aria-live="polite"
@@ -552,7 +552,7 @@ export function FoldForgeApp() {
             className={`${styles.statusPill} ${health?.liveAiEnabled ? styles.live : styles.offline}`}
           >
             <span aria-hidden="true" />
-            {health?.liveAiEnabled ? "GPT‑5.6 live" : "offline contracts"}
+            {health?.liveAiEnabled ? "GPT‑5.6 live" : "controls mode"}
           </span>
           <button
             className={styles.iconButton}
@@ -566,26 +566,20 @@ export function FoldForgeApp() {
         </div>
       </header>
 
-      <section className={styles.hero} id="top">
-        <div>
-          <p className={styles.eyebrow}>One strip · five creases · two slots</p>
-          <h1>Turn a flat sheet into a stand you can inspect.</h1>
-          <p>
-            FoldForge separates creative judgment from calculated fact. It
-            generates a constrained paper stand, measures failures, repairs
-            bounded parameters, and exports only geometry that passes every
-            software check.
-          </p>
-        </div>
-        <aside className={styles.physicalNotice}>
-          <span>Physical status</span>
-          <strong>Validation pending</strong>
-          <p>
-            Geometry is verified in software. Load-bearing performance is not
-            claimed until a printed stand completes the physical checklist.
-          </p>
-        </aside>
-      </section>
+      {stage === "specify" ? (
+        <section className={styles.hero}>
+          <div>
+            <p className={styles.eyebrow}>One sheet · no glue</p>
+            <h1>Design a paper stand.</h1>
+            <p>Set the device, verify the fold, and export at true scale.</p>
+          </div>
+          <aside className={styles.physicalNotice}>
+            <span>Physical test pending</span>
+            <strong>Geometry, not strength</strong>
+            <p>Print and test the stand before regular use.</p>
+          </aside>
+        </section>
+      ) : null}
 
       <nav className={styles.stageNav} aria-label="FoldForge stages">
         {(["specify", "workshop", "export"] as const).map((item, index) => {
@@ -622,8 +616,8 @@ export function FoldForgeApp() {
       {health?.liveAiEnabled && health.accessRequired && !accessGranted ? (
         <section className={styles.accessBar} aria-labelledby="access-title">
           <div>
-            <strong id="access-title">Judge access</strong>
-            <span>A short-lived HttpOnly cookie unlocks live model calls.</span>
+            <strong id="access-title">Live GPT access</strong>
+            <span>Enter the access code.</span>
           </div>
           <label>
             <span className={styles.srOnly}>Demo access code</span>
@@ -650,43 +644,39 @@ export function FoldForgeApp() {
             <div>
               <p className={styles.eyebrow}>Stage 01 / Specify</p>
               <h2 id="specify-title" ref={stageHeadingRef} tabIndex={-1}>
-                Define the physical problem.
+                Set the fit.
               </h2>
             </div>
             <p>
-              Dimensions and mass are essential. Structured controls remain the
-              source of truth while live GPT‑5.6 access is disabled.
+              {health?.liveAiEnabled
+                ? "Describe it or edit the exact dimensions."
+                : "Exact dimensions control the fit."}
             </p>
           </div>
 
           <div className={styles.specifyGrid}>
             <div className={styles.promptCard}>
-              <label htmlFor="design-prompt">
-                {health?.liveAiEnabled
-                  ? "Describe the stand"
-                  : "Natural-language prompt (live GPT only)"}
-              </label>
+              <label htmlFor="design-prompt">Describe your stand</label>
               <textarea
                 id="design-prompt"
                 value={prompt}
                 onChange={(event) => setPrompt(event.currentTarget.value)}
                 maxLength={2000}
                 rows={7}
-                disabled={!health?.liveAiEnabled}
                 required={health?.liveAiEnabled}
                 aria-describedby="prompt-mode-note"
               />
               <p className={styles.promptModeNote} id="prompt-mode-note">
                 {health?.liveAiEnabled
-                  ? "GPT‑5.6 compiles this text into the controls below."
-                  : "Offline mode does not interpret this text. Use the structured controls as the source of truth."}
+                  ? "GPT‑5.6 turns this into exact constraints."
+                  : "Saved as notes. Measurements below control this build."}
               </p>
               <div className={styles.promptFooter}>
                 <span>{prompt.length} / 2,000</span>
                 <span>
                   {compileMode === "gpt-5.6-sol"
                     ? "AI interpreted"
-                    : "not applied offline"}
+                    : "controls only"}
                 </span>
               </div>
             </div>
@@ -832,21 +822,8 @@ export function FoldForgeApp() {
             </div>
           </div>
 
-          <div className={styles.constraintSummary}>
-            <div>
-              <span>Topology</span>
-              <strong>5 creases / 2 internal cuts</strong>
-            </div>
-            <div>
-              <span>Release</span>
-              <strong>Dual tabs · no glue</strong>
-            </div>
-            <div>
-              <span>Sheet</span>
-              <strong>
-                {constraint.sheetWidthMm} × {constraint.sheetHeightMm} mm
-              </strong>
-            </div>
+          <div className={styles.specifyAction}>
+            <p>Fixed topology: 5 creases · 2 slots · dual tabs</p>
             <button
               className={styles.primaryButton}
               type="button"
@@ -858,17 +835,12 @@ export function FoldForgeApp() {
               }
               onClick={() => void generate()}
             >
-              {busy === "generate"
-                ? "Forging geometry…"
-                : "Generate candidates"}
+              {busy === "generate" ? "Forging geometry…" : "Generate 3 designs"}
               <span aria-hidden="true">→</span>
             </button>
           </div>
           <p className={styles.privacyNote}>
-            Checkpoints remain on this device for up to 24 hours. When live GPT
-            is enabled, prompts are processed by OpenAI and may be retained
-            under its API abuse-monitoring policy. Reset clears the design
-            checkpoint.
+            Saved locally for 24 hours. Live mode sends prompts to OpenAI.
           </p>
         </section>
       ) : null}
@@ -879,13 +851,10 @@ export function FoldForgeApp() {
             <div>
               <p className={styles.eyebrow}>Stage 02 / Workshop</p>
               <h2 id="workshop-title" ref={stageHeadingRef} tabIndex={-1}>
-                Inspect the evidence.
+                Compare and verify.
               </h2>
             </div>
-            <p>
-              Nine internal samples were generated. One representative from each
-              strategy is shown; only hard-check passes can be ranked.
-            </p>
+            <p>Three strategies. Only passing geometry can be exported.</p>
           </div>
 
           <div className={styles.candidateRail} aria-label="Candidate choices">
@@ -1121,8 +1090,8 @@ export function FoldForgeApp() {
                 </div>
               ) : null}
 
-              <div className={styles.checkList}>
-                <div className={styles.inspectorHeading}>
+              <details className={styles.checkList}>
+                <summary className={styles.inspectorHeading}>
                   <strong>Verifier</strong>
                   <span>
                     {
@@ -1132,7 +1101,7 @@ export function FoldForgeApp() {
                     }{" "}
                     passed
                   </span>
-                </div>
+                </summary>
                 <ol>
                   {activeEntry.report.checks.map((check) => (
                     <li key={check.id} data-status={check.status}>
@@ -1154,15 +1123,15 @@ export function FoldForgeApp() {
                     </li>
                   ))}
                 </ol>
-              </div>
+              </details>
             </aside>
           </div>
 
-          <section className={styles.tracePanel} aria-labelledby="trace-title">
-            <div className={styles.inspectorHeading}>
+          <details className={styles.tracePanel}>
+            <summary className={styles.inspectorHeading}>
               <strong id="trace-title">Source-labelled design trace</strong>
               <span>AI never overrides code</span>
-            </div>
+            </summary>
             <ol>
               {trace.map((event, index) => (
                 <li key={`${event.source}-${index}`}>
@@ -1179,7 +1148,7 @@ export function FoldForgeApp() {
                 </li>
               ))}
             </ol>
-          </section>
+          </details>
 
           <div className={styles.stageFooter}>
             <button
@@ -1187,7 +1156,7 @@ export function FoldForgeApp() {
               type="button"
               onClick={() => setStage("specify")}
             >
-              ← Revise constraints
+              ← Edit dimensions
             </button>
             <button
               className={styles.primaryButton}
@@ -1195,9 +1164,7 @@ export function FoldForgeApp() {
               disabled={busy !== null || !activeEntry.report.valid}
               onClick={() => void finalize()}
             >
-              {busy === "finalize"
-                ? "Revalidating…"
-                : "Prepare selected verified export"}
+              {busy === "finalize" ? "Revalidating…" : "Export selected design"}
               <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -1210,23 +1177,23 @@ export function FoldForgeApp() {
             <div>
               <p className={styles.eyebrow}>Stage 03 / Export</p>
               <h2 id="export-title" ref={stageHeadingRef} tabIndex={-1}>
-                Make the digital plan physical.
+                Download and test.
               </h2>
             </div>
-            <p>
-              The server rebuilt this geometry from parameters and re-ran every
-              hard check before enabling either download.
-            </p>
+            <p>Verified geometry. Physical strength still requires testing.</p>
           </div>
 
           <div className={styles.exportHero}>
             <div>
               <span className={styles.successBadge}>Verified in software</span>
-              <h3>
-                {finalization.winner.candidate.strategy} /{" "}
-                {finalization.winner.candidate.id}
+              <h3 className={styles.designName}>
+                {finalization.winner.candidate.strategy} design
               </h3>
-              <p>{finalization.narrative.summary}</p>
+              <p>
+                Score{" "}
+                {finalization.winner.report.scoreBreakdown.total.toFixed(1)}.
+                All hard checks passed.
+              </p>
               <div className={styles.exportActions}>
                 <button
                   className={styles.primaryButton}
@@ -1260,17 +1227,14 @@ export function FoldForgeApp() {
                 <i />
               </div>
               <strong>50 mm</strong>
-              <p>
-                Print at 100% / actual size. Measure the SVG calibration line
-                before cutting.
-              </p>
+              <p>Print at 100%. Measure before cutting.</p>
             </div>
           </div>
 
           <div className={styles.exportGrid}>
             <section>
               <span className={styles.eyebrow}>Fold legend</span>
-              <h3>Cut once. Score first.</h3>
+              <h3>Cut and score</h3>
               <ul className={styles.legend}>
                 <li>
                   <span className={styles.cutSwatch} />
@@ -1285,15 +1249,16 @@ export function FoldForgeApp() {
                   Dashed teal — score and fold
                 </li>
               </ul>
-              <p className={styles.profileNote}>
-                FOLD export uses the FoldForge 1.2 edge profile. Slits are
-                encoded as cut edges; some consumers do not render slit-face
-                topology.
-              </p>
+              <details className={styles.profileNote}>
+                <summary>FOLD compatibility</summary>
+                <p>
+                  Slits are cut edges; some viewers omit slit-face topology.
+                </p>
+              </details>
             </section>
             <section>
               <span className={styles.eyebrow}>Assembly</span>
-              <h3>Seven deliberate moves.</h3>
+              <h3>Fold the stand</h3>
               <ol className={styles.instructions}>
                 {finalization.narrative.foldingSteps.map((step) => (
                   <li key={step}>{step}</li>
@@ -1301,8 +1266,8 @@ export function FoldForgeApp() {
               </ol>
             </section>
             <section>
-              <span className={styles.eyebrow}>Physical checklist</span>
-              <h3>Validate before regular use.</h3>
+              <span className={styles.eyebrow}>Physical test</span>
+              <h3>Test before use</h3>
               <ul className={styles.instructions}>
                 <li>
                   Print on {MATERIALS[constraint.materialProfile].label} at 100%
@@ -1322,22 +1287,13 @@ export function FoldForgeApp() {
 
           <section className={styles.limitations}>
             <div>
-              <span>Physical test required</span>
-              <h3>Software cannot measure paper strength or friction.</h3>
+              <span>Required</span>
+              <h3>Test the printed stand.</h3>
             </div>
-            <ul>
-              {finalization.narrative.limitations.map((limitation) => (
-                <li key={limitation}>{limitation}</li>
-              ))}
-              <li>
-                Test with a sacrificial device or equivalent weight before
-                regular use.
-              </li>
-              <li>
-                Stop if tabs tear, slots elongate, or the device touches the
-                rear support boundary.
-              </li>
-            </ul>
+            <p>
+              Software checks geometry, not paper strength or friction. Start
+              with an equivalent test weight.
+            </p>
           </section>
 
           <div className={styles.stageFooter}>

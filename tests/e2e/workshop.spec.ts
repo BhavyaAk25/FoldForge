@@ -11,9 +11,9 @@ test("generates, repairs, restores, finalizes, and downloads", async ({
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Generate candidates" }).click();
+  await page.getByRole("button", { name: "Generate 3 designs" }).click();
   await expect(
-    page.getByRole("heading", { name: "Inspect the evidence." }),
+    page.getByRole("heading", { name: "Compare and verify." }),
   ).toBeFocused();
   await expect(
     page.getByText("geometry.rear_run", { exact: true }),
@@ -33,24 +33,22 @@ test("generates, repairs, restores, finalizes, and downloads", async ({
 
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Inspect the evidence." }),
+    page.getByRole("heading", { name: "Compare and verify." }),
   ).toBeVisible();
   await expect(page.getByText("Repair passed", { exact: true })).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Prepare selected verified export" })
-    .click();
+  await page.getByRole("button", { name: "Export selected design" }).click();
   await expect(
-    page.getByRole("heading", { name: "Make the digital plan physical." }),
+    page.getByRole("heading", { name: "Download and test." }),
   ).toBeFocused();
   await expect(
-    page.getByRole("heading", { level: 3, name: /compact \/ compact-/ }),
+    page.getByRole("heading", { level: 3, name: "compact design" }),
   ).toBeVisible();
   await expect(
     page.getByText("Verified in software", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("Physical test required", { exact: true }),
+    page.getByRole("heading", { name: "Test the printed stand." }),
   ).toBeVisible();
 
   const svgDownloadPromise = page.waitForEvent("download");
@@ -98,6 +96,19 @@ test("has no horizontal overflow at the required viewport matrix", async ({
   }
 });
 
+test("keeps the prompt editable while clearly labelling controls mode", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const prompt = page.getByLabel("Describe your stand");
+  await expect(prompt).toBeEnabled();
+  await prompt.fill("A compact stand with exact controls below.");
+  await expect(prompt).toHaveValue(
+    "A compact stand with exact controls below.",
+  );
+  await expect(page.getByText("controls only", { exact: true })).toBeVisible();
+});
+
 test("supports keyboard operation and persistent sound preference", async ({
   page,
 }) => {
@@ -136,12 +147,12 @@ test("fails safely when an API returns malformed data", async ({ page }) => {
     });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Generate candidates" }).click();
+  await page.getByRole("button", { name: "Generate 3 designs" }).click();
   await expect(page.locator('[class*="errorBanner"]')).toContainText(
     "outside the expected strict contract",
   );
   await expect(
-    page.getByRole("heading", { name: "Define the physical problem." }),
+    page.getByRole("heading", { name: "Set the fit." }),
   ).toBeVisible();
 });
 

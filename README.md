@@ -2,7 +2,7 @@
 
 **AI-guided design and repair for one-sheet functional structures**
 
-Tell FoldForge what you need to prop up and how. With live access enabled, FoldForge compiles the request into strict constraints; offline mode visibly uses only the structured controls. It generates deterministic one-sheet phone/light-tablet stands, exposes objective failures, applies bounded repairs, re-verifies the result, and exports the selected printable pattern.
+Tell FoldForge what you need to prop up and how. With live access enabled, FoldForge compiles the request into strict constraints. In controls mode, prompt text remains editable as notes while exact measurements drive generation. FoldForge generates deterministic one-sheet phone/light-tablet stands, measures failures, repairs bounded parameters, and exports the selected printable pattern.
 
 > Describe it. Verify it. Fold it.
 
@@ -104,7 +104,7 @@ FoldForge builds on the vocabulary and interchange goals of the [FOLD specificat
 
 ## Live-model status and deployment
 
-The full GPT-5.6 Sol integration, strict prompts, schemas, safety identifier, access gate, and mocked/offline contracts are implemented. Live calls are deliberately disabled until usable API credits and model access are confirmed. GPT-5.6 Sol does not currently list free-tier API access, so local or hosted software must not imply a compliant live run until that external gate is cleared.
+The full GPT-5.6 Sol integration, strict prompts, schemas, safety identifier, access gate, and mocked/offline contracts are implemented. The configured key can authenticate and list `gpt-5.6-sol`, but live calls remain disabled until paid usage is explicitly approved and usable API credits are confirmed. Hosted software must not imply a compliant live run until that external gate is cleared.
 
 Production is deployed at [foldforge.vercel.app](https://foldforge.vercel.app). Live mode cannot become active unless the API key, explicit opt-in, access code, and 32-character cookie secret are all present. The hosted deployment deliberately sets `ENABLE_LIVE_OPENAI=false`, so it uses deterministic structured controls and cannot make paid model calls. The landing page remains public; the access code protects only paid model calls after live mode is explicitly enabled. Live routes also use bounded JSON bodies, best-effort per-instance rate limits, no SDK retries, and a 60-second SDK timeout; provider-side spend limits remain required for production.
 

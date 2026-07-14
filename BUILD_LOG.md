@@ -39,6 +39,14 @@
 - Vercel independently installed the locked dependencies, compiled Next.js, passed TypeScript, generated all routes, and reported deployment `dpl_CYAbwBjhNnZMNKB8BhgYdDfyBVtL` as Ready.
 - Production is aliased at `https://foldforge.vercel.app`. GitHub automatic deployment could not be attached by the CLI, but authenticated production deployment is complete.
 
+## 2026-07-14 — concise product pass
+
+- Captured and inspected the production Specify, Workshop, and Export screens before changing the interface.
+- Made the prompt editable in controls mode with a direct disclosure that only exact measurements drive offline generation; no prompt text is silently interpreted.
+- Replaced the repeated hero and filler copy with short task language, collapsed the verifier and source trace by default, shortened actions, and removed repeated export warnings while preserving the physical test protocol.
+- Re-captured all three stages at the same desktop viewport and compared them with the production references. The revised flow preserves the paper/graphite design system while materially reducing vertical and reading load.
+- Full checks remain green: 76 tests, 6/6 Chromium flows, four required responsive widths, production build, and 97.48% statement / 91.01% branch coverage.
+
 ## External gates
 
 - Physical validation is awaiting the user and remains separate from software completion.
