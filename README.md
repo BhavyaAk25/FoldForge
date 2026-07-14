@@ -2,7 +2,7 @@
 
 **AI-guided design and repair for one-sheet functional structures**
 
-Tell FoldForge what you need to prop up and how. FoldForge compiles the request into strict constraints, generates deterministic one-sheet phone/light-tablet stands, exposes objective failures, applies bounded GPT-5.6-guided repairs, re-verifies the result, and exports a printable pattern.
+Tell FoldForge what you need to prop up and how. With live access enabled, FoldForge compiles the request into strict constraints; offline mode visibly uses only the structured controls. It generates deterministic one-sheet phone/light-tablet stands, exposes objective failures, applies bounded repairs, re-verifies the result, and exports the selected printable pattern.
 
 > Describe it. Verify it. Fold it.
 
@@ -54,7 +54,7 @@ Set these server-only variables in `.env.local`:
 
 - `OPENAI_API_KEY` — OpenAI project key.
 - `ENABLE_LIVE_OPENAI` — set to `true` only when model access and usable credits are confirmed; the default offline mode makes no paid calls.
-- `DEMO_ACCESS_CODE` — optional shared code that protects live model calls.
+- `DEMO_ACCESS_CODE` — required for live model calls; use at least 12 random characters.
 - `ACCESS_COOKIE_SECRET` — at least 32 random bytes for the signed access cookie.
 
 Never prefix them with `NEXT_PUBLIC_`.
@@ -70,12 +70,12 @@ pnpm run verify:artifact -- artifacts/kill-test/manifest.json
 pnpm run test:e2e
 pnpm run eval:offline
 pnpm run eval:compiler -- --cases 25
-pnpm run eval:repair -- --fixtures 10 --max-iterations 5
+pnpm run eval:repair -- --fixtures 11 --max-iterations 5
 pnpm run eval:e2e -- --cases 15
 pnpm run eval:ablation
 ```
 
-The fixture emits a passing SVG/FOLD pair, a deliberately aggressive compact candidate rejected for a measured rear-run failure, a manifest, and physical folding instructions. Repeated generation with the same seed is byte-stable.
+The fixture emits a passing SVG/FOLD pair, a geometry-derived aggressive compact candidate rejected for a measured rear-run failure, a manifest, and physical folding instructions. The verifier requires stored exports to be byte/source-equivalent to the parameter-owned geometry. Repeated generation with the same seed is byte-stable.
 
 ## Sample prompts
 
@@ -104,7 +104,7 @@ FoldForge builds on the vocabulary and interchange goals of the [FOLD specificat
 
 The full GPT-5.6 Sol integration, strict prompts, schemas, safety identifier, access gate, and mocked/offline contracts are implemented. Live calls are deliberately disabled until usable API credits and model access are confirmed. GPT-5.6 Sol does not currently list free-tier API access, so local or hosted software must not imply a compliant live run until that external gate is cleared.
 
-The hosted URL and shared live-generator access code will be added after Vercel authentication and credits are confirmed. The landing page remains public; the access code protects only paid model calls.
+The hosted URL will be added after Vercel authentication. Live mode cannot become active unless the API key, explicit opt-in, access code, and 32-character cookie secret are all present. The landing page remains public; the access code protects only paid model calls. Live routes also use bounded JSON bodies, best-effort per-instance rate limits, no SDK retries, and a 60-second SDK timeout; provider-side spend limits remain required for production.
 
 ## License
 

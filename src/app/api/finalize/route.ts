@@ -9,9 +9,12 @@ import { safetyIdentifier } from "@/server/ai/safety";
 import { apiError, parseJsonBody } from "@/server/api/response";
 import { FinalizeRequestSchema, toCandidate } from "@/server/api/schemas";
 import { deterministicInstructions } from "@/server/instructions";
+import { enforceRateLimit } from "@/server/rate-limit";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const parsed = FinalizeRequestSchema.safeParse(await parseJsonBody(request));
+  const body = await parseJsonBody(request);
+  if (!body.ok) return body.response;
+  const parsed = FinalizeRequestSchema.safeParse(body.value);
   if (!parsed.success)
     return apiError("INVALID_REQUEST", "Finalization input is malformed.", 400);
 
@@ -36,6 +39,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   }
 
   const live = isLiveAiEnabled();
+  const limited = live
+    ? enforceRateLimit(request, "finalize", 20, 60 * 60 * 1_000)
+    : null;
+  if (limited) return limited;
   if (live && !hasLiveModelAccess(request)) {
     return apiError(
       "ACCESS_REQUIRED",

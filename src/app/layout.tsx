@@ -5,7 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FoldForge — verified paper stands",
+  title: "FoldForge — software-verified paper geometry",
   description:
     "Generate, verify, repair, and export a fold-flat paper device stand.",
 };

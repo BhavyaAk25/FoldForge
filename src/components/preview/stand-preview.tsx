@@ -121,19 +121,29 @@ export function StandPreview({
 
   if (mode === "flat") {
     return (
-      <div className={styles.preview} data-preview-mode="flat">
+      <div
+        className={styles.preview}
+        data-preview-mode="flat"
+        role="img"
+        aria-label={`Flat cutting and crease pattern for ${entry.candidate.strategy} candidate`}
+      >
         <FlatPreview candidate={entry.candidate} failureRefs={failureRefs} />
       </div>
     );
   }
 
   return (
-    <div className={styles.preview} data-preview-mode="folded">
+    <div
+      className={styles.preview}
+      data-preview-mode="folded"
+      role="img"
+      aria-label={`Folded preview for ${entry.candidate.strategy} candidate at ${entry.candidate.parameters.backrestAngleDeg} degrees`}
+    >
       <Canvas
         camera={{ position: [2.3, 1.65, 2.4], fov: 36, near: 0.1, far: 100 }}
         dpr={[1, 1.5]}
         frameloop="demand"
-        aria-label={`Folded three-dimensional preview for ${entry.candidate.strategy} candidate`}
+        aria-hidden="true"
       >
         <color attach="background" args={["#f8f3e9"]} />
         <ambientLight intensity={2.1} />

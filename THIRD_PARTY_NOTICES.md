@@ -16,6 +16,12 @@ FoldForge source code is MIT licensed. Direct runtime and development dependenci
 | React Three Fiber    | React 3D renderer     |   9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber |
 | Playwright           | Browser testing       |  1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright     |
 
-No third-party dependency is modified. Transitive notices are available through the package lock and final licence report.
+No third-party dependency is modified. `pnpm licenses list --prod --json` generates the complete installed production dependency report for each release environment. The lockfile is the reproducible component inventory; the report is generated rather than committed because it contains machine-specific installation paths.
+
+Notable transitive/runtime artifacts:
+
+- Geist font files are redistributed to browsers under SIL Open Font License 1.1. The copyright and complete license text are retained in `licenses/GEIST-OFL-1.1.txt`.
+- Next.js may install Sharp (Apache-2.0) and a platform-specific libvips binary (LGPL-3.0-or-later) for image tooling. FoldForge does not modify these packages. Deployment packagers must retain notices and satisfy the applicable LGPL source/relocation requirements described in `licenses/README.md`.
+- `caniuse-lite` data is CC-BY-4.0; the package metadata and lockfile retain its attribution.
 
 Related work is cited for context only and is not incorporated: FOLD, OrigamiSimulator, COrigami, Learn2Fold, rigid-origami optimization, TreeMaker, and Origamizer.

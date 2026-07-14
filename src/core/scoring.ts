@@ -10,7 +10,7 @@ export interface ScoreInputs {
   readonly paperEfficiencyRatio: number;
   readonly targetAngleErrorDeg: number;
   readonly angleToleranceDeg: number;
-  readonly panelClearanceMm: number;
+  readonly slotClearanceMm: number;
   readonly priority: "stability" | "compactness" | "simplicity";
 }
 
@@ -41,7 +41,10 @@ export const calculateScore = (input: ScoreInputs): ScoreBreakdown => {
       0,
       1,
     ),
-    foldability: clamp((input.panelClearanceMm - 0.4) / 1.1, 0, 1),
+    // Slot clearance is an actual fabrication feature. Panel clearance remains
+    // reserved for future thickness-aware collision geometry and cannot affect
+    // ranking until it changes the generated form.
+    foldability: clamp((input.slotClearanceMm - 0.4) / 0.8, 0, 1),
   };
   const priorityKey =
     input.priority === "compactness" ? "paperEfficiency" : input.priority;

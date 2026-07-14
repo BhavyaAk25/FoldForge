@@ -1,10 +1,11 @@
-import { MATERIALS, TOPOLOGY } from "./constants";
+import { EXPORT_FOOTER_HEIGHT_MM, MATERIALS, TOPOLOGY } from "./constants";
 import { deviceFaceDimensions } from "./constraints";
 import { exportFold, verifyFoldReference } from "./export/fold";
 import { exportSvg, verifySvgScale } from "./export/svg";
 import {
+  auditFoldedGeometry,
   findDeploymentIntersection,
-  maximumPanelLengthErrorMm,
+  planarPanelsHaveInteriorOverlap,
 } from "./geometry";
 import { degreesToRadians, round } from "./math";
 import {
@@ -91,6 +92,56 @@ const statusFor = (
   id: string,
 ): CheckStatus => checks.find((check) => check.id === id)?.status ?? "not_run";
 
+const stoppedReport = (
+  candidateId: string,
+  checks: readonly VerificationCheck[],
+): VerificationReport => {
+  const hardFailures = checks
+    .filter((check) => check.status === "fail")
+    .map((check) => check.id);
+  return {
+    candidateId,
+    valid: false,
+    checks,
+    schemaValidity: statusFor(checks, "schema.valid"),
+    finiteGeometry: statusFor(checks, "geometry.finite"),
+    sheetBoundResult: statusFor(checks, "sheet.bounds"),
+    printableMarginResult: statusFor(checks, "sheet.margin"),
+    creaseCountResult: statusFor(checks, "topology.creases"),
+    cutCountResult: statusFor(checks, "topology.cuts"),
+    minimumFeatureResult: statusFor(checks, "feature.minimum"),
+    targetAngleErrorDeg: 0,
+    contactAreaMm2: 0,
+    contactAreaResult: statusFor(checks, "contact.nominal"),
+    supportPolygonResult: statusFor(checks, "stability.support_polygon"),
+    frontStabilityMarginMm: 0,
+    rearStabilityMarginMm: 0,
+    sideStabilityMarginMm: 0,
+    approximateCenterOfMassProjectionMm: { xMm: 0, yMm: 0 },
+    intersectionResult: statusFor(checks, "fold.intersections"),
+    foldFlatCompatibilityResult: statusFor(checks, "fold.unlock_to_sheet"),
+    svgScaleResult: statusFor(checks, "export.svg_scale"),
+    foldReferenceResult: statusFor(checks, "export.fold_reference"),
+    warnings: [
+      "Verification stopped at the first hard failure; no downstream calculations or exports were run.",
+      "Physical validation pending user print, fold, and timed hold test.",
+    ],
+    hardFailures,
+    scoreBreakdown: calculateScore({
+      eligible: false,
+      frontStabilityMarginMm: 0,
+      rearStabilityMarginMm: 0,
+      sideStabilityMarginMm: 0,
+      paperEfficiencyRatio: 1,
+      targetAngleErrorDeg: 0,
+      angleToleranceDeg: 1,
+      slotClearanceMm: 0.4,
+      priority: "stability",
+    }),
+    physicalStatus: TOPOLOGY.physicalStatus,
+  };
+};
+
 export const verifyCandidate = (
   candidate: Candidate,
   constraint: DesignConstraint,
@@ -112,9 +163,22 @@ export const verifyCandidate = (
       "Candidate and constraint inputs match the strict canonical schemas.",
     failMessage: "Candidate or constraint input is outside its strict schema.",
   });
+  if (!schemaValid) {
+    runner.run({
+      id: "scope.supported",
+      label: "Supported scope",
+      passed: false,
+      actual: "not evaluated",
+      expected: "supported with no unresolved contradictions",
+      passMessage: "Scope is supported.",
+      failMessage: "Skipped after schema failure.",
+    });
+    return stoppedReport(candidate.id, runner.checks);
+  }
 
   const scopeValid =
     constraint.supportedScopeStatus === "supported" &&
+    constraint.feasibilityStatus !== "infeasible" &&
     constraint.contradictoryRequirements.length === 0 &&
     constraint.unresolvedQuestions.length === 0;
   runner.run({
@@ -128,6 +192,18 @@ export const verifyCandidate = (
     failMessage:
       "The request is unsupported, contradictory, or still needs essential input.",
   });
+  if (!scopeValid) {
+    runner.run({
+      id: "geometry.rear_run",
+      label: "Parameter ranges and derived rear run",
+      passed: false,
+      actual: "not evaluated",
+      expected: `at least ${TOPOLOGY.minimumRearRunMm} mm`,
+      passMessage: "Rear run is valid.",
+      failMessage: "Skipped after unsupported scope.",
+    });
+    return stoppedReport(candidate.id, runner.checks);
+  }
 
   const rearRunValid =
     candidate.geometry.derived.rearRunMm >= TOPOLOGY.minimumRearRunMm;
@@ -165,7 +241,9 @@ export const verifyCandidate = (
   const patternWidthWithMarginsMm =
     candidate.geometry.flat.widthMm + constraint.printableMarginMm * 2;
   const patternLengthWithMarginsMm =
-    candidate.geometry.flat.lengthMm + constraint.printableMarginMm * 2;
+    candidate.geometry.flat.lengthMm +
+    constraint.printableMarginMm * 2 +
+    EXPORT_FOOTER_HEIGHT_MM;
   const sheetFits =
     patternWidthWithMarginsMm <= constraint.sheetWidthMm &&
     patternLengthWithMarginsMm <= constraint.sheetHeightMm;
@@ -186,7 +264,9 @@ export const verifyCandidate = (
     candidate.geometry.flat.widthMm <=
       constraint.sheetWidthMm - constraint.printableMarginMm * 2 &&
     candidate.geometry.flat.lengthMm <=
-      constraint.sheetHeightMm - constraint.printableMarginMm * 2;
+      constraint.sheetHeightMm -
+        constraint.printableMarginMm * 2 -
+        EXPORT_FOOTER_HEIGHT_MM;
   runner.run({
     id: "sheet.margin",
     label: "Printable margins",
@@ -250,6 +330,25 @@ export const verifyCandidate = (
     geometryRefs: ["panel-lip", "crease-base-lip"],
   });
 
+  const geometryAudit = auditFoldedGeometry(candidate);
+  const measuredAngleRad = degreesToRadians(
+    geometryAudit.measuredBackrestAngleDeg,
+  );
+  const requiredToeDepthMm =
+    constraint.objectDepthMm * Math.sin(measuredAngleRad) + 0.5;
+  const toeValid = candidate.parameters.frontToeDepthMm >= requiredToeDepthMm;
+  runner.run({
+    id: "retention.toe",
+    label: "Front-toe device capture",
+    passed: toeValid,
+    actual: round(candidate.parameters.frontToeDepthMm, 3),
+    expected: `at least ${round(requiredToeDepthMm, 3)} mm for the measured backrest angle`,
+    passMessage:
+      "The toe reaches beyond the device-depth projection with clearance.",
+    failMessage: "The device-depth projection extends beyond the front toe.",
+    geometryRefs: ["panel-base", "panel-backrest"],
+  });
+
   const creaseCountValid =
     candidate.geometry.flat.creases.length <=
       constraint.maximumActiveCreaseCount &&
@@ -284,17 +383,23 @@ export const verifyCandidate = (
     geometryRefs: ["slot-left", "slot-right"],
   });
 
-  const panelLengthErrorMm = maximumPanelLengthErrorMm(candidate.geometry);
+  const panelLengthErrorMm = geometryAudit.panelLengthErrorMm;
   const targetAngleErrorDeg = Math.abs(
-    candidate.parameters.backrestAngleDeg - constraint.targetViewingAngleDeg,
+    geometryAudit.measuredBackrestAngleDeg - constraint.targetViewingAngleDeg,
   );
-  const transformValid = panelLengthErrorMm <= 0.01;
+  const transformValid =
+    panelLengthErrorMm <= 0.01 &&
+    geometryAudit.sourceCoordinateErrorMm <= 0.001 &&
+    geometryAudit.minimumPanelAreaMm2 > 1 &&
+    geometryAudit.parametersMatch &&
+    geometryAudit.topologyMatch;
   runner.run({
     id: "fold.transforms",
     label: "Rigid transforms and seam closure",
     passed: transformValid,
-    actual: round(panelLengthErrorMm, 6),
-    expected: "panel length error ≤0.01 mm",
+    actual: `length ${round(panelLengthErrorMm, 6)} mm; source ${round(geometryAudit.sourceCoordinateErrorMm, 6)} mm`,
+    expected:
+      "panel length error ≤0.01 mm and source-coordinate error ≤0.001 mm",
     passMessage:
       "Folded transforms preserve panel lengths and close the intended chain.",
     failMessage: "Folded transforms do not preserve the source panel lengths.",
@@ -354,18 +459,50 @@ export const verifyCandidate = (
     geometryRefs: ["panel-backrest"],
   });
 
-  const angleRad = degreesToRadians(candidate.parameters.backrestAngleDeg);
+  const angleRad = measuredAngleRad;
   const objectCenterXMm =
     candidate.parameters.frontToeDepthMm +
     (face.lengthMm / 2) * Math.cos(angleRad) -
     (constraint.objectDepthMm / 2) * Math.sin(angleRad);
-  const paperAreaM2 =
-    (candidate.geometry.flat.widthMm * candidate.geometry.flat.lengthMm) /
-    1_000_000;
+  const deployedPanelCenterXMm: Readonly<Record<string, number>> = {
+    "panel-tab-left": candidate.parameters.frontToeDepthMm,
+    "panel-tab-right": candidate.parameters.frontToeDepthMm,
+    "panel-backrest":
+      (candidate.geometry.folded.sideProfile.backrestToe.xMm +
+        candidate.geometry.folded.sideProfile.ridge.xMm) /
+      2,
+    "panel-rear-brace":
+      (candidate.geometry.folded.sideProfile.ridge.xMm +
+        candidate.geometry.folded.sideProfile.rearFoot.xMm) /
+      2,
+    "panel-base": candidate.parameters.baseDepthMm / 2,
+    "panel-lip": 0,
+  };
+  const panelMassWeights = candidate.geometry.flat.panels.map((panel) => {
+    const widthMm =
+      Math.max(...panel.points.map((point) => point.xMm)) -
+      Math.min(...panel.points.map((point) => point.xMm));
+    const lengthMm =
+      Math.max(...panel.points.map((point) => point.yMm)) -
+      Math.min(...panel.points.map((point) => point.yMm));
+    return {
+      areaMm2: widthMm * lengthMm,
+      centerXMm: deployedPanelCenterXMm[panel.id] ?? 0,
+    };
+  });
+  const paperAreaMm2 = panelMassWeights.reduce(
+    (sum, panel) => sum + panel.areaMm2,
+    0,
+  );
+  const paperAreaM2 = paperAreaMm2 / 1_000_000;
   const paperMassG = paperAreaM2 * MATERIALS[constraint.materialProfile].gsm;
+  const paperCenterXMm =
+    panelMassWeights.reduce(
+      (sum, panel) => sum + panel.areaMm2 * panel.centerXMm,
+      0,
+    ) / paperAreaMm2;
   const combinedCenterXMm =
-    (objectCenterXMm * constraint.objectMassG +
-      (candidate.parameters.baseDepthMm / 2) * paperMassG) /
+    (objectCenterXMm * constraint.objectMassG + paperCenterXMm * paperMassG) /
     (constraint.objectMassG + paperMassG);
   const uncertaintyMm = Math.max(5, candidate.parameters.baseDepthMm * 0.03);
   const frontStabilityMarginMm = combinedCenterXMm - uncertaintyMm;
@@ -374,15 +511,15 @@ export const verifyCandidate = (
   const sideStabilityMarginMm =
     candidate.parameters.standWidthMm / 2 - uncertaintyMm;
   const stabilityValid =
-    frontStabilityMarginMm >= 0 &&
-    rearStabilityMarginMm >= 0 &&
-    sideStabilityMarginMm >= 0;
+    frontStabilityMarginMm >= 0.5 &&
+    rearStabilityMarginMm >= 0.5 &&
+    sideStabilityMarginMm >= 0.5;
   runner.run({
     id: "stability.support_polygon",
     label: "Support polygon and stability reserves",
     passed: stabilityValid,
     actual: `front ${round(frontStabilityMarginMm, 2)}, rear ${round(rearStabilityMarginMm, 2)}, side ${round(sideStabilityMarginMm, 2)} mm`,
-    expected: "all signed reserves ≥0 mm",
+    expected: "all signed reserves ≥0.5 mm after uncertainty",
     passMessage:
       "The approximate combined centre of mass remains inside the reserved support polygon.",
     failMessage:
@@ -393,17 +530,17 @@ export const verifyCandidate = (
   const foldFlatCompatible =
     !constraint.mustFoldFlat ||
     (candidate.parameters.lockingStyle === "dual_tabs" &&
-      !constraint.glueAllowed);
+      !planarPanelsHaveInteriorOverlap(candidate.geometry));
   runner.run({
     id: "fold.unlock_to_sheet",
     label: "Unlock-to-sheet compatibility",
     passed: foldFlatCompatible,
     actual: candidate.parameters.lockingStyle,
-    expected: "dual releasable tabs with no glued joint",
+    expected: "dual releasable tabs and non-overlapping planar panels",
     passMessage:
       "Releasing both tabs returns the continuous strip to its planar sheet.",
     failMessage:
-      "The requested fold-flat behavior is incompatible with the selected lock or glue rule.",
+      "The requested fold-flat behavior is incompatible with the lock or planar sheet geometry.",
     geometryRefs: [
       "crease-tab-left",
       "crease-tab-right",
@@ -413,7 +550,7 @@ export const verifyCandidate = (
   });
 
   const svg = exportSvg(candidate, constraint);
-  const svgScale = verifySvgScale(svg, constraint);
+  const svgScale = verifySvgScale(svg, constraint, candidate);
   runner.run({
     id: "export.svg_scale",
     label: "SVG physical scale",
@@ -455,7 +592,7 @@ export const verifyCandidate = (
     paperEfficiencyRatio,
     targetAngleErrorDeg,
     angleToleranceDeg: constraint.angleToleranceDeg,
-    panelClearanceMm: candidate.parameters.panelClearanceMm,
+    slotClearanceMm: candidate.parameters.slotClearanceMm,
     priority: constraint.priorities[0] ?? "stability",
   });
 
@@ -490,6 +627,7 @@ export const verifyCandidate = (
     foldReferenceResult: statusFor(runner.checks, "export.fold_reference"),
     warnings: [
       "Geometric and kinematic verification only; material strength and real load capacity are not simulated.",
+      "Deployment collision screening uses 201 fixed side-profile states; tabs, device volume, friction, and paper thickness are not simulated.",
       "Physical validation pending user print, fold, and timed hold test.",
     ],
     hardFailures,

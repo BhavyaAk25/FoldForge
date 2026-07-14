@@ -1,4 +1,5 @@
-import { round } from "../math";
+import { canonicalSerialize } from "../canonical";
+import { radiansToDegrees, round } from "../math";
 import type { Candidate, Point2, Segment2 } from "../types";
 
 export interface FoldDocument {
@@ -67,10 +68,21 @@ export const createFoldDocument = (candidate: Candidate): FoldDocument => {
     addEdge(accumulator, { id: `boundary-${index}`, start, end }, "B", 0);
   }
 
-  const creaseAssignments: readonly ("M" | "V")[] = ["V", "M", "V", "M", "M"];
+  const parameters = candidate.parameters;
+  const betaDeg = radiansToDegrees(
+    Math.atan2(parameters.backrestRiseMm, candidate.geometry.derived.rearRunMm),
+  );
+  const creaseAngles = [
+    -(parameters.backrestAngleDeg + betaDeg),
+    betaDeg - 180,
+    -90,
+    -parameters.backrestAngleDeg,
+    -parameters.backrestAngleDeg,
+  ];
   candidate.geometry.flat.creases.forEach((crease, index) => {
-    const assignment = creaseAssignments[index] ?? "M";
-    addEdge(accumulator, crease, assignment, assignment === "M" ? -180 : 180);
+    const foldAngle = round(creaseAngles[index] ?? 0, 6);
+    const assignment = foldAngle < 0 ? "M" : "V";
+    addEdge(accumulator, crease, assignment, foldAngle);
   });
 
   candidate.geometry.flat.slots.forEach((slot) =>
@@ -109,6 +121,10 @@ export const verifyFoldReference = (
     return { valid: false, message: "FOLD root must be an object." };
   }
 
+  if (Array.isArray(parsed)) {
+    return { valid: false, message: "FOLD root must be an object." };
+  }
+
   const document = parsed as Partial<FoldDocument>;
   const expected = createFoldDocument(candidate);
   const assignmentsValid =
@@ -116,14 +132,67 @@ export const verifyFoldReference = (
     document.edges_assignment.every((assignment) =>
       ["B", "M", "V", "C"].includes(assignment),
     );
+  const arraysParallel =
+    Array.isArray(document.edges_vertices) &&
+    Array.isArray(document.edges_assignment) &&
+    Array.isArray(document.edges_foldAngle) &&
+    document.edges_vertices.length === document.edges_assignment.length &&
+    document.edges_vertices.length === document.edges_foldAngle.length;
+  const coordinatesValid =
+    Array.isArray(document.vertices_coords) &&
+    document.vertices_coords.every(
+      (vertex) =>
+        Array.isArray(vertex) &&
+        vertex.length === 2 &&
+        vertex.every((coordinate) => Number.isFinite(coordinate)),
+    );
+  const referencesValid =
+    coordinatesValid &&
+    Array.isArray(document.edges_vertices) &&
+    document.edges_vertices.every((edge) => {
+      if (
+        !Array.isArray(edge) ||
+        edge.length !== 2 ||
+        !edge.every(Number.isSafeInteger)
+      ) {
+        return false;
+      }
+      const [firstIndex, secondIndex] = edge;
+      if (
+        firstIndex === undefined ||
+        secondIndex === undefined ||
+        firstIndex === secondIndex ||
+        firstIndex < 0 ||
+        secondIndex < 0 ||
+        firstIndex >= (document.vertices_coords?.length ?? 0) ||
+        secondIndex >= (document.vertices_coords?.length ?? 0)
+      ) {
+        return false;
+      }
+      const first = document.vertices_coords?.[firstIndex];
+      const second = document.vertices_coords?.[secondIndex];
+      return Boolean(
+        first &&
+        second &&
+        Math.hypot(second[0] - first[0], second[1] - first[1]) > 1e-7,
+      );
+    });
+  const anglesValid =
+    Array.isArray(document.edges_foldAngle) &&
+    document.edges_foldAngle.every(
+      (angle) => Number.isFinite(angle) && angle >= -180 && angle <= 180,
+    );
+  const sourceEquivalent =
+    canonicalSerialize(document) === canonicalSerialize(expected);
   const valid =
     document.file_spec === 1.2 &&
     document.frame_unit === "mm" &&
     assignmentsValid &&
-    document.vertices_coords?.length === expected.vertices_coords.length &&
-    document.edges_vertices?.length === expected.edges_vertices.length &&
-    document.edges_assignment?.filter((assignment) => assignment === "C")
-      .length === 2;
+    arraysParallel &&
+    coordinatesValid &&
+    referencesValid &&
+    anglesValid &&
+    sourceEquivalent;
 
   return {
     valid,

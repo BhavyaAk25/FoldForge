@@ -4,6 +4,8 @@ import path from "node:path";
 import { z } from "zod";
 
 import { stableHash } from "../src/core/canonical";
+import { exportFold, verifyFoldReference } from "../src/core/export/fold";
+import { exportSvg, verifySvgScale } from "../src/core/export/svg";
 import { buildStandGeometry } from "../src/core/geometry";
 import {
   CandidateParametersSchema,
@@ -75,6 +77,14 @@ for (const entry of manifest.candidates) {
     parameters: entry.parameters,
     geometry: buildStandGeometry(entry.parameters),
   };
+  if (
+    svg !== exportSvg(candidate, manifest.constraint) ||
+    fold !== exportFold(candidate) ||
+    !verifySvgScale(svg, manifest.constraint, candidate).valid ||
+    !verifyFoldReference(candidate, fold).valid
+  ) {
+    throw new Error(`Stored export is not source-equivalent for ${entry.id}.`);
+  }
   validity.set(entry.id, verifyCandidate(candidate, manifest.constraint).valid);
 }
 

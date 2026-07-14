@@ -4,7 +4,9 @@ import { apiError, parseJsonBody } from "@/server/api/response";
 import { ExportRequestSchema, toCandidate } from "@/server/api/schemas";
 
 export const POST = async (request: Request): Promise<Response> => {
-  const parsed = ExportRequestSchema.safeParse(await parseJsonBody(request));
+  const body = await parseJsonBody(request);
+  if (!body.ok) return body.response;
+  const parsed = ExportRequestSchema.safeParse(body.value);
   if (!parsed.success)
     return apiError("INVALID_REQUEST", "Export input is malformed.", 400);
   const candidate = toCandidate(parsed.data.candidate);

@@ -51,6 +51,7 @@ const allowedParametersByFailure: Readonly<
     "panelClearanceMm",
   ],
   "retention.lip": ["lipHeightMm", "backrestAngleDeg"],
+  "retention.toe": ["frontToeDepthMm", "backrestAngleDeg"],
   "angle.target": ["backrestAngleDeg"],
   "fold.intersections": [
     "baseDepthMm",

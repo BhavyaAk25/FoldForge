@@ -137,6 +137,19 @@ export class RuleBasedRepairDiagnosisModel implements RepairDiagnosisModel {
           "Meet the report's device-depth retention height.",
         );
       }
+      case "retention.toe": {
+        const required = Number(
+          input.report.checks
+            .find((check) => check.id === failure)
+            ?.expected.match(/[\d.]+/)?.[0] ?? 22,
+        );
+        if (required > 22) return null;
+        return operation(
+          "frontToeDepthMm",
+          clamp(required + 0.02, 7, 22),
+          "Meet the measured device-depth projection plus toe clearance.",
+        );
+      }
       case "angle.target":
         return operation(
           "backrestAngleDeg",

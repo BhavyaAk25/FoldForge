@@ -52,13 +52,25 @@ const featureFailure = withParameters("fixture-feature", {
 
 const lipConstraint: DesignConstraint = {
   ...DEMO_CONSTRAINT,
-  objectDepthMm: 30,
-  targetViewingAngleDeg: 75,
+  objectDepthMm: 20,
 };
 const lipFailure = withParameters("fixture-lip", {
   ...base.parameters,
-  backrestAngleDeg: 75,
+  frontToeDepthMm: 22,
   lipHeightMm: 8,
+});
+
+const toeConstraint: DesignConstraint = {
+  ...DEMO_CONSTRAINT,
+  objectDepthMm: 18,
+  targetViewingAngleDeg: 75,
+};
+const toeFailure = withParameters("fixture-toe", {
+  ...base.parameters,
+  baseDepthMm: 80,
+  backrestAngleDeg: 75,
+  frontToeDepthMm: 16,
+  lipHeightMm: 12,
 });
 
 const contactConstraint: DesignConstraint = {
@@ -71,22 +83,38 @@ const contactFailure = withParameters("fixture-contact", {
   baseDepthMm: 80,
   backrestRiseMm: 35,
   backrestAngleDeg: 65,
-  frontToeDepthMm: 7,
+  frontToeDepthMm: 8,
 });
 
 const stabilityConstraint: DesignConstraint = {
   ...DEMO_CONSTRAINT,
   objectWidthMm: 60,
-  objectHeightMm: 1,
-  objectDepthMm: 30,
+  objectHeightMm: 320,
+  objectDepthMm: 20,
   objectMassG: 500,
   sheetHeightMm: 500,
-  targetViewingAngleDeg: 75,
+  targetViewingAngleDeg: 50,
 };
 const stabilityFailure = withParameters("fixture-stability", {
   ...base.parameters,
+  baseDepthMm: 110,
+  backrestRiseMm: 90,
+  backrestAngleDeg: 50,
+  frontToeDepthMm: 22,
+  lipHeightMm: 18,
+});
+
+const infeasibleToeConstraint: DesignConstraint = {
+  ...DEMO_CONSTRAINT,
+  objectDepthMm: 30,
+  targetViewingAngleDeg: 75,
+};
+const infeasibleToe = withParameters("fixture-infeasible-toe", {
+  ...base.parameters,
+  baseDepthMm: 80,
   backrestAngleDeg: 75,
-  lipHeightMm: 11,
+  frontToeDepthMm: 22,
+  lipHeightMm: 18,
 });
 
 const sheetFailure = withParameters("fixture-sheet", {
@@ -128,6 +156,13 @@ export const REPAIR_FIXTURES: readonly RepairFixture[] = [
     expectedInitialFailure: "retention.lip",
   },
   {
+    name: "insufficient toe capture",
+    candidate: toeFailure,
+    constraint: toeConstraint,
+    expectedStatus: "passed",
+    expectedInitialFailure: "retention.toe",
+  },
+  {
     name: "insufficient contact",
     candidate: contactFailure,
     constraint: contactConstraint,
@@ -135,7 +170,7 @@ export const REPAIR_FIXTURES: readonly RepairFixture[] = [
     expectedInitialFailure: "contact.nominal",
   },
   {
-    name: "negative front stability",
+    name: "negative rear stability",
     candidate: stabilityFailure,
     constraint: stabilityConstraint,
     expectedStatus: "passed",
@@ -163,10 +198,10 @@ export const REPAIR_FIXTURES: readonly RepairFixture[] = [
     expectedInitialFailure: "topology.creases",
   },
   {
-    name: "glued fold-flat contradiction",
-    candidate: base,
-    constraint: { ...DEMO_CONSTRAINT, glueAllowed: true },
+    name: "device depth exceeds toe topology",
+    candidate: infeasibleToe,
+    constraint: infeasibleToeConstraint,
     expectedStatus: "infeasible",
-    expectedInitialFailure: "fold.unlock_to_sheet",
+    expectedInitialFailure: "retention.toe",
   },
 ];

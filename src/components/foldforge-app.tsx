@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { StandPreview } from "@/components/preview/stand-preview";
+import { MATERIALS, PRODUCT_LIMITS } from "@/core/constants";
 import { DEMO_CONSTRAINT } from "@/core/constraints";
 import { DesignConstraintSchema, type DesignConstraint } from "@/core/schemas";
 import {
@@ -47,7 +48,8 @@ const AccessSchema = z
 
 const CheckpointSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
+    expiresAt: z.string().datetime(),
     prompt: z.string(),
     stage: z.enum(["specify", "workshop", "export"]),
     constraint: DesignConstraintSchema,
@@ -80,6 +82,8 @@ function NumericField({
   step,
   onChange,
 }: NumericFieldProps) {
+  const invalid = !Number.isFinite(value) || value < min || value > max;
+  const errorId = `${id}-error`;
   return (
     <label className={styles.field} htmlFor={id}>
       <span>{label}</span>
@@ -91,10 +95,18 @@ function NumericField({
           max={max}
           step={step}
           value={value}
+          aria-label={`${label} in ${unit}`}
+          aria-invalid={invalid}
+          aria-describedby={invalid ? errorId : undefined}
           onChange={(event) => onChange(Number(event.currentTarget.value))}
         />
         <span aria-hidden="true">{unit}</span>
       </span>
+      {invalid ? (
+        <small className={styles.fieldError} id={errorId}>
+          Supported range: {min}–{max} {unit}.
+        </small>
+      ) : null}
     </label>
   );
 }
@@ -153,6 +165,8 @@ export function FoldForgeApp() {
   );
   const [accessCode, setAccessCode] = useState("");
   const [accessGranted, setAccessGranted] = useState(false);
+  const stageHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStageRef = useRef<Stage>(stage);
 
   const announce = useCallback((text: string) => {
     setLiveMessage((current) => ({ text, sequence: current.sequence + 1 }));
@@ -193,6 +207,9 @@ export function FoldForgeApp() {
       if (checkpoint) {
         try {
           const parsed = CheckpointSchema.parse(JSON.parse(checkpoint));
+          if (Date.parse(parsed.expiresAt) <= Date.now()) {
+            throw new Error("Checkpoint expired.");
+          }
           setPrompt(parsed.prompt);
           setConstraint(parsed.constraint);
           setGeneration(parsed.generation);
@@ -226,7 +243,8 @@ export function FoldForgeApp() {
     localStorage.setItem(
       CHECKPOINT_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
         prompt,
         stage,
         constraint,
@@ -254,6 +272,16 @@ export function FoldForgeApp() {
     localStorage.setItem(MUTE_KEY, String(muted));
   }, [hydrated, muted]);
 
+  useEffect(() => {
+    if (!hydrated || previousStageRef.current === stage) return;
+    previousStageRef.current = stage;
+    const timer = window.setTimeout(() => {
+      stageHeadingRef.current?.focus({ preventScroll: true });
+      stageHeadingRef.current?.scrollIntoView({ block: "start" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, stage]);
+
   const selectedEntry = useMemo(
     () =>
       generation?.candidates.find(
@@ -280,10 +308,18 @@ export function FoldForgeApp() {
   const trace = useMemo(() => {
     const base = generation
       ? [
-          {
-            source: "USER" as const,
-            summary: `Requested: ${prompt}`,
-          },
+          ...(compileMode === "gpt-5.6-sol"
+            ? [
+                {
+                  source: "USER" as const,
+                  summary: `Requested: ${prompt}`,
+                  timestamp: "Current session",
+                  kind: "request",
+                  inputHash: "client input",
+                  candidateId: null,
+                },
+              ]
+            : []),
           {
             source:
               compileMode === "gpt-5.6-sol"
@@ -293,10 +329,18 @@ export function FoldForgeApp() {
               compileMode === "gpt-5.6-sol"
                 ? "GPT-5.6 compiled the request into strict constraints."
                 : "Structured controls supplied deterministic constraints; live AI is disabled.",
+            timestamp: "Current session",
+            kind: "constraint_compilation",
+            inputHash: "server validated",
+            candidateId: null,
           },
           {
             source: "CODE" as const,
             summary: `Generated nine candidates, verified them in fixed order, and displayed three representatives.`,
+            timestamp: "Current session",
+            kind: "candidate_generation",
+            inputHash: "deterministic seed",
+            candidateId: null,
           },
         ]
       : [];
@@ -305,6 +349,10 @@ export function FoldForgeApp() {
       ...(repair?.outcome.trace.map((event) => ({
         source: event.source,
         summary: event.summary,
+        timestamp: event.timestamp,
+        kind: event.kind,
+        inputHash: event.inputHash,
+        candidateId: event.candidateId,
       })) ?? []),
     ];
   }, [compileMode, generation, prompt, repair]);
@@ -389,7 +437,7 @@ export function FoldForgeApp() {
       announce(
         nextRepair.outcome.status === "passed"
           ? `The candidate passed after ${nextRepair.outcome.cycles.length} bounded repair cycles.`
-          : "The five-cycle repair budget was exhausted with an explicit infeasible result.",
+          : `${nextRepair.outcome.reason} ${nextRepair.outcome.cycles.length} repair cycles completed.`,
       );
     } catch (caught) {
       setError(formatFailure(caught));
@@ -400,23 +448,15 @@ export function FoldForgeApp() {
   };
 
   const finalize = async () => {
-    if (!generation) return;
+    if (!generation || !activeEntry?.report.valid) return;
     setBusy("finalize");
     setError("");
     playTone(410);
     try {
-      const unique = new Map(
-        generation.candidates.map((entry) => [
-          entry.candidate.id,
-          entry.candidate,
-        ]),
-      );
-      if (repair?.outcome.status === "passed")
-        unique.set(repair.outcome.candidate.id, repair.outcome.candidate);
       const nextFinalization = await postJson(
         "/api/finalize",
         {
-          candidates: [...unique.values()].map(candidateInput),
+          candidates: [candidateInput(activeEntry.candidate)],
           constraint,
           installationId,
         },
@@ -504,7 +544,7 @@ export function FoldForgeApp() {
           </span>
           <span>
             <strong>FoldForge</strong>
-            <small>verified paper engineering</small>
+            <small>software-verified paper geometry</small>
           </span>
         </a>
         <div className={styles.headerActions}>
@@ -518,10 +558,8 @@ export function FoldForgeApp() {
             className={styles.iconButton}
             type="button"
             onClick={() => setMuted((value) => !value)}
-            aria-pressed={muted}
-            aria-label={
-              muted ? "Enable workshop sounds" : "Mute workshop sounds"
-            }
+            aria-pressed={!muted}
+            aria-label="Workshop sounds"
           >
             {muted ? "Sound off" : "Sound on"}
           </button>
@@ -611,7 +649,9 @@ export function FoldForgeApp() {
           <div className={styles.stageHeading}>
             <div>
               <p className={styles.eyebrow}>Stage 01 / Specify</p>
-              <h2 id="specify-title">Define the physical problem.</h2>
+              <h2 id="specify-title" ref={stageHeadingRef} tabIndex={-1}>
+                Define the physical problem.
+              </h2>
             </div>
             <p>
               Dimensions and mass are essential. Structured controls remain the
@@ -621,20 +661,32 @@ export function FoldForgeApp() {
 
           <div className={styles.specifyGrid}>
             <div className={styles.promptCard}>
-              <label htmlFor="design-prompt">Describe the stand</label>
+              <label htmlFor="design-prompt">
+                {health?.liveAiEnabled
+                  ? "Describe the stand"
+                  : "Natural-language prompt (live GPT only)"}
+              </label>
               <textarea
                 id="design-prompt"
                 value={prompt}
                 onChange={(event) => setPrompt(event.currentTarget.value)}
                 maxLength={2000}
                 rows={7}
+                disabled={!health?.liveAiEnabled}
+                required={health?.liveAiEnabled}
+                aria-describedby="prompt-mode-note"
               />
+              <p className={styles.promptModeNote} id="prompt-mode-note">
+                {health?.liveAiEnabled
+                  ? "GPT‑5.6 compiles this text into the controls below."
+                  : "Offline mode does not interpret this text. Use the structured controls as the source of truth."}
+              </p>
               <div className={styles.promptFooter}>
                 <span>{prompt.length} / 2,000</span>
                 <span>
                   {compileMode === "gpt-5.6-sol"
                     ? "AI interpreted"
-                    : "control interpreted"}
+                    : "not applied offline"}
                 </span>
               </div>
             </div>
@@ -685,7 +737,7 @@ export function FoldForgeApp() {
                     value={constraint.objectMassG}
                     unit="g"
                     min={1}
-                    max={800}
+                    max={PRODUCT_LIMITS.maximumObjectMassG}
                     step={1}
                     onChange={(value) => patchConstraint("objectMassG", value)}
                   />
@@ -801,7 +853,8 @@ export function FoldForgeApp() {
               disabled={
                 busy !== null ||
                 installationId.length < 8 ||
-                prompt.trim().length === 0
+                !DesignConstraintSchema.safeParse(constraint).success ||
+                (health?.liveAiEnabled === true && prompt.trim().length === 0)
               }
               onClick={() => void generate()}
             >
@@ -811,6 +864,12 @@ export function FoldForgeApp() {
               <span aria-hidden="true">→</span>
             </button>
           </div>
+          <p className={styles.privacyNote}>
+            Checkpoints remain on this device for up to 24 hours. When live GPT
+            is enabled, prompts are processed by OpenAI and may be retained
+            under its API abuse-monitoring policy. Reset clears the design
+            checkpoint.
+          </p>
         </section>
       ) : null}
 
@@ -819,7 +878,9 @@ export function FoldForgeApp() {
           <div className={styles.stageHeading}>
             <div>
               <p className={styles.eyebrow}>Stage 02 / Workshop</p>
-              <h2 id="workshop-title">Inspect the evidence.</h2>
+              <h2 id="workshop-title" ref={stageHeadingRef} tabIndex={-1}>
+                Inspect the evidence.
+              </h2>
             </div>
             <p>
               Nine internal samples were generated. One representative from each
@@ -843,6 +904,9 @@ export function FoldForgeApp() {
                   setShowRepaired(false);
                   playTone(300);
                 }}
+                aria-pressed={
+                  selectedEntry?.candidate.id === entry.candidate.id
+                }
               >
                 <span
                   className={
@@ -872,6 +936,7 @@ export function FoldForgeApp() {
                       previewMode === "folded" ? styles.segmentActive : ""
                     }
                     onClick={() => setPreviewMode("folded")}
+                    aria-pressed={previewMode === "folded"}
                   >
                     Folded
                   </button>
@@ -881,6 +946,7 @@ export function FoldForgeApp() {
                       previewMode === "flat" ? styles.segmentActive : ""
                     }
                     onClick={() => setPreviewMode("flat")}
+                    aria-pressed={previewMode === "flat"}
                   >
                     Flat pattern
                   </button>
@@ -891,6 +957,7 @@ export function FoldForgeApp() {
                       type="button"
                       className={!showRepaired ? styles.segmentActive : ""}
                       onClick={() => setShowRepaired(false)}
+                      aria-pressed={!showRepaired}
                     >
                       Before
                     </button>
@@ -898,6 +965,7 @@ export function FoldForgeApp() {
                       type="button"
                       className={showRepaired ? styles.segmentActive : ""}
                       onClick={() => setShowRepaired(true)}
+                      aria-pressed={showRepaired}
                     >
                       After repair
                     </button>
@@ -1028,9 +1096,14 @@ export function FoldForgeApp() {
                     <strong>
                       {repair.outcome.status === "passed"
                         ? "Repair passed"
-                        : "Infeasible after five cycles"}
+                        : `Infeasible after ${repair.outcome.cycles.length} cycle${repair.outcome.cycles.length === 1 ? "" : "s"}`}
                     </strong>
                   </div>
+                  {repair.outcome.status === "infeasible" ? (
+                    <p className={styles.repairReason}>
+                      {repair.outcome.reason}
+                    </p>
+                  ) : null}
                   {repair.outcome.cycles.map((cycle) => (
                     <section key={cycle.cycle}>
                       <h4>Cycle {cycle.cycle}</h4>
@@ -1094,7 +1167,15 @@ export function FoldForgeApp() {
               {trace.map((event, index) => (
                 <li key={`${event.source}-${index}`}>
                   <span data-source={event.source}>{event.source}</span>
-                  <p>{event.summary}</p>
+                  <div>
+                    <p>{event.summary}</p>
+                    <small>
+                      {event.timestamp} · {event.kind}
+                      {event.candidateId
+                        ? ` · ${event.candidateId}`
+                        : ""} · {event.inputHash}
+                    </small>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -1111,10 +1192,12 @@ export function FoldForgeApp() {
             <button
               className={styles.primaryButton}
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || !activeEntry.report.valid}
               onClick={() => void finalize()}
             >
-              {busy === "finalize" ? "Revalidating…" : "Select verified export"}
+              {busy === "finalize"
+                ? "Revalidating…"
+                : "Prepare selected verified export"}
               <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -1126,7 +1209,9 @@ export function FoldForgeApp() {
           <div className={styles.stageHeading}>
             <div>
               <p className={styles.eyebrow}>Stage 03 / Export</p>
-              <h2 id="export-title">Make the digital plan physical.</h2>
+              <h2 id="export-title" ref={stageHeadingRef} tabIndex={-1}>
+                Make the digital plan physical.
+              </h2>
             </div>
             <p>
               The server rebuilt this geometry from parameters and re-ran every
@@ -1214,6 +1299,24 @@ export function FoldForgeApp() {
                   <li key={step}>{step}</li>
                 ))}
               </ol>
+            </section>
+            <section>
+              <span className={styles.eyebrow}>Physical checklist</span>
+              <h3>Validate before regular use.</h3>
+              <ul className={styles.instructions}>
+                <li>
+                  Print on {MATERIALS[constraint.materialProfile].label} at 100%
+                  / actual size.
+                </li>
+                <li>Accept the 50 mm scale line only from 49.5 to 50.5 mm.</li>
+                <li>Release and relock both tabs for 10 complete cycles.</li>
+                <li>Hold an equivalent test mass centered for 60 seconds.</li>
+                <li>Repeat for 60 seconds with the mass offset by 5 mm.</li>
+                <li>
+                  Fail on collapse, tear, slot growth, buckling, tipping, or
+                  slip over 3 mm.
+                </li>
+              </ul>
             </section>
           </div>
 

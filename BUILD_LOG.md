@@ -12,7 +12,7 @@
 - Implemented strict GPT-5.6 Sol Responses API contracts with Zod, `store:false`, bounded output, reasoning defaults, hashed browser safety identifiers, and no production prompt logging.
 - Added all eight application routes, server reconstruction of client candidates, short-lived signed HttpOnly access cookies, constant-time access-code comparison, and an explicit live-AI opt-in.
 - Implemented five-cycle bounded repair with three operations per cycle, report grounding, allowlisted parameters, duplicate-input blocking, regeneration, full revalidation, source-labelled traces, and explicit exhaustion.
-- Live calls remain disabled because usable credits are not confirmed; 28 offline compiler cases and 10 repair fixtures pass.
+- Live calls remain disabled because usable credits are not confirmed; 25 offline compiler cases and 11 repair fixtures pass.
 
 ## 2026-07-14 — workshop and evaluation
 
@@ -21,8 +21,19 @@
 - Playwright: 5 / 5 passed. Fifteen end-to-end constraint variations: 15 / 15 passed. Full-feedback repair ablation: 100% versus 0% for pass/fail-only and no-feedback baselines.
 - Evaluation found a lip-repair rounding loop; a 0.02 mm geometric allowance removed the duplicate-input failure and all affected cases now pass within three cycles.
 
+## 2026-07-14 — independent review hardening
+
+- Geometry review reproduced a false-valid result with zeroed folded vertices. Verification now rebuilds source geometry from parameters, measures folded panels and backrest angle, rejects topology/coordinate drift, and adds a hard device-toe capture check.
+- FOLD exports now derive deployed hinge angles and validate every coordinate/reference/parallel array against the source document. SVG verification now requires exact source equivalence and reserves a separate scale footer. The artifact CLI validates stored bytes, not regenerated stand-ins.
+- Evaluation now varies 100 constraints and uses independent folded-geometry, SVG, and FOLD corruption oracles. It records 98% request-level geometry success, 100% mutation rejection, 100% no-crash/repeatability, 11/11 repair outcomes, and 15/15 end-to-end cases across seven failure causes.
+- Product review fixes make the offline prompt explicitly unapplied, export the exact selected/repaired candidate, move focus to each new stage, expose selected states, restore visible form focus, show factual repair reasons, and include the material-specific physical checklist.
+- Security review closed fail-open live access, bounded request bodies to 64 KiB JSON, added best-effort per-client rate limits, disabled SDK retries, set a 60-second timeout, and added a 24-hour checkpoint/privacy notice. A production audit reports no known vulnerabilities.
+- Created the public repository, pushed `codex/foldforge-build-week`, established `main`, and opened draft PR #1 without merging.
+- Re-ran the complete release matrix after hardening: 76 tests, 97.48% statement and 91.01% branch coverage, 1,000 seeded properties, all offline eval groups, 5/5 Chromium flows, exact artifact verification, production build, licence inventory, and dependency audit all pass.
+- Exercised the repaired candidate through selected-candidate export and the native print save sheet, then cancelled without writing or printing.
+
 ## External gates
 
 - Physical validation is awaiting the user and remains separate from software completion.
-- GitHub repository creation/push and Vercel deployment depend on authenticated CLI or connector access.
+- Vercel deployment depends on authenticated CLI access.
 - Production live-model verification depends on GPT-5.6 Sol access and usable credits. No paid API call has been made.

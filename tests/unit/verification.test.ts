@@ -145,6 +145,46 @@ describe("ordered deterministic verification", () => {
     expect(report.targetAngleErrorDeg).toBe(15);
   });
 
+  it("rejects folded coordinates that do not match the parameter-owned source", () => {
+    const corrupted: Candidate = {
+      ...baseCandidate,
+      id: "corrupt-folded-geometry",
+      geometry: {
+        ...baseCandidate.geometry,
+        folded: {
+          ...baseCandidate.geometry.folded,
+          panels: baseCandidate.geometry.folded.panels.map((panel) => ({
+            ...panel,
+            points: panel.points.map(() => ({ xMm: 0, yMm: 0, zMm: 0 })),
+          })),
+        },
+      },
+    };
+    const report = verifyCandidate(corrupted, DEMO_CONSTRAINT);
+    expect(report.hardFailures).toEqual(["fold.transforms"]);
+    expect(report.valid).toBe(false);
+  });
+
+  it("requires toe capture for the measured backrest angle", () => {
+    const constraint: DesignConstraint = {
+      ...DEMO_CONSTRAINT,
+      objectDepthMm: 18,
+      targetViewingAngleDeg: 75,
+    };
+    const candidate = candidateWith(
+      {
+        ...baseCandidate.parameters,
+        baseDepthMm: 80,
+        backrestAngleDeg: 75,
+        frontToeDepthMm: 16,
+        lipHeightMm: 12,
+      },
+      "toe-failure",
+    );
+    const report = verifyCandidate(candidate, constraint);
+    expect(report.hardFailures).toEqual(["retention.toe"]);
+  });
+
   it("rejects inadequate nominal contact before stability", () => {
     const constraint: DesignConstraint = {
       ...DEMO_CONSTRAINT,
@@ -156,7 +196,7 @@ describe("ordered deterministic verification", () => {
       baseDepthMm: 80,
       backrestRiseMm: 35,
       backrestAngleDeg: 65,
-      frontToeDepthMm: 7,
+      frontToeDepthMm: 8,
     };
     const report = verifyCandidate(
       candidateWith(parameters, "contact-failure"),
@@ -166,37 +206,40 @@ describe("ordered deterministic verification", () => {
     expect(report.contactAreaResult).toBe("fail");
   });
 
-  it("rejects a negative front stability reserve", () => {
+  it("rejects a negative rear stability reserve", () => {
     const constraint: DesignConstraint = {
       ...DEMO_CONSTRAINT,
       objectWidthMm: 60,
-      objectHeightMm: 1,
-      objectDepthMm: 30,
+      objectHeightMm: 320,
+      objectDepthMm: 20,
       objectMassG: 500,
       sheetHeightMm: 500,
-      targetViewingAngleDeg: 75,
+      targetViewingAngleDeg: 50,
     };
     const parameters: CandidateParameters = {
       ...baseCandidate.parameters,
-      backrestAngleDeg: 75,
-      lipHeightMm: 11,
+      baseDepthMm: 110,
+      backrestRiseMm: 90,
+      backrestAngleDeg: 50,
+      frontToeDepthMm: 22,
+      lipHeightMm: 18,
     };
     const report = verifyCandidate(
       candidateWith(parameters, "stability-failure"),
       constraint,
     );
     expect(report.hardFailures).toEqual(["stability.support_polygon"]);
-    expect(report.frontStabilityMarginMm).toBeLessThan(0);
+    expect(report.rearStabilityMarginMm).toBeLessThan(0.5);
   });
 
-  it("enforces releasable no-glue fold-flat semantics", () => {
+  it("does not confuse glue permission with glue use", () => {
     const constraint: DesignConstraint = {
       ...DEMO_CONSTRAINT,
       glueAllowed: true,
     };
     const report = verifyCandidate(baseCandidate, constraint);
-    expect(report.hardFailures).toEqual(["fold.unlock_to_sheet"]);
-    expect(report.foldFlatCompatibilityResult).toBe("fail");
+    expect(report.valid).toBe(true);
+    expect(report.foldFlatCompatibilityResult).toBe("pass");
   });
 });
 

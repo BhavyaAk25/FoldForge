@@ -20,17 +20,39 @@ describe("source-owned exports", () => {
     expect(svg).toContain('width="215.9mm"');
     expect(svg).toContain('height="279.4mm"');
     expect(svg).toContain('id="calibration-50mm"');
-    expect(verifySvgScale(svg, DEMO_CONSTRAINT)).toEqual({
+    expect(verifySvgScale(svg, DEMO_CONSTRAINT, candidate)).toEqual({
       valid: true,
       errorMm: 0,
     });
   });
 
   it("rejects incomplete SVG scale declarations", () => {
-    expect(verifySvgScale("<svg />", DEMO_CONSTRAINT)).toEqual({
+    expect(candidate).toBeDefined();
+    if (!candidate) return;
+    expect(verifySvgScale("<svg />", DEMO_CONSTRAINT, candidate)).toEqual({
       valid: false,
       errorMm: Number.POSITIVE_INFINITY,
     });
+  });
+
+  it("rejects SVG geometry or viewBox corruption even when physical units remain", () => {
+    expect(candidate).toBeDefined();
+    if (!candidate) return;
+    const svg = exportSvg(candidate, DEMO_CONSTRAINT);
+    expect(
+      verifySvgScale(
+        svg.replace('viewBox="0 0 215.9 279.4"', 'viewBox="0 0 1 1"'),
+        DEMO_CONSTRAINT,
+        candidate,
+      ).valid,
+    ).toBe(false);
+    expect(
+      verifySvgScale(
+        svg.replace('id="perimeter"', 'id="perimeter-corrupt"'),
+        DEMO_CONSTRAINT,
+        candidate,
+      ).valid,
+    ).toBe(false);
   });
 
   it("writes the FoldForge FOLD 1.2 cuts profile", () => {
@@ -42,6 +64,23 @@ describe("source-owned exports", () => {
     expect(
       document.edges_assignment.filter((assignment) => assignment === "C"),
     ).toHaveLength(2);
+    const boundaryCount = candidate.geometry.flat.outline.points.length;
+    const betaDeg =
+      (Math.atan2(
+        candidate.parameters.backrestRiseMm,
+        candidate.geometry.derived.rearRunMm,
+      ) *
+        180) /
+      Math.PI;
+    expect(
+      document.edges_foldAngle.slice(boundaryCount, boundaryCount + 5),
+    ).toEqual([
+      expect.closeTo(-(candidate.parameters.backrestAngleDeg + betaDeg), 5),
+      expect.closeTo(betaDeg - 180, 5),
+      -90,
+      -candidate.parameters.backrestAngleDeg,
+      -candidate.parameters.backrestAngleDeg,
+    ]);
     expect(verifyFoldReference(candidate, exportFold(candidate)).valid).toBe(
       true,
     );
@@ -60,6 +99,18 @@ describe("source-owned exports", () => {
     expect(verifyFoldReference(candidate, "[]").valid).toBe(false);
     expect(
       verifyFoldReference(candidate, JSON.stringify({ file_spec: 1.1 })).valid,
+    ).toBe(false);
+
+    const corrupt = createFoldDocument(candidate);
+    expect(
+      verifyFoldReference(
+        candidate,
+        JSON.stringify({
+          ...corrupt,
+          vertices_coords: corrupt.vertices_coords.map(() => [0, 0]),
+          edges_foldAngle: corrupt.edges_foldAngle.map(() => 123),
+        }),
+      ).valid,
     ).toBe(false);
   });
 });

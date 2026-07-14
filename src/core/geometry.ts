@@ -1,7 +1,8 @@
 import { TOPOLOGY } from "./constants";
-import { degreesToRadians, distance2 } from "./math";
+import { degreesToRadians, radiansToDegrees } from "./math";
 import type { CandidateParameters } from "./schemas";
 import type {
+  Candidate,
   DerivedDimensions,
   FoldedGeometry,
   Point2,
@@ -336,8 +337,14 @@ export const findDeploymentIntersection = (
       state.frontFoot,
       state.lipTop,
     );
+    const backHitsBase = segmentsProperlyIntersect(
+      state.ridge,
+      state.backrestToe,
+      state.frontFoot,
+      state.rearFoot,
+    );
 
-    if (rearHitsLip || backHitsLip) {
+    if (rearHitsLip || backHitsLip || backHitsBase) {
       return { intersects: true, progress };
     }
   }
@@ -346,23 +353,175 @@ export const findDeploymentIntersection = (
 };
 
 export const maximumPanelLengthErrorMm = (geometry: StandGeometry): number => {
-  const state = deploymentState(geometry, 1);
+  const expectedLengths = new Map<string, number>([
+    ["panel-backrest", geometry.derived.backrestLengthMm],
+    ["panel-rear-brace", geometry.derived.rearBraceLengthMm],
+    ["panel-base", geometry.parameters.baseDepthMm],
+    ["panel-lip", geometry.parameters.lipHeightMm],
+  ]);
+
   return Math.max(
-    Math.abs(
-      distance2(state.ridge, state.backrestToe) -
-        geometry.derived.backrestLengthMm,
-    ),
-    Math.abs(
-      distance2(state.rearFoot, state.ridge) -
-        geometry.derived.rearBraceLengthMm,
-    ),
-    Math.abs(
-      distance2(state.frontFoot, state.rearFoot) -
-        geometry.parameters.baseDepthMm,
-    ),
-    Math.abs(
-      distance2(state.frontFoot, state.lipTop) -
-        geometry.parameters.lipHeightMm,
+    ...geometry.folded.panels.map((panel) => {
+      const first = panel.points[0];
+      const last = panel.points[3];
+      const expected = expectedLengths.get(panel.id);
+      if (!first || !last || expected === undefined)
+        return Number.POSITIVE_INFINITY;
+      const actual = Math.hypot(
+        last.xMm - first.xMm,
+        last.yMm - first.yMm,
+        last.zMm - first.zMm,
+      );
+      return Math.abs(actual - expected);
+    }),
+  );
+};
+
+const maximumNumberDifference = (
+  actual: readonly number[],
+  expected: readonly number[],
+): number => {
+  if (actual.length !== expected.length) return Number.POSITIVE_INFINITY;
+  return Math.max(
+    0,
+    ...actual.map((value, index) =>
+      Math.abs(value - (expected[index] ?? Number.POSITIVE_INFINITY)),
     ),
   );
+};
+
+const geometryCoordinates = (geometry: StandGeometry): readonly number[] => [
+  ...Object.values(geometry.derived),
+  geometry.flat.widthMm,
+  geometry.flat.lengthMm,
+  ...geometry.flat.outline.points.flatMap((point) => [point.xMm, point.yMm]),
+  ...geometry.flat.panels.flatMap((panel) =>
+    panel.points.flatMap((point) => [point.xMm, point.yMm]),
+  ),
+  ...geometry.flat.creases.flatMap((segment) => [
+    segment.start.xMm,
+    segment.start.yMm,
+    segment.end.xMm,
+    segment.end.yMm,
+  ]),
+  ...geometry.flat.slots.flatMap((segment) => [
+    segment.start.xMm,
+    segment.start.yMm,
+    segment.end.xMm,
+    segment.end.yMm,
+  ]),
+  ...Object.values(geometry.folded.sideProfile).flatMap((point) => [
+    point.xMm,
+    point.yMm,
+  ]),
+  ...geometry.folded.panels.flatMap((panel) =>
+    panel.points.flatMap((point) => [point.xMm, point.yMm, point.zMm]),
+  ),
+];
+
+const panelAreaMm2 = (panel: FoldedGeometry["panels"][number]): number => {
+  const first = panel.points[0];
+  const second = panel.points[1];
+  const last = panel.points[3];
+  if (!first || !second || !last) return 0;
+  const firstEdge = {
+    x: second.xMm - first.xMm,
+    y: second.yMm - first.yMm,
+    z: second.zMm - first.zMm,
+  };
+  const secondEdge = {
+    x: last.xMm - first.xMm,
+    y: last.yMm - first.yMm,
+    z: last.zMm - first.zMm,
+  };
+  const cross = {
+    x: firstEdge.y * secondEdge.z - firstEdge.z * secondEdge.y,
+    y: firstEdge.z * secondEdge.x - firstEdge.x * secondEdge.z,
+    z: firstEdge.x * secondEdge.y - firstEdge.y * secondEdge.x,
+  };
+  return Math.hypot(cross.x, cross.y, cross.z);
+};
+
+export interface FoldedGeometryAudit {
+  readonly sourceCoordinateErrorMm: number;
+  readonly panelLengthErrorMm: number;
+  readonly minimumPanelAreaMm2: number;
+  readonly measuredBackrestAngleDeg: number;
+  readonly parametersMatch: boolean;
+  readonly topologyMatch: boolean;
+}
+
+export const auditFoldedGeometry = (
+  candidate: Candidate,
+): FoldedGeometryAudit => {
+  const expected = buildStandGeometry(candidate.parameters);
+  const backrest = candidate.geometry.folded.panels.find(
+    (panel) => panel.id === "panel-backrest",
+  );
+  const toe = backrest?.points[0];
+  const ridge = backrest?.points[3];
+  const measuredBackrestAngleDeg =
+    toe && ridge
+      ? radiansToDegrees(Math.atan2(ridge.zMm - toe.zMm, ridge.xMm - toe.xMm))
+      : Number.POSITIVE_INFINITY;
+
+  return {
+    sourceCoordinateErrorMm: maximumNumberDifference(
+      geometryCoordinates(candidate.geometry),
+      geometryCoordinates(expected),
+    ),
+    panelLengthErrorMm: maximumPanelLengthErrorMm(candidate.geometry),
+    minimumPanelAreaMm2: Math.min(
+      ...candidate.geometry.folded.panels.map(panelAreaMm2),
+    ),
+    measuredBackrestAngleDeg,
+    parametersMatch:
+      JSON.stringify(candidate.geometry.parameters) ===
+      JSON.stringify(candidate.parameters),
+    topologyMatch:
+      JSON.stringify({
+        outline: candidate.geometry.flat.outline.id,
+        panels: candidate.geometry.flat.panels.map((panel) => panel.id),
+        creases: candidate.geometry.flat.creases.map((crease) => crease.id),
+        slots: candidate.geometry.flat.slots.map((slot) => slot.id),
+        folded: candidate.geometry.folded.panels.map((panel) => panel.id),
+      }) ===
+      JSON.stringify({
+        outline: expected.flat.outline.id,
+        panels: expected.flat.panels.map((panel) => panel.id),
+        creases: expected.flat.creases.map((crease) => crease.id),
+        slots: expected.flat.slots.map((slot) => slot.id),
+        folded: expected.folded.panels.map((panel) => panel.id),
+      }),
+  };
+};
+
+export const planarPanelsHaveInteriorOverlap = (
+  geometry: StandGeometry,
+): boolean => {
+  const bounds = geometry.flat.panels.map((panel) => ({
+    id: panel.id,
+    minX: Math.min(...panel.points.map((point) => point.xMm)),
+    maxX: Math.max(...panel.points.map((point) => point.xMm)),
+    minY: Math.min(...panel.points.map((point) => point.yMm)),
+    maxY: Math.max(...panel.points.map((point) => point.yMm)),
+  }));
+  const epsilon = 1e-7;
+  for (let firstIndex = 0; firstIndex < bounds.length; firstIndex += 1) {
+    for (
+      let secondIndex = firstIndex + 1;
+      secondIndex < bounds.length;
+      secondIndex += 1
+    ) {
+      const first = bounds[firstIndex];
+      const second = bounds[secondIndex];
+      if (!first || !second) continue;
+      const overlapX =
+        Math.min(first.maxX, second.maxX) - Math.max(first.minX, second.minX);
+      const overlapY =
+        Math.min(first.maxY, second.maxY) - Math.max(first.minY, second.minY);
+      if (overlapX > epsilon && overlapY > epsilon) return true;
+    }
+  }
+  return false;
 };

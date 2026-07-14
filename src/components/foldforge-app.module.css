@@ -310,6 +310,11 @@
   line-height: 1;
 }
 
+.stageHeading h2:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 6px;
+}
+
 .stageHeading > p {
   margin: 0;
   color: var(--muted);
@@ -354,8 +359,37 @@
     var(--border) 32px
   );
   color: var(--graphite);
+  font-family: var(--font-mono);
   font-size: 1.16rem;
   line-height: 32px;
+}
+
+.promptCard textarea:focus-visible,
+.field select:focus-visible,
+.accessBar input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+.promptCard textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.promptModeNote,
+.privacyNote,
+.repairReason {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.promptModeNote {
+  margin: 12px 0 0;
+}
+
+.privacyNote {
+  margin: 14px 0 0;
 }
 
 .promptFooter {
@@ -413,6 +447,11 @@
   background: var(--surface);
 }
 
+.inputWithUnit:focus-within {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
 .field select {
   min-height: 46px;
   padding: 0 12px;
@@ -435,11 +474,21 @@
   color: var(--graphite);
 }
 
+.inputWithUnit input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 0;
+}
+
 .inputWithUnit span {
   padding-right: 10px;
   color: var(--faint);
   font-family: var(--font-mono);
   font-size: 0.64rem;
+}
+
+.fieldError {
+  color: var(--failure);
+  font-size: 0.68rem;
 }
 
 .constraintSummary {
@@ -751,6 +800,12 @@
   border-bottom: 0;
 }
 
+.repairReason {
+  margin: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
 .patchCard h4 {
   margin: 0 0 7px;
   color: var(--accent);
@@ -894,6 +949,15 @@
   line-height: 1.45;
 }
 
+.tracePanel small {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .stageFooter {
   justify-content: space-between;
   margin-top: 24px;
@@ -974,7 +1038,7 @@
 
 .exportGrid {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   margin-top: 18px;
 }

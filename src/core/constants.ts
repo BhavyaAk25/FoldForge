@@ -25,6 +25,10 @@ export const TOPOLOGY = {
   physicalStatus: "awaiting_user",
 } as const;
 
+// Printable exports reserve this footer outside the fabrication pattern for the
+// scale bar and print-at-100% reminder.
+export const EXPORT_FOOTER_HEIGHT_MM = 10;
+
 export const PRODUCT_LIMITS = {
   maximumObjectMassG: 500,
   maximumPromptCharacters: 2_000,

@@ -1,6 +1,7 @@
 import { zodTextFormat } from "openai/helpers/zod";
 
 import { PRODUCT_LIMITS } from "@/core/constants";
+import { degreesToRadians } from "@/core/math";
 import { DesignConstraintSchema, type DesignConstraint } from "@/core/schemas";
 import { lengthToMm, massToG } from "@/core/units";
 
@@ -168,6 +169,19 @@ export const normalizeCompilation = (
     };
   }
 
+  const requiredToeDepthMm =
+    parsed.data.objectDepthMm *
+      Math.sin(degreesToRadians(parsed.data.targetViewingAngleDeg)) +
+    0.5;
+  if (requiredToeDepthMm > 22) {
+    return {
+      status: "infeasible",
+      constraint: null,
+      clarifyingQuestion: "",
+      interpretationSummary: `${raw.interpretationSummary} The device depth requires ${requiredToeDepthMm.toFixed(1)} mm of toe capture, above the 22 mm topology limit.`,
+    };
+  }
+
   return {
     status: "ready",
     constraint: parsed.data,
@@ -218,9 +232,23 @@ export const compileConstraints = async (
 export const compileProvidedConstraint = (
   constraint: DesignConstraint,
   summary: string,
-): CompileOutcome => ({
-  status: "ready",
-  constraint: DesignConstraintSchema.parse(constraint),
-  clarifyingQuestion: "",
-  interpretationSummary: summary,
-});
+): CompileOutcome => {
+  const parsed = DesignConstraintSchema.parse(constraint);
+  const requiredToeDepthMm =
+    parsed.objectDepthMm *
+      Math.sin(degreesToRadians(parsed.targetViewingAngleDeg)) +
+    0.5;
+  return requiredToeDepthMm > 22
+    ? {
+        status: "infeasible",
+        constraint: null,
+        clarifyingQuestion: "",
+        interpretationSummary: `${summary} Device depth requires ${requiredToeDepthMm.toFixed(1)} mm of toe capture, above the 22 mm topology limit.`,
+      }
+    : {
+        status: "ready",
+        constraint: parsed,
+        clarifyingQuestion: "",
+        interpretationSummary: summary,
+      };
+};

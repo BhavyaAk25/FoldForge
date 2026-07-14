@@ -2,10 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { generateCandidates } from "../src/core/candidates";
-import { DEMO_CONSTRAINT } from "../src/core/constraints";
 import { exportFold, verifyFoldReference } from "../src/core/export/fold";
 import { exportSvg, verifySvgScale } from "../src/core/export/svg";
-import type { DesignConstraint } from "../src/core/schemas";
 import {
   compareCandidates,
   selectRepresentatives,
@@ -15,6 +13,7 @@ import {
   RuleBasedRepairDiagnosisModel,
   runRepairLoop,
 } from "../src/server/orchestration/repair-loop";
+import { REPAIR_FIXTURES } from "../tests/fixtures/repair-fixtures";
 
 const argument = (name: string): string | null => {
   const index = process.argv.indexOf(name);
@@ -23,36 +22,35 @@ const argument = (name: string): string | null => {
 
 const caseCount = Number(argument("--cases") ?? 15);
 const results = [];
+const repairableFixtures = REPAIR_FIXTURES.filter(
+  (fixture) => fixture.expectedStatus === "passed",
+);
 
 for (let index = 0; index < caseCount; index += 1) {
-  const constraint: DesignConstraint = {
-    ...DEMO_CONSTRAINT,
-    objectWidthMm: 62 + (index % 6) * 4,
-    objectHeightMm: 138 + (index % 5) * 5,
-    objectDepthMm: 6.5 + (index % 4) * 0.7,
-    objectMassG: 140 + (index % 5) * 28,
-    targetViewingAngleDeg: 58 + (index % 4) * 3,
-  };
+  const fixture = repairableFixtures[index % repairableFixtures.length];
+  if (!fixture) throw new Error("Repair evaluation fixtures are unavailable.");
+  const constraint = fixture.constraint;
   try {
-    const candidates = generateCandidates(constraint, 20260714);
+    const candidates = generateCandidates(constraint, 20260714 + index);
     const evaluated = candidates.map((candidate) => ({
       candidate,
       report: verifyCandidate(candidate, constraint),
     }));
     const representatives = selectRepresentatives(evaluated);
-    const failure = representatives.find((entry) => !entry.report.valid);
-    const repair = failure
-      ? await runRepairLoop(
-          failure.candidate,
-          constraint,
-          new RuleBasedRepairDiagnosisModel(),
-          "ff_e2e_eval",
-          { now: () => "2026-07-14T12:00:00.000Z" },
-        )
-      : null;
+    const failure = {
+      candidate: fixture.candidate,
+      report: verifyCandidate(fixture.candidate, constraint),
+    };
+    const repair = await runRepairLoop(
+      failure.candidate,
+      constraint,
+      new RuleBasedRepairDiagnosisModel(),
+      "ff_e2e_eval",
+      { now: () => "2026-07-14T12:00:00.000Z" },
+    );
     const finalEvaluated = [
       ...evaluated,
-      ...(repair?.status === "passed"
+      ...(repair.status === "passed"
         ? [{ candidate: repair.candidate, report: repair.report }]
         : []),
     ];
@@ -65,18 +63,19 @@ for (let index = 0; index < caseCount; index += 1) {
     const passed =
       candidates.length === 9 &&
       representatives.length === 3 &&
-      failure !== undefined &&
-      repair?.status === "passed" &&
+      repair.status === "passed" &&
       repair.cycles.length <= 3 &&
       winner?.report.valid === true &&
-      (winner ? verifySvgScale(svg, constraint).valid : false) &&
+      (winner
+        ? verifySvgScale(svg, constraint, winner.candidate).valid
+        : false) &&
       (winner ? verifyFoldReference(winner.candidate, fold).valid : false);
     results.push({
       case: index + 1,
       status: passed ? "passed" : "failed",
-      measuredFailure: failure?.report.hardFailures[0] ?? null,
-      repairStatus: repair?.status ?? "not_run",
-      repairCycles: repair?.cycles.length ?? 0,
+      measuredFailure: failure.report.hardFailures[0] ?? null,
+      repairStatus: repair.status,
+      repairCycles: repair.cycles.length,
       winner: winner?.candidate.id ?? null,
     });
   } catch (error) {

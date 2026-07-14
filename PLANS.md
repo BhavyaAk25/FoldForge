@@ -1,15 +1,16 @@
 # FoldForge implementation plan
 
-| Milestone                              | Status        | Proof                                            |
-| -------------------------------------- | ------------- | ------------------------------------------------ |
-| Repository, branch, scaffold, guidance | Complete      | `pnpm run check`                                 |
-| Deterministic geometry and kill test   | Complete      | unit/property tests, artifact verifier, coverage |
-| GPT-5.6 constraint compiler            | Offline ready | 28-case contract eval; live access blocked       |
-| Bounded repair loop                    | Complete      | 10 seeded fixtures, five-cycle exhaustion        |
-| Workshop UI, preview, exports          | Complete      | browser matrix and 5 Playwright flows            |
-| Full eval and independent review       | In progress   | release thresholds and review log                |
-| GitHub, Vercel, submission package     | Pending       | public branch, draft PR, live URL                |
-| Physical prototype                     | Awaiting user | signed physical protocol result                  |
+| Milestone                              | Status        | Proof                                             |
+| -------------------------------------- | ------------- | ------------------------------------------------- |
+| Repository, branch, scaffold, guidance | Complete      | `pnpm run check`                                  |
+| Deterministic geometry and kill test   | Complete      | mutation tests, artifact verifier, coverage       |
+| GPT-5.6 constraint compiler            | Offline ready | 25-case contract eval; live access blocked        |
+| Bounded repair loop                    | Complete      | 11 seeded fixtures, bounded exhaustion            |
+| Workshop UI, preview, exports          | Complete      | browser matrix and 5 Playwright flows             |
+| Full eval and independent review       | Complete      | all serious findings fixed; release matrix passes |
+| GitHub and draft PR                    | Complete      | public `BhavyaAk25/FoldForge`, draft PR #1        |
+| Vercel and submission package          | Auth blocked  | Vercel device login requires user interaction     |
+| Physical prototype                     | Awaiting user | signed physical protocol result                   |
 
 ## Dependencies and blockers
 

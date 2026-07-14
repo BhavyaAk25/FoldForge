@@ -14,7 +14,7 @@ test("generates, repairs, restores, finalizes, and downloads", async ({
   await page.getByRole("button", { name: "Generate candidates" }).click();
   await expect(
     page.getByRole("heading", { name: "Inspect the evidence." }),
-  ).toBeVisible();
+  ).toBeFocused();
   await expect(
     page.getByText("geometry.rear_run", { exact: true }),
   ).toBeVisible();
@@ -29,7 +29,7 @@ test("generates, repairs, restores, finalizes, and downloads", async ({
   await expect(
     page.getByRole("heading", { name: "All hard checks pass" }),
   ).toBeVisible();
-  await expect(page.getByText("Cycle 3", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cycle 2", { exact: true })).toBeVisible();
 
   await page.reload();
   await expect(
@@ -37,9 +37,14 @@ test("generates, repairs, restores, finalizes, and downloads", async ({
   ).toBeVisible();
   await expect(page.getByText("Repair passed", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Select verified export" }).click();
+  await page
+    .getByRole("button", { name: "Prepare selected verified export" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Make the digital plan physical." }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("heading", { level: 3, name: /compact \/ compact-/ }),
   ).toBeVisible();
   await expect(
     page.getByText("Verified in software", { exact: true }),
@@ -102,18 +107,24 @@ test("supports keyboard operation and persistent sound preference", async ({
     page.getByRole("link", { name: "FoldForge home" }),
   ).toBeFocused();
   await page.keyboard.press("Tab");
-  const soundButton = page.getByRole("button", {
-    name: "Enable workshop sounds",
-  });
+  const soundButton = page.getByRole("button", { name: "Workshop sounds" });
   await expect(soundButton).toBeFocused();
+  await expect(soundButton).toHaveAttribute("aria-pressed", "false");
   await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("button", { name: "Mute workshop sounds" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(soundButton).toHaveAttribute("aria-pressed", "true");
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Mute workshop sounds" }),
-  ).toHaveAttribute("aria-pressed", "false");
+    page.getByRole("button", { name: "Workshop sounds" }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  const massInput = page.getByLabel("Mass in g");
+  await massInput.focus();
+  await expect(massInput).toBeFocused();
+  expect(
+    await massInput.evaluate(
+      (element) => getComputedStyle(element).outlineWidth,
+    ),
+  ).not.toBe("0px");
 });
 
 test("fails safely when an API returns malformed data", async ({ page }) => {

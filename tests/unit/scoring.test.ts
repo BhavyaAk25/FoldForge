@@ -10,7 +10,7 @@ const baseInput = {
   paperEfficiencyRatio: 0.35,
   targetAngleErrorDeg: 1,
   angleToleranceDeg: 5,
-  panelClearanceMm: 1,
+  slotClearanceMm: 0.8,
 } as const;
 
 describe("deterministic scoring", () => {
@@ -44,7 +44,7 @@ describe("deterministic scoring", () => {
       frontStabilityMarginMm: -100,
       targetAngleErrorDeg: 100,
       paperEfficiencyRatio: 2,
-      panelClearanceMm: 0,
+      slotClearanceMm: 0.4,
       priority: "stability",
     });
     expect(score.stability).toBe(0);

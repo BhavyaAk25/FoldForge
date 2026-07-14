@@ -14,6 +14,7 @@ describe("access and privacy identifiers", () => {
     vi.stubEnv("ACCESS_COOKIE_SECRET", "0123456789abcdef0123456789abcdef");
     const token = createAccessToken(1_000);
     expect(verifyAccessToken(token, 1_001)).toBe(true);
+    expect(verifyAccessToken(`${token}.ignored`, 1_001)).toBe(false);
     expect(verifyAccessToken(token, 10_000)).toBe(false);
     expect(verifyAccessToken(`${token}tampered`, 1_001)).toBe(false);
   });

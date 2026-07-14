@@ -28,7 +28,7 @@ const createParameters = (
   const frontToeDepthMm = clamp(
     Math.max(8, constraint.objectDepthMm * Math.sin(angleRad) + 0.5),
     7,
-    16,
+    22,
   );
   const lipHeightMm = clamp(
     Math.max(8, constraint.objectDepthMm * Math.cos(angleRad) + 3),
@@ -53,12 +53,14 @@ const createParameters = (
   let backrestAngleDeg =
     targetAngleDeg + strategyAdjustments.angleDeg + variantShift + jitter * 0.8;
 
-  // The third compact sample is intentionally aggressive. It remains within all
-  // parameter bounds but creates a real rear-run failure for the verifier to expose.
-  if (seed === 20260714 && strategy === "compact" && variant === 2) {
-    baseDepthMm = 45;
-    backrestRiseMm = clamp(balancedRiseMm + 9, 35, 90);
-    backrestAngleDeg = 50;
+  // The final compact sample explores the real geometric boundary of the
+  // supported family. Its dimensions follow the device face, so any rejection
+  // is caused by the same verifier used for every request rather than a seed or
+  // demo-specific shortcut.
+  if (strategy === "compact" && variant === 2) {
+    baseDepthMm = clamp(face.lengthMm * 0.31, 45, 70);
+    backrestRiseMm = clamp(balancedRiseMm + 7, 35, 90);
+    backrestAngleDeg = clamp(targetAngleDeg - 10, 50, 75);
   }
 
   const standWidthMm = clamp(

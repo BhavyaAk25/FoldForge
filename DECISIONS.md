@@ -11,8 +11,9 @@
 
 - Canonical units are millimetres, grams, and degrees.
 - Candidate parameters stay within documented closed ranges. Derived rear run must be at least 12 mm.
-- Deployment checks at least 201 states plus refined samples around possible intersections. This is a deterministic geometric screen, not a rigid-foldability proof.
-- Stability combines the device centre-of-mass projection with a small paper-mass heuristic and a conservative uncertainty reserve.
+- Deployment checks exactly 201 fixed side-profile states and all non-adjacent structural segment pairs. Tabs, device volume, paper thickness, friction, collinear near-clearance, and adaptive refinement are not modeled; this is a screen, not a rigid-foldability proof.
+- Stability combines the device centre-of-mass projection with area-weighted deployed centroids for every paper panel and a conservative uncertainty reserve.
+- Toe capture is a hard measured-angle check. Requests requiring more than the 22 mm topology limit are explicitly infeasible.
 - Contact area is “nominal geometric overlap,” never pressure, friction, or load capacity.
 - Verification is fail-fast and code-owned; failed candidates are ineligible for ranking.
 
@@ -25,13 +26,13 @@
 
 ## Export profile
 
-- SVG declares millimetres and uses one viewBox unit per millimetre with a 50 mm calibration line.
-- FOLD uses `file_spec: 1.2`, millimetres, a crease-pattern frame, `B/M/V/C` edges, and no faces for the cut-bearing v1 profile.
+- SVG declares millimetres, uses one viewBox unit per millimetre, and reserves a 10 mm footer for the 50 mm calibration line.
+- FOLD uses `file_spec: 1.2`, millimetres, a crease-pattern frame, derived deployed fold angles, `B/M/V/C` edges, and no faces for the cut-bearing v1 profile.
 - “FOLD-reference result” means FoldForge-profile source equivalence, not universal simulator compatibility.
 
 ## Experience
 
-- Paper `#F4F0E6`, surface `#FBF8F1`, graphite `#20201D`, muted `#6E6A62`, border `#CFC7B8`, accent `#315F63`, success `#247A4A`, warning `#A46516`, failure `#B43A32`.
+- Paper `#F4F0E6`, surface `#FBF8F1`, graphite `#20201D`, muted `#6E6A62`, border `#CFC7B8`, accent `#315F63`, success `#247A4A`, warning `#7A4B0E`, failure `#B43A32`.
 - Geist Sans/Mono, 8 px spacing grid, limited shadows, restrained motion, synthesized interaction sounds, persistent mute, and immediate reduced-motion rendering.
 
 ## Rejected alternatives

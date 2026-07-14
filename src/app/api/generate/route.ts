@@ -10,7 +10,9 @@ import { GenerateRequestSchema } from "@/server/api/schemas";
 import { apiError, parseJsonBody } from "@/server/api/response";
 
 export const POST = async (request: Request): Promise<NextResponse> => {
-  const parsed = GenerateRequestSchema.safeParse(await parseJsonBody(request));
+  const body = await parseJsonBody(request);
+  if (!body.ok) return body.response;
+  const parsed = GenerateRequestSchema.safeParse(body.value);
   if (!parsed.success)
     return apiError("INVALID_REQUEST", "Generation input is malformed.", 400);
 

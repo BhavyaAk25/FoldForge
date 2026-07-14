@@ -208,22 +208,61 @@ describe("application API routes", () => {
     const response = await generatePost(
       new Request("http://localhost/api/generate", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: "{",
       }),
     );
     expect(response.status).toBe(400);
   });
 
+  it("rejects non-JSON and oversized request bodies before schema work", async () => {
+    const wrongType = await generatePost(
+      new Request("http://localhost/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: "{}",
+      }),
+    );
+    expect(wrongType.status).toBe(415);
+
+    const misleadingType = await generatePost(
+      new Request("http://localhost/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json-patch+json" },
+        body: "{}",
+      }),
+    );
+    expect(misleadingType.status).toBe(415);
+
+    const oversized = await generatePost(
+      new Request("http://localhost/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": String(70 * 1024),
+        },
+        body: JSON.stringify({ value: "x".repeat(70 * 1024) }),
+      }),
+    );
+    expect(oversized.status).toBe(413);
+  });
+
   it("sets a short-lived HttpOnly cookie only for the correct access code", async () => {
-    vi.stubEnv("DEMO_ACCESS_CODE", "judge-only");
+    vi.stubEnv("DEMO_ACCESS_CODE", "too-short");
     vi.stubEnv("ACCESS_COOKIE_SECRET", "0123456789abcdef0123456789abcdef");
+    const misconfigured = await accessPost(
+      jsonRequest("http://localhost/api/access", { code: "too-short" }),
+    );
+    expect(misconfigured.status).toBe(503);
+
+    vi.stubEnv("DEMO_ACCESS_CODE", "judge-only-2026");
     const denied = await accessPost(
       jsonRequest("http://localhost/api/access", { code: "wrong" }),
     );
     expect(denied.status).toBe(401);
 
     const granted = await accessPost(
-      jsonRequest("http://localhost/api/access", { code: "judge-only" }),
+      jsonRequest("http://localhost/api/access", { code: "judge-only-2026" }),
     );
     expect(granted.status).toBe(200);
     expect(granted.headers.get("set-cookie")).toContain("HttpOnly");

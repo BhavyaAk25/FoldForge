@@ -1,6 +1,7 @@
 import { round } from "../math";
 import type { Candidate, Point2, Segment2 } from "../types";
 import type { DesignConstraint } from "../schemas";
+import { EXPORT_FOOTER_HEIGHT_MM } from "../constants";
 
 const pointList = (
   points: readonly Point2[],
@@ -32,7 +33,8 @@ export const exportSvg = (
   const sheetHeightMm = constraint.sheetHeightMm;
   const offsetX = marginMm;
   const offsetY = marginMm;
-  const calibrationY = sheetHeightMm - marginMm;
+  const footerStartY = sheetHeightMm - marginMm - EXPORT_FOOTER_HEIGHT_MM;
+  const calibrationY = footerStartY + 4;
 
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
@@ -56,18 +58,26 @@ export const exportSvg = (
 export const verifySvgScale = (
   svg: string,
   constraint: DesignConstraint,
+  candidate: Candidate,
 ): { readonly valid: boolean; readonly errorMm: number } => {
   const widthMatch = svg.match(/<svg[^>]*width="([\d.]+)mm"/);
   const heightMatch = svg.match(/<svg[^>]*height="([\d.]+)mm"/);
   const calibrationMatch = svg.match(
     /id="calibration-50mm"[^>]*x1="([\d.]+)"[^>]*x2="([\d.]+)"/,
   );
+  const viewBoxMatch = svg.match(
+    /<svg[^>]*viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/,
+  );
 
   if (
     !widthMatch?.[1] ||
     !heightMatch?.[1] ||
     !calibrationMatch?.[1] ||
-    !calibrationMatch[2]
+    !calibrationMatch[2] ||
+    !viewBoxMatch?.[1] ||
+    !viewBoxMatch[2] ||
+    !viewBoxMatch[3] ||
+    !viewBoxMatch[4]
   ) {
     return { valid: false, errorMm: Number.POSITIVE_INFINITY };
   }
@@ -81,6 +91,15 @@ export const verifySvgScale = (
   const scaleErrorMm = Math.abs(
     Number(calibrationMatch[2]) - Number(calibrationMatch[1]) - 50,
   );
-  const errorMm = Math.max(widthErrorMm, heightErrorMm, scaleErrorMm);
+  const viewBoxErrorMm = Math.max(
+    Math.abs(Number(viewBoxMatch[1])),
+    Math.abs(Number(viewBoxMatch[2])),
+    Math.abs(Number(viewBoxMatch[3]) - constraint.sheetWidthMm),
+    Math.abs(Number(viewBoxMatch[4]) - constraint.sheetHeightMm),
+  );
+  const sourceEquivalent = svg === exportSvg(candidate, constraint);
+  const errorMm = sourceEquivalent
+    ? Math.max(widthErrorMm, heightErrorMm, scaleErrorMm, viewBoxErrorMm)
+    : Number.POSITIVE_INFINITY;
   return { valid: errorMm <= 0.01, errorMm };
 };

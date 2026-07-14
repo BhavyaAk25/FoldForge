@@ -28,7 +28,9 @@ export const verifyAccessToken = (
   nowSeconds = Math.floor(Date.now() / 1_000),
 ): boolean => {
   const signingSecret = secret();
-  const [expiresText, suppliedSignature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [expiresText, suppliedSignature] = parts;
   if (!signingSecret || !expiresText || !suppliedSignature) return false;
 
   const expires = Number(expiresText);
@@ -45,8 +47,12 @@ export const verifyAccessToken = (
 export const accessRequired = (): boolean =>
   Boolean(process.env.DEMO_ACCESS_CODE);
 
+export const liveAccessConfigurationValid = (): boolean =>
+  (process.env.DEMO_ACCESS_CODE?.length ?? 0) >= 12 &&
+  (process.env.ACCESS_COOKIE_SECRET?.length ?? 0) >= 32;
+
 export const hasLiveModelAccess = (request: NextRequest): boolean =>
-  !accessRequired() ||
+  liveAccessConfigurationValid() &&
   verifyAccessToken(request.cookies.get(COOKIE_NAME)?.value ?? "");
 
 export const accessCookie = (token: string) => ({
@@ -61,7 +67,7 @@ export const accessCookie = (token: string) => ({
 
 export const accessCodeMatches = (supplied: string): boolean => {
   const expected = process.env.DEMO_ACCESS_CODE;
-  if (!expected) return true;
+  if (!expected) return false;
   const suppliedBuffer = Buffer.from(supplied);
   const expectedBuffer = Buffer.from(expected);
   return (
