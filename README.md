@@ -53,6 +53,7 @@ pnpm run dev
 Set these server-only variables in `.env.local`:
 
 - `OPENAI_API_KEY` — OpenAI project key.
+- `ENABLE_LIVE_OPENAI` — set to `true` only when model access and usable credits are confirmed; the default offline mode makes no paid calls.
 - `DEMO_ACCESS_CODE` — optional shared code that protects live model calls.
 - `ACCESS_COOKIE_SECRET` — at least 32 random bytes for the signed access cookie.
 
@@ -67,6 +68,11 @@ FC_SEED=20260714 FC_NUM_RUNS=1000 pnpm run test:property
 pnpm run fixture -- --fixture phone-letter-110lb --seed 20260714 --output artifacts/kill-test
 pnpm run verify:artifact -- artifacts/kill-test/manifest.json
 pnpm run test:e2e
+pnpm run eval:offline
+pnpm run eval:compiler -- --cases 25
+pnpm run eval:repair -- --fixtures 10 --max-iterations 5
+pnpm run eval:e2e -- --cases 15
+pnpm run eval:ablation
 ```
 
 The fixture emits a passing SVG/FOLD pair, a deliberately aggressive compact candidate rejected for a measured rear-run failure, a manifest, and physical folding instructions. Repeated generation with the same seed is byte-stable.
@@ -94,9 +100,11 @@ Unsupported objects, missing essential measurements, conflicting limits, and inf
 
 FoldForge builds on the vocabulary and interchange goals of the [FOLD specification](https://github.com/edemaine/fold/blob/main/doc/spec.md) and acknowledges [OrigamiSimulator](https://erikdemaine.org/papers/OrigamiSimulator_Origami7/), [COrigami](https://arxiv.org/abs/2606.26299), [Learn2Fold](https://arxiv.org/abs/2603.29585), [rigid-origami optimization](https://www.ijcai.org/proceedings/2023/645), [TreeMaker](https://langorigami.com/article/treemaker/), and [Origamizer](https://erikdemaine.org/papers/Origamizer_SoCG2017/). These systems are cited for context; their code or designs are not incorporated.
 
-## Judges and deployment
+## Live-model status and deployment
 
-The hosted URL, shared live-generator access code, evaluation snapshot, video, and primary Codex `/feedback` session ID will be added before submission. The landing page remains public; the access code only protects paid model calls.
+The full GPT-5.6 Sol integration, strict prompts, schemas, safety identifier, access gate, and mocked/offline contracts are implemented. Live calls are deliberately disabled until usable API credits and model access are confirmed. GPT-5.6 Sol does not currently list free-tier API access, so local or hosted software must not imply a compliant live run until that external gate is cleared.
+
+The hosted URL and shared live-generator access code will be added after Vercel authentication and credits are confirmed. The landing page remains public; the access code protects only paid model calls.
 
 ## License
 

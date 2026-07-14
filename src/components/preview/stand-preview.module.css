@@ -1,0 +1,49 @@
+.preview {
+  width: 100%;
+  height: clamp(270px, 34vw, 470px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: #f8f3e9;
+}
+
+.preview canvas {
+  display: block;
+}
+
+.flatSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 18px;
+}
+
+.outline {
+  fill: #eee6d5;
+  stroke: var(--graphite);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.crease,
+.slot {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.crease {
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+}
+
+.slot {
+  stroke: var(--failure);
+  stroke-width: 2.2;
+}
+
+.failed {
+  stroke: var(--failure);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 4px rgb(180 58 50 / 32%));
+}

@@ -22,20 +22,25 @@
     "eval:repair": "tsx scripts/run-repair-evals.ts",
     "eval:e2e": "tsx scripts/run-e2e-evals.ts",
     "eval:ablation": "tsx scripts/run-ablation.ts",
+    "test:e2e": "playwright test",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test && pnpm run build"
   },
   "dependencies": {
+    "@react-three/fiber": "9.6.1",
     "geist": "1.7.2",
     "next": "16.2.10",
     "openai": "6.46.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "three": "0.185.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.185.1",
     "@vitest/coverage-v8": "4.1.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
