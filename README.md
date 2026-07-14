@@ -10,7 +10,7 @@ Production: [foldforge.vercel.app](https://foldforge.vercel.app) — deployed in
 
 ## Supported scope
 
-FoldForge supports one procedural family: a continuous-strip, dual-tab, fold-flat stand for phones and light tablets up to 500 g. It varies width, base depth, backrest rise and angle, lip, tabs, and clearances within documented bounds.
+FoldForge supports one procedural family: a continuous-strip, dual-tab, fold-flat stand for phones and light tablets. The software accepts design inputs up to 500 g inside its current geometric verifier envelope; this is an input bound, **not** a tested load rating. It varies width, base depth, backrest rise and angle, lip, tabs, and clearances within documented bounds.
 
 It is not unrestricted text-to-origami, an industrial CAD system, a material-strength simulator, or a load certification tool. FoldForge performs geometric and kinematic verification. Real load capacity depends on material, print accuracy, and fold quality and must be confirmed through physical prototyping.
 
@@ -90,6 +90,15 @@ Unsupported objects, missing essential measurements, conflicting limits, and inf
 ## Physical status
 
 **Physical validation pending.** No load-bearing or tablet-performance claim is made. Follow [PHYSICAL_TEST.md](./PHYSICAL_TEST.md); a result is not recorded as passed until the user confirms the printed scale, material, folds, and timed hold.
+
+## Remaining release gates
+
+Two external gates remain before the strongest hackathon claim can be demonstrated:
+
+1. Run the controlled physical cardstock test and record calibration, device data, timed holds, failures, and evidence in `PHYSICAL_TEST.md`.
+2. Enable and evaluate live GPT-5.6 Sol only after model access, usable credits, the access gate, and provider-side spend controls are confirmed.
+
+Until both gates pass, the deployed application must continue to describe itself as an offline deterministic demonstration with an implemented but unverified live-model integration.
 
 ## Evaluation and build evidence
 
