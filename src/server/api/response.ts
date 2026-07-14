@@ -8,7 +8,12 @@ export const apiError = (
 ): NextResponse =>
   NextResponse.json({ error: { code, message, details } }, { status });
 
-const MAXIMUM_JSON_BODY_BYTES = 64 * 1024;
+const DEFAULT_MAXIMUM_JSON_BODY_BYTES = 64 * 1024;
+const ABSOLUTE_MAXIMUM_JSON_BODY_BYTES = 1024 * 1024;
+
+export interface JsonBodyOptions {
+  readonly maxBytes: number;
+}
 
 export type JsonBodyResult =
   | { readonly ok: true; readonly value: unknown }
@@ -16,7 +21,18 @@ export type JsonBodyResult =
 
 export const parseJsonBody = async (
   request: Request,
+  options?: JsonBodyOptions,
 ): Promise<JsonBodyResult> => {
+  const maximumBytes = options?.maxBytes ?? DEFAULT_MAXIMUM_JSON_BODY_BYTES;
+  if (
+    !Number.isSafeInteger(maximumBytes) ||
+    maximumBytes <= 0 ||
+    maximumBytes > ABSOLUTE_MAXIMUM_JSON_BODY_BYTES
+  ) {
+    throw new RangeError(
+      "JSON body limit must be a positive integer no larger than 1 MiB.",
+    );
+  }
   const mediaType = request.headers
     .get("content-type")
     ?.split(";", 1)[0]
@@ -33,15 +49,12 @@ export const parseJsonBody = async (
     };
   }
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (
-    Number.isFinite(declaredLength) &&
-    declaredLength > MAXIMUM_JSON_BODY_BYTES
-  ) {
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
     return {
       ok: false,
       response: apiError(
         "PAYLOAD_TOO_LARGE",
-        "Request body exceeds 64 KiB.",
+        `Request body exceeds ${maximumBytes} bytes.`,
         413,
       ),
     };
@@ -56,13 +69,13 @@ export const parseJsonBody = async (
       const chunk = await reader.read();
       if (chunk.done) break;
       byteLength += chunk.value.byteLength;
-      if (byteLength > MAXIMUM_JSON_BODY_BYTES) {
+      if (byteLength > maximumBytes) {
         await reader.cancel();
         return {
           ok: false,
           response: apiError(
             "PAYLOAD_TOO_LARGE",
-            "Request body exceeds 64 KiB.",
+            `Request body exceeds ${maximumBytes} bytes.`,
             413,
           ),
         };
@@ -87,3 +100,9 @@ export const parseJsonBody = async (
     };
   }
 };
+
+export const parseRouteJsonBody = async (
+  request: Request,
+  maximumBytes: number,
+): Promise<JsonBodyResult> =>
+  parseJsonBody(request, { maxBytes: maximumBytes });

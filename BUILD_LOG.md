@@ -61,3 +61,10 @@
 - Recorded the live boundary honestly: `ENABLE_LIVE_OPENAI=false`, generalized Sol evaluation not run, current production still the legacy stand, and all pivot results pending.
 - This entry covers documentation only. It does not claim the target schemas, compiler, verifier, UI, exports, security controls, deployment, or live evaluation are implemented.
 - Documentation verification passed targeted Prettier checking, local Markdown-link existence checking, and `git diff --check`; no package, source, or test file was edited as part of this documentation workstream.
+
+## 2026-07-14 — live-model security foundation
+
+- Replaced the client-controlled safety identifier with a random server-issued subject inside a signed, versioned two-hour access session.
+- Added production `__Host-` cookie semantics, strict origin/Fetch Metadata checks, streaming route-specific body limits, bounded per-session request/token quotas, global/session concurrency leases, an independent live-model kill switch, metadata-only audit types, and validated build-SHA discovery.
+- Kept the live path fail-closed. Generalized routes must still wire the signed subject, exact quotas, concurrency leases, audit events, and health provenance before Sol can be enabled.
+- Focused security and legacy API integration validation passed 27 tests, strict type checking, targeted zero-warning lint, targeted formatting, and `git diff --check`.

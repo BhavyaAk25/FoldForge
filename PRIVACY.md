@@ -1,6 +1,6 @@
 # FoldForge privacy and security contract
 
-Status: **approved target; implementation pending**. The final section lists current legacy behavior and gaps. Nothing in this document should be read as a claim that the pivot is already deployed.
+Status: **security foundation implemented; route integration and deployment pending**. The final section separates implemented controls from release blockers. Nothing in this document should be read as a claim that the pivot is already deployed.
 
 ## Data flow
 
@@ -100,7 +100,7 @@ As of 2026-07-14:
 - Existing model calls already set `store:false`, bound output, disable SDK retries, use a 60-second timeout, and send a safety identifier.
 - The current worktree includes foundations for a signed two-hour production `__Host-` cookie with a random session subject, same-origin/Fetch Metadata guarding, route-selectable body parsing, request/token quota and concurrency gates, metadata audit events, kill-switch state, and build-SHA discovery.
 - Those foundations are not yet evidence of end-to-end enforcement: every live/export route still needs integration tests against the exact caps and budgets above, and multi-instance production needs a shared atomic quota/concurrency store.
-- Safety-identifier derivation from the signed session, target export-route caps, split input/output token accounting, metadata-only log assertions, and build-SHA health output still require release-level route wiring and tests.
+- Target export-route caps, split input/output token accounting, metadata-only log assertions, signed-subject route wiring, and build-SHA health output still require release-level route wiring and tests.
 - The current deployment is the legacy stand prototype, not the generalized compiler.
 
 These gaps are release blockers for live target mode. They are not papered over by keeping the kill switch off; offline target release still requires honest unavailable-state behavior and the applicable non-live security tests.
