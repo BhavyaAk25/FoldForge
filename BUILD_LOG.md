@@ -68,3 +68,25 @@
 - Added production `__Host-` cookie semantics, strict origin/Fetch Metadata checks, streaming route-specific body limits, bounded per-session request/token quotas, global/session concurrency leases, an independent live-model kill switch, metadata-only audit types, and validated build-SHA discovery.
 - Kept the live path fail-closed. Generalized routes must still wire the signed subject, exact quotas, concurrency leases, audit events, and health provenance before Sol can be enabled.
 - Focused security and legacy API integration validation passed 27 tests, strict type checking, targeted zero-warning lint, targeted formatting, and `git diff --check`.
+
+## 2026-07-14 — generalized fabrication compiler implementation
+
+- Replaced the stand-only runtime with versioned `FabricationIntentV1`, `FabricationProgramV1`, `FabricationIRV1`, `VerificationReportV2`, `ProgramPatchV1`, and `CandidateV2` contracts.
+- Implemented the pure panel/joint/connector compiler, polygon-with-holes triangulation, rigid transforms, 201-state kinematics, ordered verifier, deterministic scoring, canonical hashes, and bounded report-grounded repair.
+- Added exact GLB, print-scale SVG, DXF, canonical JSON, and profile-scoped FOLD exports. Every route rebuilds and verifies the selected candidate before returning bytes.
+- Rebuilt the app as a concise Describe → Forge → Compare → Export studio with sequential topology-aware proposal generation, synchronized 3D/pattern previews, motion controls, real repair evidence, provenance, checkpoint restoration, and exact downloads.
+- Removed executable legacy stand routes, modules, fixtures, and tests so the generalized compiler is the only product path.
+- Replaced legacy eval scripts with target evidence: 120 valid controls, 560 independent mutations, 50 × 10 repeatability runs, 140 intent-contract cases, 40 repairable failures, 20 infeasible cases, 120 adversarial patches, 15 offline end-to-end runs, and a structured-feedback ablation.
+- Recorded 0 accepted hard-invalid mutations, 0 export-equivalence failures, 100% repeatability, 40/40 repaired failures, 0/120 accepted adversarial patches, and 15/15 offline end-to-end runs.
+- Added seven Chromium flows covering access, sequential generation, measured repair, checkpoint restore, exact exports, duplicate topologies, honest offline state, malformed data, all required widths, keyboard focus, reduced motion, and zero serious/critical Axe violations.
+- Rendered and inspected the studio at 1440, 1280, 768, and 390 px. Removed a redundant visible status announcement while retaining its screen-reader live region.
+- Live GPT-5.6 Sol remains fail-closed until the user enables model access. Offline and mocked evidence is labelled and never presented as live behavior.
+
+## 2026-07-14 — adversarial geometry and security review
+
+- Corrected the fabrication-path topology so shared fold hinges are score-only, tab roots remain attached, slots remain closed cuts, and every exported cut/score path has one canonical source.
+- Added hard checks for hole edge size, outer and inter-hole ligaments, net material area/ratio, cut-on-crease overlap, joint connector body/axis binding, cam connector body binding, and full reflected panel/hole symmetry rather than bounding-box symmetry.
+- Bound GLB output to the selected IR: panel surfaces, all fabrication paths, connectors, hierarchy, embedded canonical profile, and 11 code-derived motion samples are source-equivalence checked. Removed caller-controlled animation inputs.
+- Added a fail-closed 2,000,000-unit verification work budget, one-state static verification, and best-effort process-local rate/concurrency controls on public deterministic compile/export routes.
+- Focused regression validation passed 29 files and 226 tests after the independent geometry and security findings were fixed. The complete release matrix is rerun before the milestone is committed or deployed.
+- Final hardening validation passed 277 tests, 96.68% statement / 90.08% branch coverage, the 1,000-run seeded property suite, all offline eval groups, 7/7 Chromium flows, exact fixture verification, strict formatting/type/lint/build checks, production dependency audit, and secret-ignore checks.

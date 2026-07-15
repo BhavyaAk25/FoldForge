@@ -1,6 +1,6 @@
 # FoldForge fabrication compiler specification
 
-Status: **approved target contract; implementation pending**. This document is normative for the pivot. “Must” and “must not” are release requirements. Current legacy phone-stand behavior is not evidence of conformance.
+Status: **implemented and release-tested offline; live GPT-5.6 Sol evaluation pending user activation**. This document is normative. “Must” and “must not” are release requirements.
 
 ## 1. Scope
 
@@ -18,7 +18,7 @@ Every external object must include an exact schema version. Unknown or partially
 | `FabricationProgramV1` | Untrusted Sol proposal validated by code         | Panels, joints, connectors, driver, couplings, outputs, semantic requirements, and design rationale           |
 | `FabricationIRV1`      | Deterministic compiler                           | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs |
 | `VerificationReportV2` | Deterministic verifier                           | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics        |
-| `ProgramPatchV1`       | Untrusted Sol proposal validated/applied by code | At most eight typed, local operations against existing program identifiers                                    |
+| `ProgramPatchV1`       | Untrusted Sol proposal validated/applied by code | At most three typed, local operations against existing program identifiers                                    |
 | `CandidateV2`          | Deterministic pipeline                           | Intent/program/IR/report/score bundle with canonical hashes and provenance                                    |
 
 The canonical serializer must:
@@ -42,7 +42,9 @@ The canonical serializer must:
 | Motion drivers        |       0 or 1 |
 | Driven outputs        |            6 |
 
-All fabrication geometry uses millimetres. A panel is a non-degenerate simple polygon in a sheet-local 2D frame. A program may contain perimeter cuts, internal cuts, fold lines, tabs, and slots. Minimum feature sizes and printable margins are explicit intent/material-profile values; missing values use a versioned conservative profile, never a model guess hidden from the report.
+All fabrication geometry uses millimetres. A panel is a non-degenerate simple polygon in a sheet-local 2D frame. A program may contain perimeter cuts, internal cuts, fold lines, tabs, and slots. A shared fold edge is emitted once as a score/crease and never duplicated as a cut. Tab roots remain attached; only their exposed perimeter is cut. Internal slots are closed cut contours. Minimum feature sizes and printable margins are explicit intent/material-profile values; missing values use a versioned conservative profile, never a model guess hidden from the report.
+
+The conservative software profile rejects panel or hole edges below 1 mm, hole-to-boundary or hole-to-hole ligaments below the greater of 1 mm and twice the material thickness, net panel area below 25 mm², and net-to-gross material ratio below 8%. These checks establish geometric manufacturability only; they do not predict strength.
 
 ### 3.2 Graph and joints
 
@@ -52,7 +54,7 @@ The rigid-body graph must be connected for each assembled component and acyclic.
 - `revolute`: one rotational degree of freedom about a declared axis; and
 - `prismatic`: one translational degree of freedom along a declared axis with bounded travel.
 
-Tabs and slots are typed connectors with mating identifiers, engagement direction, insertion clearance, and active state. Connector references must resolve exactly once and cannot create an unsupported kinematic loop.
+Tabs and slots are typed connectors with mating identifiers, engagement direction, insertion clearance, and active state. Connector references must resolve exactly once and cannot create an unsupported kinematic loop. Revolute and prismatic guide connectors must span the joint's parent and child bodies and lie on the declared joint axis. Cam-slot connector pairs must span the coupled output joint's two bodies.
 
 ### 3.3 Motion and couplings
 
@@ -106,7 +108,7 @@ Verification is deterministic, fail-fast by phase, and independent of model expl
 4. **Interfaces:** shared edges, joints, connector mating, insertion direction, and clearances.
 5. **Sheet packing:** bounds, non-overlap, printable margins, units, and calibration space across 1–4 sheets.
 6. **Assembly transforms:** rigid transforms, closure, and requested static dimensions.
-7. **Motion:** 201 uniformly spaced driver states plus adaptive refinement near contact, clearance minima, joint limits, discontinuities, and branch events.
+7. **Motion:** one canonical state for static objects; 201 uniformly spaced driver states plus bounded deterministic refinement near contact, clearance minima, joint limits, discontinuities, and branch events for moving objects.
 8. **Dynamic validity:** collision, requested moving clearance, slider travel, branch continuity, and unreachable/dead states.
 9. **Semantics:** requested behaviors, outputs, directions, angles, travels, symmetry, and user hard constraints.
 10. **Export equivalence:** every exported coordinate, unit, layer, transform, motion state, identifier, and hash traces to the selected IR.
@@ -123,6 +125,7 @@ Verification is deterministic, fail-fast by phase, and independent of model expl
 | Requested output travel    | Absolute error ≤1 mm                                                                                                                               |
 | Branch continuity          | No discontinuous transform, sign reversal, or unrequested solution-branch switch                                                                   |
 | Driver reachability        | Every state in `[0, 1]` reachable; no dead interval or singular state that prevents traversal                                                      |
+| Verification work budget   | Estimated sampled triangle-pair work ≤2,000,000 units; larger requests fail closed before expensive traversal                                      |
 
 Passing sampled motion is a verified result for the bounded analytic model, not proof of real material behavior. Adaptive refinement must be deterministic and bounded; exhaustion or numerical ambiguity fails closed.
 
@@ -146,7 +149,7 @@ Ranking is deterministic and versioned. It may combine fabrication efficiency, m
 
 ## 7. Repair
 
-Repair is bounded to five cycles. Each `ProgramPatchV1` contains at most eight typed operations. Allowed operation families may adjust an existing numeric parameter within its declared range, replace an existing supported coupling with another supported coupling, add/remove an optional existing-schema fabrication feature, or select an enumerated supported topology variant exposed by the program.
+Repair is bounded to five cycles. Each `ProgramPatchV1` contains at most three typed operations. Allowed operation families may adjust existing allowlisted values within their declared ranges. A patch cannot mutate intent, invent identifiers, or bypass full recompilation and verification.
 
 Code must reject a patch that:
 
@@ -165,13 +168,13 @@ After an accepted patch, code recompiles and reruns phases 1–11. Reaching five
 Only the exact selected verified `CandidateV2` is exportable. Required outputs are:
 
 - interactive 3D rendered from the selected IR;
-- binary GLB from the same panels, transforms, hierarchy, and selected motion state/range;
+- binary GLB from the same panels, transforms, hierarchy, fabrication paths, connectors, and deterministic 11-keyframe body motion derived from the selected IR;
 - print-scale SVG in millimetres with explicit cut/fold/score/annotation/calibration layers;
 - DXF with explicit units and corresponding fabrication layers;
 - canonical `fabrication.json` containing selected intent, program, IR, report, score, provenance, versions, seed, and hashes; and
 - assembly and operation instructions grounded in identifiers and verified motion.
 
-Every file must include or be covered by a manifest containing the build SHA, schema/compiler/verifier/exporter versions, selected candidate hash, byte hash, units, and generation time. SVG and DXF must include a labelled calibration length. GLB must be generated from the same IR, not a visually similar reconstruction.
+Every file must include or be covered by a manifest containing the build SHA, schema/compiler/verifier/exporter versions, selected candidate hash, byte hash, units, and generation time. SVG and DXF must include a labelled calibration length. GLB must embed the canonical fabrication profile and represent every source path as a line primitive; its profile, identifiers, path coverage, and motion channels must pass source-equivalence verification.
 
 FOLD is optional. It may be emitted only if the source joint, assignment, cut, and motion semantics can be represented without loss and an equivalence verifier passes. Otherwise the exporter must omit FOLD with an explicit reason.
 

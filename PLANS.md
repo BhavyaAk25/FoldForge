@@ -2,71 +2,53 @@
 
 ## Current state
 
-The prompt-to-fabrication pivot is approved, but the implementation is not complete. The current application, tests, deployment, and historical metrics still describe the legacy single-topology stand. Documentation is the first migration step; no target milestone may inherit a legacy pass result without rerunning against versioned fabrication-compiler fixtures.
+The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. GPT-5.6 Sol remains deliberately disabled until the user enables live access and authorizes API use.
 
-| Milestone                                                           | Status   | Exit evidence                                                             |
-| ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------- |
-| Normative product, privacy, eval, and submission contract           | Complete | Documentation diff and formatting check                                   |
-| Versioned intent, program, IR, report, patch, and candidate schemas | Pending  | Contract fixtures and canonical round trips pass                          |
-| Pure deterministic compiler and geometry kernel                     | Pending  | Supported grammar compiles without model access                           |
-| Ordered verifier and kinematic sampler                              | Pending  | Independent mutation/adversarial oracles reject every hard invalid        |
-| Candidate diversity, ranking, and bounded repair                    | Pending  | Sealed topology and repair suites meet [EVALS.md](./EVALS.md)             |
-| GLB, print-scale SVG/DXF, JSON, and instruction exports             | Pending  | All formats are source-equivalent to the selected IR                      |
-| Describe → Forge → Export product experience                        | Pending  | Browser, accessibility, responsive, and provenance suites pass            |
-| Hardened live GPT-5.6 Sol path                                      | Blocked  | Credits/access approved; live sealed suite passes with kill switch on     |
-| Submission package and final recording                              | Pending  | Working build, public <3-minute video, repository, README, and session ID |
-| Release review                                                      | Pending  | ≥92/100 overall, every criterion ≥22/25, and every hard gate passes       |
+| Milestone                                                           | Status     | Evidence                                                           |
+| ------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
+| Versioned intent, program, IR, report, patch, and candidate schemas | Complete   | Strict Zod contracts and canonical round-trip tests                |
+| Pure deterministic compiler and geometry kernel                     | Complete   | 120/120 valid controls; 0 crashes                                  |
+| Ordered verifier and kinematic sampler                              | Complete   | 0/560 hard-invalid mutations accepted                              |
+| Candidate ranking and bounded repair                                | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted       |
+| GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures                                  |
+| Describe → Forge → Export product experience                        | Complete   | 7/7 Chromium flows at all required widths                          |
+| Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
+| Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB, physical joint binding, bounded CPU work    |
+| Live GPT-5.6 Sol behavior                                           | User gate  | Enable model access, run sealed live evals, then keep or kill      |
+| Submission script and documentation                                 | Complete   | Concise video script, rubric, README, limitations, eval evidence   |
+| Public video recording                                              | User-owned | Record the implemented build after the live gate passes            |
 
-## Critical path
+## What remains
 
-1. **Contracts first.** Implement `FabricationIntentV1`, `FabricationProgramV1`, `FabricationIRV1`, `VerificationReportV2`, `ProgramPatchV1`, and `CandidateV2`, plus a canonical serializer and explicit migration/refusal behavior for unknown versions.
-2. **Pure compiler.** Lower the bounded grammar into panels, joints, connectors, motion, transforms, and provenance without network or UI dependencies.
-3. **Verifier before variety.** Implement the fail-fast verification sequence and independent test oracles before candidate generation can label anything valid.
-4. **Candidates and repair.** Generate at most three visible candidates; prefer at least two topology-distinct valid programs when feasible; apply at most eight typed patch operations per cycle and five cycles.
-5. **One source of truth.** Render the synchronized preview, flat pattern, motion, report, GLB, SVG, DXF, and JSON from the same selected IR.
-6. **Live model last.** Enable Sol only behind access, origin, quota, token, concurrency, timeout, privacy, and kill-switch controls; run sealed live and adversarial suites.
-7. **Submission proof.** Record only behavior that passes on the submission build and map the demo to the four official criteria in [JUDGE_RUBRIC.md](./JUDGE_RUBRIC.md).
+One external activation sequence remains:
 
-## Workstreams
+1. Confirm GPT-5.6 Sol credits/model access.
+2. Set `ENABLE_LIVE_OPENAI=true` while leaving `LIVE_MODEL_KILL_SWITCH=false`.
+3. Run `ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live`; the suite is capped at five prompts and requires four complete end-to-end passes.
+4. If it passes, deploy the same configuration and record the demo. If it fails, return the kill switch to a blocked state and use the report to repair the live path.
 
-### Core and verification
+No calendar date blocks implementation.
 
-- Keep `src/core` pure and deterministic.
-- Support only the grammar and numeric limits in [FABRICATION_SPEC.md](./FABRICATION_SPEC.md).
-- Sample motion at 201 fixed driver states and adaptively near contact, clearance, and branch events.
-- Test closure, collision, clearance, travel, angles, branch continuity, dead states, semantics, and export equivalence with independent calculations.
-- Refuse unsupported or infeasible requests with typed, user-facing reasons.
+## Completed architecture
 
-### AI and server
+- `src/core/fabrication` is pure, deterministic, versioned, and independent of React/OpenAI.
+- The compiler lowers bounded programs into panels, joints, connectors, transforms, motion, provenance, and exact export inputs.
+- The verifier fails fast across schema, topology, geometry, connections, packing, transforms, motion, collision, semantics, and export equivalence.
+- Static designs use one canonical state. Moving designs use 201 fixed driver states plus bounded deterministic adaptive event samples.
+- Panel cutouts must preserve feature size, boundary/inter-hole ligaments, useful net material, and score/cut separation.
+- Joint and coupling connectors are verified against their parent/child bodies and declared axes, not only their identifiers.
+- GLB motion, hierarchy, paths, connectors, and embedded fabrication profile are generated from and checked against the selected IR.
+- Repair accepts one to three allowlisted operations, cites actual report fields and repairable paths, blocks duplicate canonical input, and stops after five cycles.
+- Only valid candidates are scored, displayed, selected, finalized, or exported.
+- The studio keeps the 3D view, flat pattern, program, motion, report, selection, and downloads on the same candidate IR.
+- The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.
 
-- Constrain Sol to strict structured intent/program/patch contracts.
-- Treat model output as untrusted input and reject unknown fields, identifiers, and operations.
-- Enforce the exact security limits in [PRIVACY.md](./PRIVACY.md), including `__Host-` cookie semantics, same-origin checks, body caps, per-session request/token quotas, and bounded concurrency.
-- Keep `ENABLE_LIVE_OPENAI=false` until live access, spend authorization, and sealed evaluation are confirmed.
+## Deliberate scope
 
-### Product and exports
+V1 supports bounded flat-sheet objects and acyclic mechanisms. It refuses smooth solid modeling, deformable simulation, electronics, motors, force-dependent behavior, and general closed-loop mechanisms. These are product boundaries, not missing implementation.
 
-- Build the Describe → Forge → Export flow at 390, 768, 1280, and 1440 px.
-- Provide synchronized 3D, print pattern, program, motion scrub, verifier evidence, and `USER` / `AI` / `CODE` provenance.
-- Export only the exact selected verified candidate as GLB, SVG, DXF, and canonical JSON.
-- Include units, calibration, layers, hashes, assembly, and operation instructions.
-- Make offline behavior explicit; offline fixtures are demonstrations, not arbitrary prompt interpretation.
+FoldForge verifies geometry, motion, clearances, and source equivalence. It makes no strength, friction, fatigue, durability, load, or manufacturing-performance claim.
 
-## Blockers and dependencies
+## Release discipline
 
-- **Live Sol:** the repository has not completed a paid GPT-5.6 Sol call or generalized live evaluation. Model access, usable credits, and explicit authorization are required before enabling it.
-- **Legacy deployment:** [foldforge.vercel.app](https://foldforge.vercel.app) remains the old stand prototype until a new deployment passes the target release gates.
-- **Implementation debt:** current schemas, routes, UI, tests, and exporters are topology-specific and must be migrated rather than relabelled.
-- **Submission clock:** the official deadline is July 21, 2026 at 5:00 PM Pacific. The date creates prioritization pressure but never lowers a correctness, security, privacy, or honesty gate.
-
-## Explicit non-gates and non-goals
-
-- Material testing is outside the software release gate and cannot substitute for verifier evidence.
-- Do not claim material strength, force, friction, fatigue, durability, or manufacturing tolerance beyond the encoded geometric clearances.
-- Do not expand into arbitrary smooth solids, deformable simulation, electronics, motors, or general closed-loop mechanisms.
-- Do not hide templates behind prompt matching or tune evaluation prompts into the product.
-- Do not ship a generalized label over the legacy stand implementation.
-
-## Change cadence
-
-Each milestone ends with formatting, lint, type checking, focused and property tests, applicable E2E/eval suites, production build, and a diff review. Reports must record schema version, seed, build SHA, environment, pass/fail threshold, and whether the result is legacy, offline target, or live target.
+Every code milestone ends with formatting, zero-warning lint, strict TypeScript, unit/integration/property/browser tests, coverage, offline evals, production build, dependency audit, and diff review. Live evidence is always labelled live; mocked and deterministic evidence are never presented as model performance.

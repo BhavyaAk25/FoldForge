@@ -2,82 +2,61 @@
 
 **A prompt-to-fabrication compiler for bounded flat-sheet mechanisms.**
 
-FoldForge is being rebuilt for the OpenAI Build Week **Work & Productivity** track. A product or fabrication team describes a small flat-sheet object; GPT-5.6 Sol turns that brief into a typed fabrication program; deterministic code compiles, simulates, verifies, ranks, repairs, and exports the exact selected design.
+Describe a small foldable object or mechanism. GPT-5.6 Sol converts the brief into a strict fabrication program. Deterministic code compiles geometry, simulates motion, rejects invalid designs, repairs bounded failures, ranks valid candidates, and exports the exact selected result.
 
-> Describe it. Prove it. Fabricate it.
+> Let AI explore. Make code prove.
 
-## Status: approved pivot, implementation pending
+## Status
 
-The repository currently contains a deployed, deterministic one-sheet phone-stand prototype. The generalized compiler described below is the approved target contract in [FABRICATION_SPEC.md](./FABRICATION_SPEC.md), but its source implementation and target evaluation results are not complete.
+The generalized compiler, verifier, repair loop, responsive studio, and export pipeline are implemented. Offline and mocked release suites pass. The sole live-model gate is user activation of GPT-5.6 Sol:
 
-- [foldforge.vercel.app](https://foldforge.vercel.app) is the **legacy stand prototype**, not evidence that arbitrary supported prompts compile.
-- Production sets `ENABLE_LIVE_OPENAI=false`. No generalized live GPT-5.6 Sol evaluation or paid model call has been completed.
-- Existing stand results remain recorded as a legacy baseline in [EVALS.md](./EVALS.md); all compiler-pivot results are pending.
-- Scope ends at geometric and kinematic verification; FoldForge does not claim strength, force, friction, fatigue, or material performance.
-
-## Product contract
-
-The supported grammar deliberately covers a useful, testable subset of flat-sheet design:
-
-- 1–4 sheets, at most 24 panels, 64 vertices per panel, and 24 joints/connectors;
-- simple panel polygons in millimetres with cuts, folds, tabs, and slots;
-- an acyclic rigid-body graph with fold, revolute, and prismatic joints;
-- zero or one motion driver and at most six driven outputs;
-- direct-ratio, mirrored-pair, pull-tab, and cam-slot couplings; and
-- static, open/close, flap, rotate, slide, and expand/collapse behaviors.
-
-Requests for arbitrary smooth solids, deformable or force-dependent behavior, electronics, motors, or general closed-loop mechanisms are refused. There are no hidden prompt keywords, winning templates, or canned designs.
-
-Example target requests:
-
-- “Make a two-sheet desk organizer whose front tray slides out 70 mm and opens two mirrored side wings.”
-- “Design a fold-flat status sign with one pull tab that rotates three indicator panels by 90 degrees.”
-- “Create a four-compartment sample sorter that expands from a flat envelope and fits on A4 sheets.”
-
-## Compiler architecture
-
-```text
-user brief
-    ↓ GPT-5.6 Sol: typed intent and fabrication program
-FabricationIntentV1 + FabricationProgramV1
-    ↓ deterministic compiler
-FabricationIRV1: panels, joints, connectors, motion, provenance
-    ↓ deterministic verification
-schema → graph → geometry → packing → transforms → motion → semantics → exports
-    ↓ bounded candidate generation and repair
-up to 3 verified, visibly distinct candidates
-    ↓ exact selected candidate
-interactive 3D + GLB + print-scale SVG/DXF + fabrication.json
+```dotenv
+ENABLE_LIVE_OPENAI=true
+LIVE_MODEL_KILL_SWITCH=false
 ```
 
-GPT-5.6 Sol contributes design reasoning, constraint interpretation, topology proposals, and typed repair patches. It does **not** author trusted coordinates, declare a design valid, rank invalid candidates, or alter exports. `src/core` is the authority for geometry, kinematics, verification, scoring, repair application, canonical serialization, and export equivalence.
+`OPENAI_API_KEY`, `DEMO_ACCESS_CODE`, and `ACCESS_COOKIE_SECRET` must also be configured server-side. The repository and deployment keep live generation off until that explicit switch is made, so no offline fixture is presented as an arbitrary prompt result.
 
-The OpenAI integration uses the [Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create), strict [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), `store:false`, bounded output, and a privacy-preserving `safety_identifier`. Live availability is a separate gate from the deterministic compiler.
+FoldForge proves bounded geometry, kinematics, clearances, and export equivalence. It does not claim material strength, friction, fatigue, or manufacturing performance.
 
-## Hard verifier guarantees
+## What it makes
 
-A candidate is visible or exportable only after every hard check passes. In particular:
+The V1 grammar supports:
 
-- closure residual is at most 0.1 mm;
-- no sampled collision is permitted;
-- requested moving clearance is at least 0.5 mm;
-- requested angle error is at most 2 degrees;
-- requested travel error is at most 1 mm;
-- no kinematic branch jump is permitted; and
-- the driver has no unreachable or dead state.
+- one to four sheets, at most 24 panels, and bounded cuts, folds, tabs, and slots;
+- acyclic fold, revolute, and prismatic mechanisms;
+- static, open/close, flap, rotate, slide, and expand/collapse behavior;
+- direct-ratio, mirrored-pair, pull-tab, and cam-slot couplings; and
+- up to three verified, topology-distinct candidates when feasible.
 
-Motion is sampled at 201 states plus adaptive samples near contact, clearance, and branch events. Scoring starts only after schema, topology, geometry, packing, transform, motion, semantic, and export/source-equivalence checks pass. The full normative order is in [FABRICATION_SPEC.md](./FABRICATION_SPEC.md).
+Examples include organizers, fold-flat displays, pop-up cards, moving packages, sample sorters, and small sheet-built boxes. Requests requiring smooth solids, deformable physics, electronics, motors, force simulation, or general closed-loop mechanisms are refused or clarified. There is no prompt-keyword routing to hidden templates.
 
-## Experience and outputs
+## How it works
 
-The target flow is **Describe → Forge → Export**:
+```text
+brief
+  → GPT-5.6 Sol: FabricationIntentV1 + FabricationProgramV1
+  → deterministic compiler: FabricationIRV1
+  → ordered verifier: geometry + packing + motion + semantics + exports
+  → bounded, report-grounded repair when needed
+  → deterministic ranking of valid candidates only
+  → selected-candidate GLB + SVG + DXF + JSON + optional FOLD
+```
 
-1. Describe the object, dimensions, motion, sheets, and fabrication constraints.
-2. Compare up to three verified candidates optimized for fabrication efficiency, mechanical simplicity, and visual expression.
-3. Inspect synchronized 3D, flat pattern, motion scrubber, verifier evidence, and `USER` / `AI` / `CODE` provenance.
-4. Export the exact selected candidate as GLB, print-scale SVG, DXF, and canonical `fabrication.json`, with assembly and operation instructions.
+Sol interprets intent, proposes bounded programs, diagnoses measured failures, and writes concise build notes. It never declares validity, mutates trusted coordinates, chooses export bytes, or overrides ranking. Every model response is strict-schema validated before deterministic code can use it.
 
-Offline mode must say that live interpretation is unavailable. It may demonstrate checked fixtures, but it may not pretend to understand an arbitrary prompt.
+The verifier checks schema, topology, panel geometry, cutout ligaments, cut/score separation, connector-to-body binding, sheet packing, rigid transforms, motion, collision, requested semantics, and source-equivalent exports in a fixed fail-fast order. Static designs use one canonical state; moving designs use 201 fixed states plus bounded event samples. A failed or over-budget candidate cannot be shown, ranked, finalized, or exported.
+
+## Studio
+
+The one-page flow is intentionally short:
+
+1. **Describe** the object and motion.
+2. **Forge** three sequential, topology-aware proposals.
+3. **Compare** synchronized 3D/pattern views, motion, scores, repair evidence, and `USER` / `AI` / `CODE` provenance.
+4. **Export** the exact selected candidate.
+
+The interface passes mocked end-to-end tests at 390, 768, 1280, and 1440 px, keyboard and reduced-motion checks, and automated serious/critical accessibility scanning.
 
 ## Local setup
 
@@ -89,46 +68,65 @@ cp .env.example .env.local
 pnpm run dev
 ```
 
-The present source still launches the legacy stand prototype. The environment variables are server-only:
+Server-only configuration:
 
 - `OPENAI_API_KEY` — OpenAI project key.
-- `ENABLE_LIVE_OPENAI` — explicit live-model kill switch; defaults to `false`.
-- `DEMO_ACCESS_CODE` — required for live calls; at least 12 random characters.
+- `ENABLE_LIVE_OPENAI` — explicit live-model opt-in; defaults to `false`.
+- `LIVE_MODEL_KILL_SWITCH` — emergency stop; defaults to `false`.
+- `DEMO_ACCESS_CODE` — at least 12 random characters.
 - `ACCESS_COOKIE_SECRET` — at least 32 random bytes.
 
-Never prefix a secret with `NEXT_PUBLIC_`, print it, commit it, or place it in browser storage. See [PRIVACY.md](./PRIVACY.md) for the target route caps, quotas, concurrency, logging, cookie, and retention contract.
+Never use a `NEXT_PUBLIC_` prefix for secrets, print them, commit them, or store them in browser storage. See [PRIVACY.md](./PRIVACY.md).
 
-## Verification commands
-
-These commands exist today. Until the pivot implementation lands, their results apply to the legacy stand baseline unless a report explicitly identifies the fabrication-compiler schema version.
+## Verification
 
 ```bash
 pnpm run check
 pnpm run coverage
 FC_SEED=20260714 FC_NUM_RUNS=1000 pnpm run test:property
 pnpm run eval:offline
+pnpm run eval:compiler
+pnpm run eval:repair
+pnpm run eval:e2e
 pnpm run eval:ablation
 pnpm run test:e2e
+pnpm audit --prod
 ```
 
-Target release requires at least 92/100 overall and 22/25 on each of the four official judging criteria, using the lower score from two independent reviewers, plus every hard gate in [EVALS.md](./EVALS.md).
+Generate and verify the deterministic showcase pack:
+
+```bash
+pnpm run fixture -- --fixture fabrication-showcase-pack --seed 20260714 --output artifacts/fabrication-showcase-pack
+pnpm run verify:artifact -- artifacts/fabrication-showcase-pack/manifest.json
+```
+
+Current offline evidence includes 120 valid controls, 560 adversarial verifier mutations, 50 programs repeated ten times, 40 repairable failures, 20 non-repairable cases, 120 adversarial patches, 140 strict intent-contract cases, 15 end-to-end showcase runs, and seven browser flows. Exact results and evidence boundaries are in [EVALS.md](./EVALS.md).
+
+To run the sealed live readiness suite after enabling Sol:
+
+```bash
+ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live
+```
+
+The suite is capped at five prompts and requires four complete prompt → three candidates → verify/repair → exact exports → narrative runs to pass. It makes no model request unless both opt-in variables are exactly `true`.
 
 ## Project documents
 
-- [FABRICATION_SPEC.md](./FABRICATION_SPEC.md) — normative grammar, contracts, verifier, repair, ranking, and export rules.
-- [PLANS.md](./PLANS.md) — pivot milestones and blockers.
-- [DECISIONS.md](./DECISIONS.md) — accepted product and architecture decisions.
-- [EVALS.md](./EVALS.md) — target release thresholds and clearly separated legacy evidence.
-- [JUDGE_RUBRIC.md](./JUDGE_RUBRIC.md) — official criteria mapped to required proof.
-- [RESEARCH.md](./RESEARCH.md) — primary sources and prior-art boundaries.
-- [PRIVACY.md](./PRIVACY.md) — data flow, security limits, and current gaps.
-- [BUILD_LOG.md](./BUILD_LOG.md) — chronological implementation evidence.
-- [submission/VIDEO_SCRIPT.md](./submission/VIDEO_SCRIPT.md) — sub-three-minute recording plan.
-- [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) — dependency and attribution inventory.
+- [FABRICATION_SPEC.md](./FABRICATION_SPEC.md) — normative grammar and verifier contract.
+- [PLANS.md](./PLANS.md) — completed implementation and the live activation gate.
+- [DECISIONS.md](./DECISIONS.md) — architecture and product decisions.
+- [EVALS.md](./EVALS.md) — reproducible release evidence.
+- [JUDGE_RUBRIC.md](./JUDGE_RUBRIC.md) — harsh scoring against the official criteria.
+- [JUDGE_SCORECARD.md](./JUDGE_SCORECARD.md) — current 83/100 and evidence required for 94/100.
+- [RESEARCH.md](./RESEARCH.md) — sources and prior-art boundaries.
+- [PRIVACY.md](./PRIVACY.md) — live data flow and security controls.
+- [BUILD_LOG.md](./BUILD_LOG.md) — chronological implementation record.
+- [submission/VIDEO_SCRIPT.md](./submission/VIDEO_SCRIPT.md) — concise sub-three-minute demo script.
+- [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) — dependencies and attribution.
 
 ## Submission position
 
-FoldForge fits Work & Productivity because it turns an underspecified design brief into a reviewable, deterministic fabrication handoff for product, operations, and prototyping teams. The official Build Week page defines that track as tools that make teams faster or more effective and requires a working project, repository, README, and public demo video under three minutes. See [RESEARCH.md](./RESEARCH.md) for the primary links and claim boundaries.
+FoldForge competes in **Work & Productivity**. It removes the manual handoff between a design brief, mechanism geometry, verification, and fabrication-ready files. Its core idea is not unrestricted text-to-CAD: it is prompt-to-typed-program-to-proof, with AI exploration bounded by deterministic evidence.
 
 ## License
 

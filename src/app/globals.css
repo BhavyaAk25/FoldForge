@@ -33,6 +33,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
   color: var(--graphite);
   background:
     linear-gradient(rgb(49 95 99 / 4%) 1px, transparent 1px),
@@ -53,6 +54,10 @@ textarea {
 button,
 select {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 a {

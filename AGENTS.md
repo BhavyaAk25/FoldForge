@@ -24,7 +24,7 @@ Reject honestly when a request requires arbitrary smooth solids, deformable surf
 ## Domain boundaries
 
 - `src/core` owns units, schemas, canonical serialization, compilation, geometry, kinematics, verification, scoring, repair application, and exporters. It stays pure and independent of React, browser APIs, and OpenAI.
-- `src/server/ai` owns OpenAI requests, prompts, response validation, tool orchestration, token limits, and model-specific behavior. No OpenAI import may enter the core or client bundle.
+- `src/server/fabrication-ai` owns OpenAI requests, prompts, response validation, tool orchestration, token limits, and model-specific behavior. Shared client construction remains under `src/server/ai`. No OpenAI import may enter the core or client bundle.
 - API routes authenticate, enforce origin/body/quota/concurrency controls, call typed services, and translate typed results to HTTP responses.
 - The UI renders typed application state. It never invents a successful result, mutates canonical geometry, or exports a different candidate from the one selected.
 
@@ -53,7 +53,7 @@ Verification is deterministic and fail-fast:
 4. shared edges, joints, connectors, and clearances;
 5. sheet packing and printable margins;
 6. rigid transforms, closure residuals, and requested dimensions;
-7. motion over 201 states plus adaptive samples near events;
+7. one canonical state for static objects, or 201 motion states plus bounded adaptive samples near events;
 8. collision, clearance, slider travel, branch continuity, and dead states;
 9. explicit semantic constraints;
 10. export/source equivalence;
@@ -65,7 +65,7 @@ Hard kinematic limits are a closure residual of at most 0.1 mm, no collision, at
 
 Generate at most three visible candidates, aimed at fabrication efficiency, mechanical simplicity, and visual expression. At least two must be topology-distinct when the intent admits more than one topology. Rank only verified candidates.
 
-The repair loop permits five cycles and at most eight typed patch operations per cycle. Reject unknown paths, unrelated changes, invalid references, out-of-range values, repeated canonical tool inputs, and patches that change the user intent. Recompile and rerun every hard check after each patch. Exhaustion returns a clear infeasible result.
+The repair loop permits five cycles and at most three typed patch operations per cycle. Reject unknown paths, unrelated changes, invalid references, out-of-range values, repeated canonical tool inputs, and patches that change the user intent. Recompile and rerun every hard check after each patch. Exhaustion returns a clear infeasible result.
 
 ## Export contract
 
@@ -77,7 +77,7 @@ A successful fabrication pack contains:
 - concise assembly and operation instructions;
 - FOLD only when the design is genuinely representable without losing source semantics.
 
-Export the exact selected candidate. SVG and DXF units, calibration geometry, layer semantics, and hashes are tested. GLB transforms and animation are derived from the same IR used by verification.
+Export the exact selected candidate. SVG and DXF units, calibration geometry, layer semantics, and hashes are tested. GLB surfaces, fabrication paths, connectors, hierarchy, and motion are derived from and source-checked against the same selected IR.
 
 ## Interface contract
 
@@ -95,7 +95,7 @@ The interface must be understandable in ten seconds, responsive at 390, 768, 128
 
 `OPENAI_API_KEY`, `DEMO_ACCESS_CODE`, and `ACCESS_COOKIE_SECRET` are server-only. Store them only in ignored environment files or the hosting secret store. Never print, commit, expose through `NEXT_PUBLIC_`, or persist them in browser storage.
 
-Use a short-lived signed `__Host-` HttpOnly access cookie and derive the OpenAI `safety_identifier` from its random server-issued subject. Enforce same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, a live-model kill switch, and metadata-only production logs. Health responses include the deployed build SHA without secrets.
+Use a short-lived signed `__Host-` HttpOnly access cookie and derive the OpenAI `safety_identifier` from its random server-issued subject. Enforce same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, a live-model kill switch, and metadata-only production logs. Public deterministic compile/export routes also require a verifier work budget and best-effort request/concurrency controls. Health responses include the deployed build SHA without secrets.
 
 ## Evaluation gates
 

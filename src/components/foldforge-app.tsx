@@ -3,1318 +3,830 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
-import { StandPreview } from "@/components/preview/stand-preview";
-import { MATERIALS, PRODUCT_LIMITS } from "@/core/constants";
-import { DEMO_CONSTRAINT } from "@/core/constraints";
-import { DesignConstraintSchema, type DesignConstraint } from "@/core/schemas";
 import {
+  FabricationPreview,
+  type FabricationPreviewMode,
+} from "@/components/fabrication-preview";
+import { buildFabricationCandidate } from "@/core/fabrication/candidate";
+import { CandidateV2Schema } from "@/core/fabrication/schemas";
+import type {
+  CandidateV2,
+  ExportFormat,
+  FabricationIntentV1,
+  FabricationProgramV1,
+} from "@/core/fabrication/types";
+import {
+  AccessApiResponseSchema,
   CompileApiResponseSchema,
   FinalizeApiResponseSchema,
-  GenerateApiResponseSchema,
+  HealthApiResponseSchema,
+  IntentApiResponseSchema,
+  ProgramsApiResponseSchema,
   RepairApiResponseSchema,
-  type CandidateData,
-  type CandidateWithReportData,
+  StudioCheckpointSchema,
   type FinalizeApiResponse,
-  type GenerateApiResponse,
-  type RepairApiResponse,
+  type HealthApiResponse,
+  type RepairEvidence,
 } from "@/lib/api-contracts";
-import { downloadExport, FoldForgeApiError, postJson } from "@/lib/client-api";
+import {
+  downloadCandidateExport,
+  FoldForgeApiError,
+  getJson,
+  postJson,
+} from "@/lib/client-api";
 
 import styles from "./foldforge-app.module.css";
 
-type Stage = "specify" | "workshop" | "export";
-type PreviewMode = "folded" | "flat";
+type AccessState = "granted" | "needed" | "unknown";
+type StudioPhase = "idle" | "intent" | "programs" | "repair" | "ready";
 
-const INSTALLATION_KEY = "foldforge.installation.v1";
-const CHECKPOINT_KEY = "foldforge.checkpoint.v1";
-const MUTE_KEY = "foldforge.muted.v1";
-const DEFAULT_PROMPT =
-  "Make a stable portrait phone stand for a 71.5 × 147.6 × 7.8 mm, 172 g phone. Use US Letter 110 lb cover, no glue, and a 65° viewing angle.";
+const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v3";
+const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
+const COMPILER_VERSION = "foldforge-fabrication-v1";
+const MODEL_ID = "gpt-5.6-sol";
+const BASE_SEED = 20_260_714;
 
-const HealthSchema = z
-  .object({
-    status: z.literal("ok"),
-    service: z.literal("foldforge"),
-    model: z.literal("gpt-5.6-sol"),
-    liveAiEnabled: z.boolean(),
-    accessRequired: z.boolean(),
-    physicalStatus: z.literal("awaiting_user"),
-  })
-  .strict();
+const EXAMPLE_PROMPTS = [
+  "Make a one-sheet desk organizer with a sliding front tray and two folding wings.",
+  "Create a pop-up fox card with recognizable ears, muzzle, and a fold-flat mechanism.",
+  "Design a compact cardstock display that opens one side panel through 90 degrees.",
+] as const;
 
-const AccessSchema = z
-  .object({ granted: z.literal(true), required: z.boolean() })
-  .strict();
-
-const CheckpointSchema = z
-  .object({
-    version: z.literal(2),
-    expiresAt: z.string().datetime(),
-    prompt: z.string(),
-    stage: z.enum(["specify", "workshop", "export"]),
-    constraint: DesignConstraintSchema,
-    generation: GenerateApiResponseSchema.nullable(),
-    repair: RepairApiResponseSchema.nullable(),
-    finalization: FinalizeApiResponseSchema.nullable(),
-    selectedId: z.string(),
-    compileMode: z.enum(["gpt-5.6-sol", "deterministic-controls"]),
-  })
-  .strict();
-
-interface NumericFieldProps {
-  readonly id: string;
-  readonly label: string;
-  readonly value: number;
-  readonly unit: string;
-  readonly min: number;
-  readonly max: number;
-  readonly step: number;
-  readonly onChange: (value: number) => void;
-}
-
-function NumericField({
-  id,
-  label,
-  value,
-  unit,
-  min,
-  max,
-  step,
-  onChange,
-}: NumericFieldProps) {
-  const invalid = !Number.isFinite(value) || value < min || value > max;
-  const errorId = `${id}-error`;
-  return (
-    <label className={styles.field} htmlFor={id}>
-      <span>{label}</span>
-      <span className={styles.inputWithUnit}>
-        <input
-          id={id}
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          aria-label={`${label} in ${unit}`}
-          aria-invalid={invalid}
-          aria-describedby={invalid ? errorId : undefined}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-        />
-        <span aria-hidden="true">{unit}</span>
-      </span>
-      {invalid ? (
-        <small className={styles.fieldError} id={errorId}>
-          Supported range: {min}–{max} {unit}.
-        </small>
-      ) : null}
-    </label>
-  );
-}
-
-const candidateInput = (candidate: CandidateData) => ({
-  id: candidate.id,
-  strategy: candidate.strategy,
-  variant: candidate.variant,
-  seed: candidate.seed,
-  parameters: candidate.parameters,
-});
+const DEFAULT_PROMPT = EXAMPLE_PROMPTS[0];
 
 const formatFailure = (error: unknown): string => {
-  if (error instanceof FoldForgeApiError) {
-    return error.details.length > 0
-      ? `${error.message} ${error.details.join(" ")}`
-      : error.message;
+  if (error instanceof FoldForgeApiError) return error.message;
+  if (error instanceof z.ZodError) {
+    return "The server returned data outside the strict fabrication contract.";
   }
-  if (error instanceof z.ZodError)
-    return "The server returned data outside the expected strict contract.";
-  return "Something interrupted the workshop. Your last checkpoint is safe.";
+  return "The forge stopped safely. Your previous checkpoint is unchanged.";
 };
 
-const downloadName = (candidate: CandidateData, format: "svg" | "fold") =>
-  `foldforge-${candidate.id}.${format}`;
+const candidateIdFor = (ordinal: number, program: FabricationProgramV1) =>
+  `candidate-${ordinal}-${program.topologyId.slice(0, 48)}`;
 
-export function FoldForgeApp() {
-  const [stage, setStage] = useState<Stage>("specify");
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
-  const [constraint, setConstraint] =
-    useState<DesignConstraint>(DEMO_CONSTRAINT);
-  const [generation, setGeneration] = useState<GenerateApiResponse | null>(
-    null,
-  );
-  const [repair, setRepair] = useState<RepairApiResponse | null>(null);
-  const [finalization, setFinalization] = useState<FinalizeApiResponse | null>(
-    null,
-  );
-  const [selectedId, setSelectedId] = useState("");
-  const [compileMode, setCompileMode] = useState<
-    "gpt-5.6-sol" | "deterministic-controls"
-  >("deterministic-controls");
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("folded");
-  const [rotationDeg, setRotationDeg] = useState(-18);
-  const [showRepaired, setShowRepaired] = useState(true);
-  const [installationId, setInstallationId] = useState("");
-  const [hydrated, setHydrated] = useState(false);
-  const [busy, setBusy] = useState<
-    "generate" | "repair" | "finalize" | "export" | "access" | null
-  >(null);
-  const [error, setError] = useState("");
-  const [liveMessage, setLiveMessage] = useState({ text: "", sequence: 0 });
-  const [muted, setMuted] = useState(true);
-  const [health, setHealth] = useState<z.infer<typeof HealthSchema> | null>(
-    null,
-  );
-  const [accessCode, setAccessCode] = useState("");
-  const [accessGranted, setAccessGranted] = useState(false);
-  const stageHeadingRef = useRef<HTMLHeadingElement>(null);
-  const previousStageRef = useRef<Stage>(stage);
-
-  const announce = useCallback((text: string) => {
-    setLiveMessage((current) => ({ text, sequence: current.sequence + 1 }));
-  }, []);
-
-  const playTone = useCallback(
-    (frequencyHz: number) => {
-      if (muted || typeof AudioContext === "undefined") return;
-      const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequencyHz;
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.035, context.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        context.currentTime + 0.12,
-      );
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.13);
-      oscillator.addEventListener("ended", () => void context.close());
+const selectedCandidate = (candidate: CandidateV2): CandidateV2 =>
+  CandidateV2Schema.parse({
+    ...candidate,
+    selectionStatus: "selected",
+    exportMetadata: {
+      ...candidate.exportMetadata,
+      selectedCandidateId: candidate.candidateId,
     },
-    [muted],
-  );
+  });
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const storedInstallation = localStorage.getItem(INSTALLATION_KEY);
-      const nextInstallation = storedInstallation ?? crypto.randomUUID();
-      if (!storedInstallation)
-        localStorage.setItem(INSTALLATION_KEY, nextInstallation);
-      setInstallationId(nextInstallation);
-      setMuted(localStorage.getItem(MUTE_KEY) !== "false");
+const buildCandidate = (
+  candidateId: string,
+  intent: FabricationIntentV1,
+  program: FabricationProgramV1,
+  ordinal: number,
+  generatedAtIso: string,
+  appliedPatchIds: readonly string[],
+  repairCycle: number,
+): CandidateV2 | null => {
+  const built = buildFabricationCandidate({
+    candidateId,
+    intent,
+    program,
+    rank: null,
+    selectionStatus: "eligible",
+    provenance: {
+      compilerVersion: COMPILER_VERSION,
+      generatedAtIso,
+      deterministicSeed: BASE_SEED + ordinal,
+      modelId: MODEL_ID,
+      modelResponseId: null,
+      parentCandidateId: null,
+      appliedPatchIds,
+      repairCycle,
+    },
+  });
+  return built.ok ? built.value : null;
+};
 
-      const checkpoint = localStorage.getItem(CHECKPOINT_KEY);
-      if (checkpoint) {
-        try {
-          const parsed = CheckpointSchema.parse(JSON.parse(checkpoint));
-          if (Date.parse(parsed.expiresAt) <= Date.now()) {
-            throw new Error("Checkpoint expired.");
-          }
-          setPrompt(parsed.prompt);
-          setConstraint(parsed.constraint);
-          setGeneration(parsed.generation);
-          setRepair(parsed.repair);
-          setFinalization(parsed.finalization);
-          setSelectedId(parsed.selectedId);
-          setCompileMode(parsed.compileMode);
-          setStage(
-            parsed.stage === "export" && !parsed.finalization
-              ? "workshop"
-              : parsed.stage,
-          );
-        } catch {
-          localStorage.removeItem(CHECKPOINT_KEY);
-        }
-      }
-      setHydrated(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    void fetch("/api/health", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((value: unknown) => setHealth(HealthSchema.parse(value)))
-      .catch(() => setHealth(null));
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(
-      CHECKPOINT_KEY,
-      JSON.stringify({
-        version: 2,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
-        prompt,
-        stage,
-        constraint,
-        generation,
-        repair,
-        finalization,
-        selectedId,
-        compileMode,
+const rankedCandidates = (
+  candidates: readonly CandidateV2[],
+): readonly CandidateV2[] =>
+  [...candidates]
+    .sort(
+      (left, right) =>
+        (right.score.totalScore ?? 0) - (left.score.totalScore ?? 0),
+    )
+    .map((candidate, index) =>
+      CandidateV2Schema.parse({
+        ...candidate,
+        rank: index + 1,
+        selectionStatus: index === 0 ? "recommended" : "eligible",
       }),
     );
+
+const fallbackLimitations = (candidate: CandidateV2): readonly string[] => [
+  `Stock is fixed to ${candidate.program.sheets.map((sheet) => sheet.material.label).join(", ")}.`,
+  `Budget: ${candidate.intent.fabricationBudget.maximumPanels} panels and ${candidate.intent.fabricationBudget.maximumJointAndConnectorCount} joints/connectors maximum.`,
+  `Assembly strategy: ${candidate.program.assemblyStrategy.replaceAll("_", " ")}; glue ${candidate.intent.fabricationBudget.glueAllowed ? "is allowed" : "is not allowed"}.`,
+];
+
+export function FoldForgeApp() {
+  const [health, setHealth] = useState<HealthApiResponse | null>(null);
+  const [accessState, setAccessState] = useState<AccessState>("unknown");
+  const [accessCode, setAccessCode] = useState("");
+  const [prompt, setPrompt] = useState<string>(DEFAULT_PROMPT);
+  const [intent, setIntent] = useState<FabricationIntentV1 | null>(null);
+  const [candidates, setCandidates] = useState<readonly CandidateV2[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [repairEvidence, setRepairEvidence] = useState<
+    Record<string, readonly RepairEvidence[]>
+  >({});
+  const [narrative, setNarrative] = useState<
+    FinalizeApiResponse["narrative"] | null
+  >(null);
+  const [phase, setPhase] = useState<StudioPhase>("idle");
+  const [statusMessage, setStatusMessage] = useState("Ready.");
+  const [error, setError] = useState("");
+  const [previewMode, setPreviewMode] =
+    useState<FabricationPreviewMode>("assembled");
+  const [motionPosition, setMotionPosition] = useState(0.65);
+  const [rotationDeg, setRotationDeg] = useState(-18);
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(
+    null,
+  );
+  const [finalizing, setFinalizing] = useState(false);
+  const [checkpointReady, setCheckpointReady] = useState(false);
+  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const shouldFocusResultsRef = useRef(false);
+
+  const busy = phase === "intent" || phase === "programs" || phase === "repair";
+  const solAvailable = health?.liveAiEnabled === true;
+  const baseSelected = useMemo(
+    () =>
+      candidates.find((candidate) => candidate.candidateId === selectedId) ??
+      candidates[0] ??
+      null,
+    [candidates, selectedId],
+  );
+  const exportCandidate = useMemo(
+    () => (baseSelected ? selectedCandidate(baseSelected) : null),
+    [baseSelected],
+  );
+  const selectedRepairs = baseSelected
+    ? (repairEvidence[baseSelected.candidateId] ?? [])
+    : [];
+
+  useEffect(() => {
+    void getJson("/api/health", HealthApiResponseSchema)
+      .then((nextHealth) => {
+        setHealth(nextHealth);
+        if (!nextHealth.liveAiEnabled) setStatusMessage("Sol is off.");
+      })
+      .catch((healthError: unknown) => setError(formatFailure(healthError)));
+  }, []);
+
+  useEffect(() => {
+    let restored: z.infer<typeof StudioCheckpointSchema> | null = null;
+    try {
+      const raw = window.localStorage.getItem(CHECKPOINT_KEY);
+      if (raw) {
+        const parsed = StudioCheckpointSchema.safeParse(JSON.parse(raw));
+        if (parsed.success) {
+          const age = Date.now() - Date.parse(parsed.data.savedAt);
+          if (age >= 0 && age <= CHECKPOINT_MAX_AGE_MS) restored = parsed.data;
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(CHECKPOINT_KEY);
+    }
+
+    const restoreTimer = window.setTimeout(() => {
+      if (restored) {
+        setPrompt(restored.prompt);
+        setIntent(restored.intent);
+        setCandidates(restored.candidates);
+        setSelectedId(restored.selectedId);
+        setRepairEvidence(restored.repairEvidence);
+        setNarrative(restored.narrative);
+      }
+      if (restored && restored.candidates.length > 0) {
+        setPhase("ready");
+        setStatusMessage("Checkpoint restored.");
+      }
+      setCheckpointReady(true);
+    }, 0);
+    return () => window.clearTimeout(restoreTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!checkpointReady) return;
+    const checkpoint = StudioCheckpointSchema.parse({
+      version: 3,
+      savedAt: new Date().toISOString(),
+      prompt,
+      intent,
+      candidates,
+      selectedId,
+      repairEvidence,
+      narrative,
+    });
+    try {
+      window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(checkpoint));
+    } catch {
+      // A quota failure does not affect the active in-memory studio.
+    }
   }, [
-    compileMode,
-    constraint,
-    finalization,
-    generation,
-    hydrated,
+    candidates,
+    checkpointReady,
+    intent,
+    narrative,
     prompt,
-    repair,
+    repairEvidence,
     selectedId,
-    stage,
   ]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(MUTE_KEY, String(muted));
-  }, [hydrated, muted]);
+    if (
+      phase !== "ready" ||
+      candidates.length === 0 ||
+      !shouldFocusResultsRef.current
+    ) {
+      return;
+    }
+    shouldFocusResultsRef.current = false;
+    resultsHeadingRef.current?.focus();
+  }, [candidates, phase]);
 
-  useEffect(() => {
-    if (!hydrated || previousStageRef.current === stage) return;
-    previousStageRef.current = stage;
-    const timer = window.setTimeout(() => {
-      stageHeadingRef.current?.focus({ preventScroll: true });
-      stageHeadingRef.current?.scrollIntoView({ block: "start" });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [hydrated, stage]);
+  const requireAccess = useCallback((requestError: unknown): boolean => {
+    if (
+      requestError instanceof FoldForgeApiError &&
+      requestError.code === "ACCESS_REQUIRED"
+    ) {
+      setAccessState("needed");
+      setError("Enter the studio access code, then forge again.");
+      return true;
+    }
+    return false;
+  }, []);
 
-  const selectedEntry = useMemo(
-    () =>
-      generation?.candidates.find(
-        (entry) => entry.candidate.id === selectedId,
-      ) ??
-      generation?.candidates[0] ??
-      null,
-    [generation, selectedId],
-  );
-
-  const repairedEntry = useMemo<CandidateWithReportData | null>(() => {
-    if (!repair) return null;
-    return {
-      candidate: repair.outcome.candidate,
-      report: repair.outcome.report,
-    };
-  }, [repair]);
-
-  const activeEntry =
-    showRepaired && repairedEntry ? repairedEntry : selectedEntry;
-  const activeFailure = activeEntry?.report.checks.find(
-    (check) => check.status === "fail",
-  );
-  const trace = useMemo(() => {
-    const base = generation
-      ? [
-          ...(compileMode === "gpt-5.6-sol"
-            ? [
-                {
-                  source: "USER" as const,
-                  summary: `Requested: ${prompt}`,
-                  timestamp: "Current session",
-                  kind: "request",
-                  inputHash: "client input",
-                  candidateId: null,
-                },
-              ]
-            : []),
-          {
-            source:
-              compileMode === "gpt-5.6-sol"
-                ? ("AI" as const)
-                : ("CODE" as const),
-            summary:
-              compileMode === "gpt-5.6-sol"
-                ? "GPT-5.6 compiled the request into strict constraints."
-                : "Structured controls supplied deterministic constraints; live AI is disabled.",
-            timestamp: "Current session",
-            kind: "constraint_compilation",
-            inputHash: "server validated",
-            candidateId: null,
-          },
-          {
-            source: "CODE" as const,
-            summary: `Generated nine candidates, verified them in fixed order, and displayed three representatives.`,
-            timestamp: "Current session",
-            kind: "candidate_generation",
-            inputHash: "deterministic seed",
-            candidateId: null,
-          },
-        ]
-      : [];
-    return [
-      ...base,
-      ...(repair?.outcome.trace.map((event) => ({
-        source: event.source,
-        summary: event.summary,
-        timestamp: event.timestamp,
-        kind: event.kind,
-        inputHash: event.inputHash,
-        candidateId: event.candidateId,
-      })) ?? []),
-    ];
-  }, [compileMode, generation, prompt, repair]);
-
-  const patchConstraint = <Key extends keyof DesignConstraint>(
-    key: Key,
-    value: DesignConstraint[Key],
-  ) => setConstraint((current) => ({ ...current, [key]: value }));
-
-  const generate = async () => {
-    setBusy("generate");
+  const unlock = async () => {
     setError("");
-    playTone(330);
     try {
-      const compiled = await postJson(
-        "/api/compile",
-        { prompt, installationId, providedConstraint: constraint },
-        CompileApiResponseSchema,
+      await postJson(
+        "/api/access",
+        { code: accessCode },
+        AccessApiResponseSchema,
       );
-      setCompileMode(compiled.mode);
-      if (compiled.outcome.status !== "ready") {
+      setAccessCode("");
+      setAccessState("granted");
+      setStatusMessage("Access granted.");
+    } catch (unlockError) {
+      setError(formatFailure(unlockError));
+    }
+  };
+
+  const forge = async () => {
+    if (!solAvailable || busy || prompt.trim().length === 0) return;
+    setError("");
+    setPhase("intent");
+    setStatusMessage("Normalizing fabrication intent…");
+    const generatedAtIso = new Date().toISOString();
+
+    try {
+      const nextIntent = await postJson(
+        "/api/intent",
+        { prompt },
+        IntentApiResponseSchema,
+      );
+      if (nextIntent.scopeStatus !== "supported") {
+        setPhase("idle");
         setError(
-          compiled.outcome.clarifyingQuestion ||
-            compiled.outcome.interpretationSummary,
-        );
-        announce(
-          "The request needs attention before geometry can be generated.",
+          nextIntent.clarificationQuestion ??
+            nextIntent.unsupportedReason ??
+            "This request needs one more fabrication constraint.",
         );
         return;
       }
 
-      const normalizedConstraint = compiled.outcome.constraint;
-      setConstraint(normalizedConstraint);
-      const nextGeneration = await postJson(
-        "/api/generate",
-        { constraint: normalizedConstraint, seed: 20260714 },
-        GenerateApiResponseSchema,
+      const usedTopologyIds: string[] = [];
+      const fingerprints = new Set<string>();
+      const accepted: CandidateV2[] = [];
+      const evidenceByCandidate: Record<string, RepairEvidence[]> = {};
+
+      for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
+        setPhase("programs");
+        setStatusMessage(`Forging candidate ${ordinal} of 3…`);
+        const generated = await postJson(
+          "/api/programs",
+          {
+            intent: nextIntent,
+            candidateOrdinal: ordinal,
+            usedTopologyIds,
+          },
+          ProgramsApiResponseSchema,
+        );
+        usedTopologyIds.push(generated.proposal.program.topologyId);
+        if (fingerprints.has(generated.programStructureFingerprint)) continue;
+        fingerprints.add(generated.programStructureFingerprint);
+
+        const candidateId = candidateIdFor(ordinal, generated.proposal.program);
+        let currentProgram = generated.proposal.program;
+        let evaluation = await postJson(
+          "/api/compile",
+          { intent: nextIntent, program: currentProgram, candidateId },
+          CompileApiResponseSchema,
+        );
+        const evidence: RepairEvidence[] = [];
+        const appliedPatchIds: string[] = [];
+        let repairCycle = 0;
+        let passed = evaluation.status === "passed";
+
+        for (
+          let cycle = 1;
+          evaluation.status === "invalid" && cycle <= 5;
+          cycle += 1
+        ) {
+          setPhase("repair");
+          setStatusMessage(`Repairing candidate ${ordinal}, cycle ${cycle}…`);
+          const failure =
+            evaluation.report.failures.find(
+              (entry) => entry.severity === "hard",
+            ) ?? evaluation.report.failures[0];
+          const repaired = await postJson(
+            "/api/repair",
+            {
+              intent: nextIntent,
+              program: currentProgram,
+              candidateId,
+              repairCycle: cycle,
+            },
+            RepairApiResponseSchema,
+          );
+          if (
+            repaired.patch &&
+            (repaired.status === "passed" ||
+              repaired.status === "still_invalid")
+          ) {
+            evidence.push({
+              cycle,
+              beforeFailureId: failure?.failureId ?? "verification.failure",
+              beforeFailureMessage:
+                failure?.message ?? "A hard verifier check failed.",
+              patch: repaired.patch,
+              result: repaired.status,
+            });
+            appliedPatchIds.push(repaired.patch.patchId);
+          }
+          if (repaired.status === "infeasible") break;
+          currentProgram = repaired.program;
+          repairCycle = cycle;
+          if (repaired.status === "passed") {
+            passed = true;
+            break;
+          }
+          if (!repaired.ir || !repaired.report || !repaired.score) break;
+          evaluation = {
+            status: "invalid",
+            candidateId,
+            ir: repaired.ir,
+            report: repaired.report,
+            score: repaired.score,
+          };
+        }
+
+        if (!passed) continue;
+        const candidate = buildCandidate(
+          candidateId,
+          nextIntent,
+          currentProgram,
+          ordinal,
+          generatedAtIso,
+          appliedPatchIds,
+          repairCycle,
+        );
+        if (!candidate) continue;
+        accepted.push(candidate);
+        if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
+      }
+
+      const ranked = rankedCandidates(accepted).slice(0, 3);
+      if (ranked.length === 0) {
+        throw new Error("No hard-valid candidates were produced.");
+      }
+      setIntent(nextIntent);
+      setCandidates(ranked);
+      setSelectedId(ranked[0]?.candidateId ?? "");
+      setRepairEvidence(evidenceByCandidate);
+      setNarrative(null);
+      shouldFocusResultsRef.current = true;
+      setPhase("ready");
+      setAccessState("granted");
+      setStatusMessage(
+        `${ranked.length} hard-valid candidate${ranked.length === 1 ? "" : "s"} ready.`,
       );
-      const failing = nextGeneration.candidates.find(
-        (entry) => !entry.report.valid,
-      );
-      setGeneration(nextGeneration);
-      setSelectedId(
-        failing?.candidate.id ??
-          nextGeneration.candidates[0]?.candidate.id ??
-          "",
-      );
-      setRepair(null);
-      setFinalization(null);
-      setShowRepaired(false);
-      setStage("workshop");
-      playTone(520);
-      announce(
-        `Generated ${nextGeneration.internalCandidateCount} deterministic candidates and displayed three representatives.`,
-      );
-    } catch (caught) {
-      setError(formatFailure(caught));
-      announce("Generation failed. Review the error message.");
-    } finally {
-      setBusy(null);
+    } catch (forgeError) {
+      setPhase(candidates.length > 0 ? "ready" : "idle");
+      if (!requireAccess(forgeError)) setError(formatFailure(forgeError));
     }
   };
 
-  const runRepair = async () => {
-    if (!selectedEntry || selectedEntry.report.valid) return;
-    setBusy("repair");
+  const chooseCandidate = (candidateId: string) => {
+    setSelectedId(candidateId);
+    setMotionPosition(0.65);
+    setNarrative(null);
+    setStatusMessage("Candidate selected.");
+  };
+
+  const exportFormat = async (format: ExportFormat) => {
+    if (!exportCandidate || exportingFormat) return;
     setError("");
-    playTone(360);
+    setExportingFormat(format);
+    setStatusMessage(`Preparing ${format.toUpperCase()}…`);
     try {
-      const nextRepair = await postJson(
-        "/api/repair",
-        {
-          candidate: candidateInput(selectedEntry.candidate),
-          constraint,
-          installationId,
-        },
-        RepairApiResponseSchema,
-      );
-      setRepair(nextRepair);
-      setShowRepaired(true);
-      playTone(nextRepair.outcome.status === "passed" ? 620 : 210);
-      announce(
-        nextRepair.outcome.status === "passed"
-          ? `The candidate passed after ${nextRepair.outcome.cycles.length} bounded repair cycles.`
-          : `${nextRepair.outcome.reason} ${nextRepair.outcome.cycles.length} repair cycles completed.`,
-      );
-    } catch (caught) {
-      setError(formatFailure(caught));
-      announce("The bounded repair loop failed safely.");
+      const filename = await downloadCandidateExport(format, exportCandidate);
+      setStatusMessage(`${filename} downloaded.`);
+    } catch (exportError) {
+      setError(formatFailure(exportError));
     } finally {
-      setBusy(null);
+      setExportingFormat(null);
     }
   };
 
-  const finalize = async () => {
-    if (!generation || !activeEntry?.report.valid) return;
-    setBusy("finalize");
+  const finalizeNarrative = async () => {
+    if (!exportCandidate || finalizing || !solAvailable) return;
+    setFinalizing(true);
     setError("");
-    playTone(410);
+    setStatusMessage("Writing concise build notes…");
     try {
-      const nextFinalization = await postJson(
+      const result = await postJson(
         "/api/finalize",
-        {
-          candidates: [candidateInput(activeEntry.candidate)],
-          constraint,
-          installationId,
-        },
+        { candidate: exportCandidate },
         FinalizeApiResponseSchema,
       );
-      setFinalization(nextFinalization);
-      setStage("export");
-      playTone(680);
-      announce(
-        `Export candidate ${nextFinalization.winner.candidate.id} is deterministically valid and ready.`,
-      );
-    } catch (caught) {
-      setError(formatFailure(caught));
-      announce(
-        "Finalization stopped because no safe export could be prepared.",
-      );
+      setNarrative(result.narrative);
+      setAccessState("granted");
+      setStatusMessage("Build notes ready.");
+    } catch (finalizeError) {
+      if (!requireAccess(finalizeError)) setError(formatFailure(finalizeError));
     } finally {
-      setBusy(null);
+      setFinalizing(false);
     }
   };
 
-  const exportFile = async (format: "svg" | "fold") => {
-    if (!finalization) return;
-    setBusy("export");
-    setError("");
-    playTone(440);
-    try {
-      const candidate = finalization.winner.candidate;
-      await downloadExport(
-        format,
-        { candidate: candidateInput(candidate), constraint },
-        downloadName(candidate, format),
-      );
-      announce(`${format.toUpperCase()} export downloaded.`);
-    } catch (caught) {
-      setError(formatFailure(caught));
-      announce(`${format.toUpperCase()} export failed safely.`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const submitAccess = async () => {
-    setBusy("access");
-    setError("");
-    try {
-      await postJson("/api/access", { code: accessCode }, AccessSchema);
-      setAccessCode("");
-      setAccessGranted(true);
-      announce("Live model access granted for this browser session.");
-    } catch (caught) {
-      setError(formatFailure(caught));
-      announce("The access code was not accepted.");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const reset = () => {
-    setStage("specify");
-    setGeneration(null);
-    setRepair(null);
-    setFinalization(null);
-    setSelectedId("");
-    setError("");
-    localStorage.removeItem(CHECKPOINT_KEY);
-    announce("Started a fresh FoldForge session.");
-  };
+  const limitations = baseSelected
+    ? (narrative?.limitations ?? fallbackLimitations(baseSelected))
+    : [];
+  const assemblySteps = baseSelected
+    ? [...baseSelected.program.blueprint.assemblyOperations]
+        .sort((left, right) => left.order - right.order)
+        .map((operation) => operation.instruction)
+    : [];
 
   return (
-    <main className={styles.shell} id="top">
-      <p
-        className={styles.srOnly}
-        aria-live="polite"
-        aria-atomic="true"
-        data-sequence={liveMessage.sequence}
-      >
-        {liveMessage.text}
-      </p>
-
+    <div className={styles.shell} id="top">
+      <a className={styles.skipLink} href="#studio-main">
+        Skip to studio
+      </a>
       <header className={styles.header}>
         <a className={styles.brand} href="#top" aria-label="FoldForge home">
-          <span className={styles.mark} aria-hidden="true">
-            F
-          </span>
-          <span>
-            <strong>FoldForge</strong>
-            <small>software-verified paper geometry</small>
-          </span>
+          <span aria-hidden="true">FF</span>
+          FoldForge
         </a>
-        <div className={styles.headerActions}>
+        <div className={styles.healthGroup}>
           <span
-            className={`${styles.statusPill} ${health?.liveAiEnabled ? styles.live : styles.offline}`}
+            className={`${styles.statusPill ?? ""} ${solAvailable ? (styles.live ?? "") : (styles.offline ?? "")}`}
           >
             <span aria-hidden="true" />
-            {health?.liveAiEnabled ? "GPT‑5.6 live" : "controls mode"}
+            {!health
+              ? "Checking Sol"
+              : solAvailable
+                ? accessState === "granted"
+                  ? "Sol ready · access granted"
+                  : accessState === "needed"
+                    ? "Sol ready · access needed"
+                    : "Sol ready"
+                : "Sol is off"}
           </span>
-          <button
-            className={styles.iconButton}
-            type="button"
-            onClick={() => setMuted((value) => !value)}
-            aria-pressed={!muted}
-            aria-label="Workshop sounds"
-          >
-            {muted ? "Sound off" : "Sound on"}
-          </button>
+          {candidates.length > 0 ? (
+            <span className={styles.checkpointLabel}>Checkpoint saved</span>
+          ) : null}
         </div>
       </header>
 
-      {stage === "specify" ? (
-        <section className={styles.hero}>
-          <div>
-            <p className={styles.eyebrow}>One sheet · no glue</p>
-            <h1>Design a paper stand.</h1>
-            <p>Set the device, verify the fold, and export at true scale.</p>
+      <main className={styles.main} id="studio-main">
+        <section className={styles.compose} aria-labelledby="studio-title">
+          <div className={styles.intro}>
+            <p className={styles.eyebrow}>Prompt-to-fabrication studio</p>
+            <h1 id="studio-title">Describe. Forge. Export.</h1>
+            <p>
+              Sol proposes bounded sheet programs. Code compiles, verifies, and
+              ranks every candidate before it appears here.
+            </p>
           </div>
-          <aside className={styles.physicalNotice}>
-            <span>Physical test pending</span>
-            <strong>Geometry, not strength</strong>
-            <p>Print and test the stand before regular use.</p>
-          </aside>
-        </section>
-      ) : null}
 
-      <nav className={styles.stageNav} aria-label="FoldForge stages">
-        {(["specify", "workshop", "export"] as const).map((item, index) => {
-          const enabled =
-            item === "specify" ||
-            (item === "workshop" && generation !== null) ||
-            (item === "export" && finalization !== null);
-          return (
+          <div className={styles.promptPanel}>
+            <label htmlFor="fabrication-prompt">
+              Describe what to fabricate
+            </label>
+            <textarea
+              id="fabrication-prompt"
+              maxLength={4_000}
+              rows={5}
+              value={prompt}
+              onChange={(event) => setPrompt(event.currentTarget.value)}
+            />
+            <div className={styles.promptMeta}>
+              <span>{prompt.length}/4,000</span>
+              <span>Access codes are never saved.</span>
+            </div>
+            <div className={styles.exampleChips} aria-label="Example prompts">
+              {EXAMPLE_PROMPTS.map((example, index) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => setPrompt(example)}
+                >
+                  Example {index + 1}
+                </button>
+              ))}
+            </div>
             <button
-              key={item}
+              className={styles.forgeButton}
               type="button"
-              className={stage === item ? styles.activeStage : ""}
-              disabled={!enabled}
-              aria-current={stage === item ? "step" : undefined}
-              onClick={() => setStage(item)}
+              disabled={!solAvailable || busy || prompt.trim().length === 0}
+              onClick={() => void forge()}
             >
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              {item}
+              {busy ? "Forging…" : "Forge 3 candidates"}
             </button>
-          );
-        })}
-      </nav>
-
-      {error ? (
-        <div className={styles.errorBanner} role="alert">
-          <strong>Workshop stopped safely.</strong>
-          <span>{error}</span>
-          <button type="button" onClick={() => setError("")}>
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {health?.liveAiEnabled && health.accessRequired && !accessGranted ? (
-        <section className={styles.accessBar} aria-labelledby="access-title">
-          <div>
-            <strong id="access-title">Live GPT access</strong>
-            <span>Enter the access code.</span>
+            {!solAvailable && health ? (
+              <p className={styles.offlineNote}>
+                Sol is off. Arbitrary generation is unavailable until live
+                service is enabled.
+              </p>
+            ) : null}
           </div>
-          <label>
-            <span className={styles.srOnly}>Demo access code</span>
+        </section>
+
+        {accessState === "needed" ? (
+          <form
+            className={styles.accessBar}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void unlock();
+            }}
+          >
+            <label htmlFor="access-code">Studio access code</label>
             <input
+              id="access-code"
               type="password"
+              autoComplete="off"
               value={accessCode}
               onChange={(event) => setAccessCode(event.currentTarget.value)}
-              autoComplete="one-time-code"
             />
-          </label>
-          <button
-            type="button"
-            onClick={() => void submitAccess()}
-            disabled={busy !== null || accessCode.length === 0}
-          >
-            {busy === "access" ? "Checking…" : "Unlock"}
-          </button>
-        </section>
-      ) : null}
+            <button type="submit" disabled={accessCode.length === 0}>
+              Unlock
+            </button>
+          </form>
+        ) : null}
 
-      {stage === "specify" ? (
-        <section className={styles.stagePanel} aria-labelledby="specify-title">
-          <div className={styles.stageHeading}>
-            <div>
-              <p className={styles.eyebrow}>Stage 01 / Specify</p>
-              <h2 id="specify-title" ref={stageHeadingRef} tabIndex={-1}>
-                Set the fit.
-              </h2>
-            </div>
-            <p>
-              {health?.liveAiEnabled
-                ? "Describe it or edit the exact dimensions."
-                : "Exact dimensions control the fit."}
-            </p>
-          </div>
-
-          <div className={styles.specifyGrid}>
-            <div className={styles.promptCard}>
-              <label htmlFor="design-prompt">Describe your stand</label>
-              <textarea
-                id="design-prompt"
-                value={prompt}
-                onChange={(event) => setPrompt(event.currentTarget.value)}
-                maxLength={2000}
-                rows={7}
-                required={health?.liveAiEnabled}
-                aria-describedby="prompt-mode-note"
-              />
-              <p className={styles.promptModeNote} id="prompt-mode-note">
-                {health?.liveAiEnabled
-                  ? "GPT‑5.6 turns this into exact constraints."
-                  : "Saved as notes. Measurements below control this build."}
-              </p>
-              <div className={styles.promptFooter}>
-                <span>{prompt.length} / 2,000</span>
-                <span>
-                  {compileMode === "gpt-5.6-sol"
-                    ? "AI interpreted"
-                    : "controls only"}
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.controlsCard}>
-              <fieldset>
-                <legend>Device</legend>
-                <div className={styles.fieldGrid}>
-                  <NumericField
-                    id="object-width"
-                    label="Width"
-                    value={constraint.objectWidthMm}
-                    unit="mm"
-                    min={1}
-                    max={220}
-                    step={0.1}
-                    onChange={(value) =>
-                      patchConstraint("objectWidthMm", value)
-                    }
-                  />
-                  <NumericField
-                    id="object-height"
-                    label="Height"
-                    value={constraint.objectHeightMm}
-                    unit="mm"
-                    min={1}
-                    max={320}
-                    step={0.1}
-                    onChange={(value) =>
-                      patchConstraint("objectHeightMm", value)
-                    }
-                  />
-                  <NumericField
-                    id="object-depth"
-                    label="Depth"
-                    value={constraint.objectDepthMm}
-                    unit="mm"
-                    min={1}
-                    max={30}
-                    step={0.1}
-                    onChange={(value) =>
-                      patchConstraint("objectDepthMm", value)
-                    }
-                  />
-                  <NumericField
-                    id="object-mass"
-                    label="Mass"
-                    value={constraint.objectMassG}
-                    unit="g"
-                    min={1}
-                    max={PRODUCT_LIMITS.maximumObjectMassG}
-                    step={1}
-                    onChange={(value) => patchConstraint("objectMassG", value)}
-                  />
-                </div>
-                <label className={styles.field} htmlFor="orientation">
-                  <span>Orientation</span>
-                  <select
-                    id="orientation"
-                    value={constraint.orientation}
-                    onChange={(event) =>
-                      patchConstraint(
-                        "orientation",
-                        event.currentTarget.value as "portrait" | "landscape",
-                      )
-                    }
-                  >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                  </select>
-                </label>
-              </fieldset>
-
-              <fieldset>
-                <legend>Sheet & view</legend>
-                <div className={styles.fieldGrid}>
-                  <NumericField
-                    id="sheet-width"
-                    label="Sheet width"
-                    value={constraint.sheetWidthMm}
-                    unit="mm"
-                    min={180}
-                    max={330}
-                    step={0.1}
-                    onChange={(value) => patchConstraint("sheetWidthMm", value)}
-                  />
-                  <NumericField
-                    id="sheet-height"
-                    label="Sheet height"
-                    value={constraint.sheetHeightMm}
-                    unit="mm"
-                    min={250}
-                    max={500}
-                    step={0.1}
-                    onChange={(value) =>
-                      patchConstraint("sheetHeightMm", value)
-                    }
-                  />
-                  <NumericField
-                    id="angle"
-                    label="View angle"
-                    value={constraint.targetViewingAngleDeg}
-                    unit="deg"
-                    min={50}
-                    max={75}
-                    step={1}
-                    onChange={(value) =>
-                      patchConstraint("targetViewingAngleDeg", value)
-                    }
-                  />
-                  <NumericField
-                    id="margin"
-                    label="Print margin"
-                    value={constraint.printableMarginMm}
-                    unit="mm"
-                    min={3}
-                    max={15}
-                    step={0.1}
-                    onChange={(value) =>
-                      patchConstraint("printableMarginMm", value)
-                    }
-                  />
-                </div>
-                <label className={styles.field} htmlFor="material">
-                  <span>Material</span>
-                  <select
-                    id="material"
-                    value={constraint.materialProfile}
-                    onChange={(event) =>
-                      patchConstraint(
-                        "materialProfile",
-                        event.currentTarget
-                          .value as DesignConstraint["materialProfile"],
-                      )
-                    }
-                  >
-                    <option value="cover_65lb">65 lb cover</option>
-                    <option value="cover_80lb">80 lb cover</option>
-                    <option value="cover_110lb">110 lb cover</option>
-                  </select>
-                </label>
-              </fieldset>
-            </div>
-          </div>
-
-          <div className={styles.specifyAction}>
-            <p>Fixed topology: 5 creases · 2 slots · dual tabs</p>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              disabled={
-                busy !== null ||
-                installationId.length < 8 ||
-                !DesignConstraintSchema.safeParse(constraint).success ||
-                (health?.liveAiEnabled === true && prompt.trim().length === 0)
-              }
-              onClick={() => void generate()}
-            >
-              {busy === "generate" ? "Forging geometry…" : "Generate 3 designs"}
-              <span aria-hidden="true">→</span>
+        <p className={styles.liveRegion} aria-live="polite" aria-atomic="true">
+          {statusMessage}
+        </p>
+        {error ? (
+          <div className={styles.errorBanner} role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError("")}>
+              Dismiss
             </button>
           </div>
-          <p className={styles.privacyNote}>
-            Saved locally for 24 hours. Live mode sends prompts to OpenAI.
-          </p>
-        </section>
-      ) : null}
+        ) : null}
 
-      {stage === "workshop" && generation && activeEntry ? (
-        <section className={styles.stagePanel} aria-labelledby="workshop-title">
-          <div className={styles.stageHeading}>
-            <div>
-              <p className={styles.eyebrow}>Stage 02 / Workshop</p>
-              <h2 id="workshop-title" ref={stageHeadingRef} tabIndex={-1}>
-                Compare and verify.
+        {candidates.length > 0 && baseSelected ? (
+          <section className={styles.results} aria-labelledby="results-title">
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>Hard-valid only</p>
+              <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
+                Compare candidates.
               </h2>
             </div>
-            <p>Three strategies. Only passing geometry can be exported.</p>
-          </div>
 
-          <div className={styles.candidateRail} aria-label="Candidate choices">
-            {generation.candidates.map((entry) => (
-              <button
-                key={entry.candidate.id}
-                type="button"
-                className={
-                  selectedEntry?.candidate.id === entry.candidate.id
-                    ? styles.selectedCandidate
-                    : ""
-                }
-                onClick={() => {
-                  setSelectedId(entry.candidate.id);
-                  setRepair(null);
-                  setShowRepaired(false);
-                  playTone(300);
-                }}
-                aria-pressed={
-                  selectedEntry?.candidate.id === entry.candidate.id
-                }
-              >
-                <span
+            <div className={styles.candidateRail}>
+              {candidates.map((candidate) => (
+                <button
+                  key={candidate.candidateId}
                   className={
-                    entry.report.valid ? styles.passDot : styles.failDot
+                    candidate.candidateId === baseSelected.candidateId
+                      ? styles.selectedCard
+                      : undefined
                   }
-                  aria-hidden="true"
-                />
-                <span>
-                  <strong>{entry.candidate.strategy}</strong>
-                  <small>
-                    {entry.report.valid
-                      ? `score ${entry.report.scoreBreakdown.total.toFixed(1)}`
-                      : entry.report.hardFailures[0]}
-                  </small>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className={styles.workshopGrid}>
-            <div className={styles.previewColumn}>
-              <div className={styles.previewToolbar}>
-                <div className={styles.segmented}>
-                  <button
-                    type="button"
-                    className={
-                      previewMode === "folded" ? styles.segmentActive : ""
-                    }
-                    onClick={() => setPreviewMode("folded")}
-                    aria-pressed={previewMode === "folded"}
-                  >
-                    Folded
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      previewMode === "flat" ? styles.segmentActive : ""
-                    }
-                    onClick={() => setPreviewMode("flat")}
-                    aria-pressed={previewMode === "flat"}
-                  >
-                    Flat pattern
-                  </button>
-                </div>
-                {repairedEntry ? (
-                  <div className={styles.segmented}>
-                    <button
-                      type="button"
-                      className={!showRepaired ? styles.segmentActive : ""}
-                      onClick={() => setShowRepaired(false)}
-                      aria-pressed={!showRepaired}
-                    >
-                      Before
-                    </button>
-                    <button
-                      type="button"
-                      className={showRepaired ? styles.segmentActive : ""}
-                      onClick={() => setShowRepaired(true)}
-                      aria-pressed={showRepaired}
-                    >
-                      After repair
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              <StandPreview
-                entry={activeEntry}
-                mode={previewMode}
-                rotationDeg={rotationDeg}
-                failureRefs={activeFailure?.geometryRefs ?? []}
-              />
-              {previewMode === "folded" ? (
-                <label
-                  className={styles.rotationControl}
-                  htmlFor="preview-rotation"
+                  type="button"
+                  aria-pressed={
+                    candidate.candidateId === baseSelected.candidateId
+                  }
+                  data-testid="candidate-card"
+                  onClick={() => chooseCandidate(candidate.candidateId)}
                 >
-                  <span>Rotate preview</span>
-                  <input
-                    id="preview-rotation"
-                    type="range"
-                    min={-65}
-                    max={65}
-                    value={rotationDeg}
-                    onChange={(event) =>
-                      setRotationDeg(Number(event.currentTarget.value))
-                    }
-                  />
-                  <output>{rotationDeg}°</output>
-                </label>
-              ) : null}
-
-              <div className={styles.measurementGrid}>
-                <div>
-                  <span>Base depth</span>
-                  <strong>
-                    {activeEntry.candidate.parameters.baseDepthMm.toFixed(1)} mm
-                  </strong>
-                </div>
-                <div>
-                  <span>Stand width</span>
-                  <strong>
-                    {activeEntry.candidate.parameters.standWidthMm.toFixed(1)}{" "}
-                    mm
-                  </strong>
-                </div>
-                <div>
-                  <span>Backrest</span>
-                  <strong>
-                    {activeEntry.candidate.parameters.backrestAngleDeg.toFixed(
-                      1,
-                    )}
-                    °
-                  </strong>
-                </div>
-                <div>
-                  <span>Flat length</span>
-                  <strong>
-                    {activeEntry.candidate.geometry.derived.flatLengthMm.toFixed(
-                      1,
-                    )}{" "}
-                    mm
-                  </strong>
-                </div>
-              </div>
+                  <span className={styles.rank}>#{candidate.rank}</span>
+                  <span>
+                    <strong>{candidate.label}</strong>
+                    <small>{candidate.program.topologyId}</small>
+                  </span>
+                  <b>{candidate.score.totalScore?.toFixed(1)}</b>
+                </button>
+              ))}
             </div>
 
-            <aside className={styles.inspector}>
-              <div
-                className={
-                  activeEntry.report.valid
-                    ? styles.validCard
-                    : styles.failureCard
-                }
-              >
-                <span>
-                  {activeEntry.report.valid
-                    ? "Deterministic result"
-                    : "Measured failure"}
-                </span>
-                <h3>
-                  {activeEntry.report.valid
-                    ? "All hard checks pass"
-                    : (activeFailure?.label ?? "Hard check failed")}
-                </h3>
-                <p>
-                  {activeEntry.report.valid
-                    ? `Eligible score: ${activeEntry.report.scoreBreakdown.total.toFixed(1)} / 100.`
-                    : activeFailure?.message}
-                </p>
-                {!activeEntry.report.valid && activeFailure ? (
-                  <dl>
-                    <div>
-                      <dt>Actual</dt>
-                      <dd>{String(activeFailure.actual)}</dd>
-                    </div>
-                    <div>
-                      <dt>Expected</dt>
-                      <dd>{activeFailure.expected}</dd>
-                    </div>
-                  </dl>
-                ) : null}
+            <div className={styles.workbench}>
+              <div className={styles.previewColumn}>
+                <div className={styles.previewToolbar}>
+                  <div className={styles.segmented} aria-label="Preview mode">
+                    {(["assembled", "pattern"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={previewMode === mode}
+                        onClick={() => setPreviewMode(mode)}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  <span>
+                    {baseSelected.program.behavior.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <FabricationPreview
+                  ir={baseSelected.ir}
+                  mode={previewMode}
+                  motionPosition={motionPosition}
+                  rotationDeg={rotationDeg}
+                  label={`${baseSelected.label} ${previewMode} preview`}
+                />
+                <div className={styles.controls}>
+                  <label>
+                    Motion
+                    <input
+                      aria-label="Motion position"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      disabled={!baseSelected.ir.driver}
+                      value={motionPosition}
+                      onChange={(event) =>
+                        setMotionPosition(Number(event.currentTarget.value))
+                      }
+                    />
+                    <output>{Math.round(motionPosition * 100)}%</output>
+                  </label>
+                  <label>
+                    Rotation
+                    <input
+                      aria-label="Preview rotation"
+                      type="range"
+                      min="-180"
+                      max="180"
+                      step="1"
+                      value={rotationDeg}
+                      onChange={(event) =>
+                        setRotationDeg(Number(event.currentTarget.value))
+                      }
+                    />
+                    <output>{rotationDeg}°</output>
+                  </label>
+                </div>
+                <dl className={styles.metrics}>
+                  <div>
+                    <dt>Score</dt>
+                    <dd>{baseSelected.score.totalScore?.toFixed(1)}</dd>
+                  </div>
+                  <div>
+                    <dt>Panels</dt>
+                    <dd>{baseSelected.ir.panels.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Sheets</dt>
+                    <dd>{baseSelected.ir.sheets.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Cut paths</dt>
+                    <dd>
+                      {
+                        baseSelected.ir.paths.filter(
+                          (path) => path.kind === "cut",
+                        ).length
+                      }
+                    </dd>
+                  </div>
+                </dl>
               </div>
 
-              {selectedEntry && !selectedEntry.report.valid && !repair ? (
-                <button
-                  className={styles.primaryButton}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => void runRepair()}
-                >
-                  {busy === "repair"
-                    ? "Running bounded repair…"
-                    : "Diagnose & repair"}
-                  <span aria-hidden="true">↗</span>
-                </button>
-              ) : null}
+              <aside
+                className={styles.inspector}
+                aria-label="Candidate details"
+              >
+                <section className={styles.summaryCard}>
+                  <span>Selected program</span>
+                  <h3>{baseSelected.label}</h3>
+                  <p>{baseSelected.program.designSummary}</p>
+                </section>
 
-              {repair ? (
-                <div className={styles.patchCard}>
-                  <div>
-                    <span>
-                      {repair.mode === "gpt-5.6-sol"
-                        ? "AI patch / code validation"
-                        : "Code patch / code validation"}
-                    </span>
-                    <strong>
-                      {repair.outcome.status === "passed"
-                        ? "Repair passed"
-                        : `Infeasible after ${repair.outcome.cycles.length} cycle${repair.outcome.cycles.length === 1 ? "" : "s"}`}
-                    </strong>
-                  </div>
-                  {repair.outcome.status === "infeasible" ? (
-                    <p className={styles.repairReason}>
-                      {repair.outcome.reason}
-                    </p>
-                  ) : null}
-                  {repair.outcome.cycles.map((cycle) => (
-                    <section key={cycle.cycle}>
-                      <h4>Cycle {cycle.cycle}</h4>
-                      {cycle.patch.operations.map((operation, index) => (
-                        <p key={`${operation.parameter}-${index}`}>
-                          <code>
-                            {operation.operation} {operation.parameter}{" "}
-                            {operation.value} {operation.unit}
-                          </code>
-                          <span>{operation.reason}</span>
+                {selectedRepairs.length > 0 ? (
+                  <details className={styles.evidenceCard} open>
+                    <summary>Repair evidence</summary>
+                    {selectedRepairs.map((entry) => (
+                      <div key={`${entry.patch.patchId}-${entry.cycle}`}>
+                        <strong>
+                          Cycle {entry.cycle}: {entry.beforeFailureId}
+                        </strong>
+                        <p>{entry.beforeFailureMessage}</p>
+                        <p>
+                          Patch: {entry.patch.diagnosis} (
+                          {entry.result.replace("_", " ")})
                         </p>
-                      ))}
-                    </section>
-                  ))}
-                </div>
-              ) : null}
+                        <ul>
+                          {entry.patch.operations.map((operation) => (
+                            <li key={operation.operationId}>
+                              {operation.path}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
 
-              <details className={styles.checkList}>
-                <summary className={styles.inspectorHeading}>
-                  <strong>Verifier</strong>
-                  <span>
-                    {
-                      activeEntry.report.checks.filter(
-                        (check) => check.status === "pass",
-                      ).length
-                    }{" "}
-                    passed
-                  </span>
-                </summary>
+                <details className={styles.evidenceCard}>
+                  <summary>
+                    Verifier evidence ·{" "}
+                    {baseSelected.verification.checks.length} checks
+                  </summary>
+                  <ul>
+                    {baseSelected.verification.checks.map((check) => (
+                      <li key={check.checkId}>
+                        <span>{check.status}</span> {check.message}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </aside>
+            </div>
+
+            <div className={styles.deliveryGrid}>
+              <section className={styles.exportPanel}>
+                <p className={styles.eyebrow}>Exact selected candidate</p>
+                <h3>Export.</h3>
+                <div className={styles.exportButtons}>
+                  {(["svg", "dxf", "glb", "json", "fold"] as const).map(
+                    (format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        disabled={exportingFormat !== null}
+                        onClick={() => void exportFormat(format)}
+                      >
+                        {exportingFormat === format
+                          ? "Preparing…"
+                          : `Download ${format.toUpperCase()}`}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  className={styles.narrativeButton}
+                  type="button"
+                  disabled={!solAvailable || finalizing}
+                  onClick={() => void finalizeNarrative()}
+                >
+                  {finalizing ? "Writing…" : "Add Sol build notes"}
+                </button>
+              </section>
+
+              <section className={styles.buildPanel}>
+                <h3>Assembly</h3>
                 <ol>
-                  {activeEntry.report.checks.map((check) => (
-                    <li key={check.id} data-status={check.status}>
-                      <span aria-hidden="true">
-                        {check.status === "pass"
-                          ? "✓"
-                          : check.status === "fail"
-                            ? "!"
-                            : "·"}
-                      </span>
-                      <span>
-                        <strong>{check.label}</strong>
-                        <small>
-                          {check.status === "not_run"
-                            ? "Not run after fail-fast stop"
-                            : check.message}
-                        </small>
-                      </span>
-                    </li>
+                  {(assemblySteps.length > 0
+                    ? assemblySteps
+                    : [baseSelected.program.designSummary]
+                  ).map((step) => (
+                    <li key={step}>{step}</li>
                   ))}
                 </ol>
-              </details>
-            </aside>
-          </div>
-
-          <details className={styles.tracePanel}>
-            <summary className={styles.inspectorHeading}>
-              <strong id="trace-title">Source-labelled design trace</strong>
-              <span>AI never overrides code</span>
-            </summary>
-            <ol>
-              {trace.map((event, index) => (
-                <li key={`${event.source}-${index}`}>
-                  <span data-source={event.source}>{event.source}</span>
-                  <div>
-                    <p>{event.summary}</p>
-                    <small>
-                      {event.timestamp} · {event.kind}
-                      {event.candidateId
-                        ? ` · ${event.candidateId}`
-                        : ""} · {event.inputHash}
-                    </small>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </details>
-
-          <div className={styles.stageFooter}>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => setStage("specify")}
-            >
-              ← Edit dimensions
-            </button>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              disabled={busy !== null || !activeEntry.report.valid}
-              onClick={() => void finalize()}
-            >
-              {busy === "finalize" ? "Revalidating…" : "Export selected design"}
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {stage === "export" && finalization ? (
-        <section className={styles.stagePanel} aria-labelledby="export-title">
-          <div className={styles.stageHeading}>
-            <div>
-              <p className={styles.eyebrow}>Stage 03 / Export</p>
-              <h2 id="export-title" ref={stageHeadingRef} tabIndex={-1}>
-                Download and test.
-              </h2>
+                <h3>Limitations</h3>
+                <ul>
+                  {limitations.map((limitation) => (
+                    <li key={limitation}>{limitation}</li>
+                  ))}
+                </ul>
+                {narrative ? (
+                  <p className={styles.narrativeSummary}>
+                    <strong>{narrative.summary}</strong> {narrative.mechanism}
+                    {narrative.assemblySteps.length > 0
+                      ? ` Sol notes: ${narrative.assemblySteps.join(" ")}`
+                      : ""}
+                  </p>
+                ) : null}
+              </section>
             </div>
-            <p>Verified geometry. Physical strength still requires testing.</p>
-          </div>
-
-          <div className={styles.exportHero}>
-            <div>
-              <span className={styles.successBadge}>Verified in software</span>
-              <h3 className={styles.designName}>
-                {finalization.winner.candidate.strategy} design
-              </h3>
-              <p>
-                Score{" "}
-                {finalization.winner.report.scoreBreakdown.total.toFixed(1)}.
-                All hard checks passed.
-              </p>
-              <div className={styles.exportActions}>
-                <button
-                  className={styles.primaryButton}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => void exportFile("svg")}
-                >
-                  Download SVG
-                </button>
-                <button
-                  className={styles.secondaryButton}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => void exportFile("fold")}
-                >
-                  Download FOLD 1.2
-                </button>
-                <button
-                  className={styles.textButton}
-                  type="button"
-                  onClick={() => window.print()}
-                >
-                  Print this guide
-                </button>
-              </div>
-            </div>
-            <div className={styles.scaleCard}>
-              <span>Scale check</span>
-              <div aria-hidden="true">
-                <i />
-                <i />
-              </div>
-              <strong>50 mm</strong>
-              <p>Print at 100%. Measure before cutting.</p>
-            </div>
-          </div>
-
-          <div className={styles.exportGrid}>
-            <section>
-              <span className={styles.eyebrow}>Fold legend</span>
-              <h3>Cut and score</h3>
-              <ul className={styles.legend}>
-                <li>
-                  <span className={styles.cutSwatch} />
-                  Solid graphite — perimeter cut
-                </li>
-                <li>
-                  <span className={styles.slotSwatch} />
-                  Solid red — internal slot cut
-                </li>
-                <li>
-                  <span className={styles.foldSwatch} />
-                  Dashed teal — score and fold
-                </li>
-              </ul>
-              <details className={styles.profileNote}>
-                <summary>FOLD compatibility</summary>
-                <p>
-                  Slits are cut edges; some viewers omit slit-face topology.
-                </p>
-              </details>
-            </section>
-            <section>
-              <span className={styles.eyebrow}>Assembly</span>
-              <h3>Fold the stand</h3>
-              <ol className={styles.instructions}>
-                {finalization.narrative.foldingSteps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </section>
-            <section>
-              <span className={styles.eyebrow}>Physical test</span>
-              <h3>Test before use</h3>
-              <ul className={styles.instructions}>
-                <li>
-                  Print on {MATERIALS[constraint.materialProfile].label} at 100%
-                  / actual size.
-                </li>
-                <li>Accept the 50 mm scale line only from 49.5 to 50.5 mm.</li>
-                <li>Release and relock both tabs for 10 complete cycles.</li>
-                <li>Hold an equivalent test mass centered for 60 seconds.</li>
-                <li>Repeat for 60 seconds with the mass offset by 5 mm.</li>
-                <li>
-                  Fail on collapse, tear, slot growth, buckling, tipping, or
-                  slip over 3 mm.
-                </li>
-              </ul>
-            </section>
-          </div>
-
-          <section className={styles.limitations}>
-            <div>
-              <span>Required</span>
-              <h3>Test the printed stand.</h3>
-            </div>
-            <p>
-              Software checks geometry, not paper strength or friction. Start
-              with an equivalent test weight.
-            </p>
           </section>
-
-          <div className={styles.stageFooter}>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => setStage("workshop")}
-            >
-              ← Back to workshop
-            </button>
-            <button className={styles.textButton} type="button" onClick={reset}>
-              Start a new stand
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <footer className={styles.footer}>
-        <span>FoldForge / deterministic core v0.1</span>
-        <span>Physical validation pending · no load-bearing claim</span>
-      </footer>
-    </main>
+        ) : null}
+      </main>
+    </div>
   );
 }

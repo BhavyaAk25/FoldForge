@@ -34,7 +34,7 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-07 — Repair is typed, local, bounded, and fully rechecked
 
-**Accepted.** A repair cycle permits at most eight allowlisted patch operations and the pipeline permits at most five cycles. Unknown or unrelated operations, intent changes, out-of-range values, repeated canonical inputs, and identifier drift are rejected. Every accepted patch recompiles and reruns all checks. Exhaustion returns explicit infeasibility.
+**Accepted.** A repair cycle permits at most three allowlisted patch operations and the pipeline permits at most five cycles. Unknown or unrelated operations, intent changes, out-of-range values, repeated canonical inputs, and identifier drift are rejected. Every accepted patch recompiles and reruns all checks. Exhaustion returns explicit infeasibility.
 
 ## D-08 — One selected IR drives every view and file
 
@@ -59,6 +59,14 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 ## D-13 — Release evidence is software-based
 
 **Accepted.** Release depends on the compiler, verifier, exports, browser experience, live-model evidence, and sealed evaluations. FoldForge makes no strength or force guarantee.
+
+## D-14 — Expensive deterministic work is bounded
+
+**Accepted.** Static objects are verified at one canonical state and moving objects at 201 fixed states plus bounded refinement. The verifier rejects a candidate before motion traversal when its estimated sampled triangle-pair work exceeds 2,000,000 units. Public deterministic compile/export routes also use best-effort process-local request and concurrency limits. These controls protect the submission service without weakening any hard geometric check.
+
+## D-15 — Fabrication topology must be source-equivalent
+
+**Accepted.** Fold edges cannot also be cut, tab roots remain attached, holes need a safe ligament and useful net material, and joint/coupling connectors must physically span the bodies and axes they claim to constrain. GLB embeds the exact canonical fabrication profile, paths, connectors, hierarchy, and code-derived motion; caller-authored animation is not accepted.
 
 ## Rejected alternatives
 

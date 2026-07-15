@@ -1,6 +1,6 @@
 # Third-party notices
 
-FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. The documentation pivot adds no package dependency; this inventory still describes the current lockfile and must be regenerated if implementation changes it.
+FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. This inventory describes the current lockfile and must be regenerated when dependencies change.
 
 | Dependency           | Purpose               | Version | License    | Source / attribution                        |
 | -------------------- | --------------------- | ------: | ---------- | ------------------------------------------- |
@@ -15,6 +15,8 @@ FoldForge source code is MIT licensed. Direct runtime and development dependenci
 | Three.js             | 3D preview            | 0.185.1 | MIT        | https://github.com/mrdoob/three.js          |
 | React Three Fiber    | React 3D renderer     |   9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber |
 | Playwright           | Browser testing       |  1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright     |
+| earcut               | Polygon triangulation |   3.2.3 | ISC        | https://github.com/mapbox/earcut            |
+| axe-core Playwright  | Accessibility testing |  4.10.2 | MPL-2.0    | https://github.com/dequelabs/axe-core-npm   |
 
 No third-party dependency is modified. `pnpm licenses list --prod --json` generates the complete installed production dependency report for each release environment. The lockfile is the reproducible component inventory; the generated report is not committed because it can contain machine-specific installation paths.
 

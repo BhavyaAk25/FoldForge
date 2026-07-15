@@ -1,80 +1,70 @@
 # FoldForge demo video script
 
-Target runtime: **2:50**. The official limit is under three minutes. The spoken script is 289 words—about 2:13 at 130 words per minute—leaving roughly 37 seconds for interaction and pauses.
+Target: **2:35–2:50**. Keep the capture continuous, the cursor slow, and the evidence readable. Do not show secrets. Record only after the live Sol suite passes.
 
-## Recording gate
+## Prompt
 
-This is a future-state recording plan, not evidence that the pivot works today. Do not record the final narration until the generalized compiler is deployed, the shown unseen prompt passes the target live suite, and all exported hashes match. As of 2026-07-14, live GPT-5.6 Sol is disabled and the hosted URL is the legacy stand prototype.
+Use an unseen supported brief, not an example button:
 
-Use one continuous submission-build capture where practical. Keep the build SHA and “Live GPT-5.6 Sol” status visible. Do not substitute an offline fixture while narrating a live prompt.
+> Make a two-sheet desk organizer. Pull the front tray out 70 millimetres to open two mirrored side wings. Fit A4. No glue.
 
-## Script and shots
+## Script
 
-### 0:00–0:18 — problem and audience
+### 0:00–0:15 — problem
 
-**Screen:** FoldForge Describe page; brief product-team context, empty prompt.
+**Screen:** Empty Describe view.
 
-**Narration:** “A small product team can describe a moving paper prototype in seconds, then lose hours translating the brief into geometry, checking motion, and preparing fabrication files. FoldForge turns that handoff into a bounded, verifiable compiler.”
+**Say:** “Turning a product brief into moving geometry, checks, and fabrication files takes multiple tools and repeated handoffs. FoldForge compiles that work into one verified flow.”
 
-### 0:18–0:38 — unseen prompt
+### 0:15–0:35 — live intent
 
-**Screen:** Enter a previously sealed prompt: “Make a two-sheet desk organizer whose front tray slides out 70 millimetres and opens two mirrored side wings. Fit A4, no glue.” Select Forge.
+**Screen:** Type the unseen prompt. Show `Sol ready`. Select **Forge 3 candidates**.
 
-**Narration:** “This is an unseen request in the Work & Productivity track. GPT-5.6 Sol interprets the constraints and proposes a strict fabrication program. It does not draw trusted coordinates or declare success.”
+**Say:** “GPT-5.6 Sol interprets this unseen request and proposes strict fabrication programs. It explores the design space, but it cannot declare a design valid or write trusted export geometry.”
 
-### 0:38–1:04 — technological implementation
+### 0:35–1:00 — deterministic proof
 
-**Screen:** Show `USER`, `AI`, `CODE` trace, typed program, then compiler/verifier phases.
+**Screen:** Show the `USER`, `AI`, `CODE` trace, then the verifier summary.
 
-**Narration:** “Deterministic code compiles panels, tabs, slots, a prismatic driver, and mirrored revolute outputs. The verifier checks schema, graph, sheet packing, closure, then 201 motion states plus adaptive samples for collision, clearance, travel, and branch continuity. Only fully valid candidates can appear.”
+**Say:** “Code compiles panels, joints, tabs, slots, and motion into one canonical IR. The verifier checks topology, manufacturable cut paths, packing, rigid transforms, and 201 motion states for collision, clearance, travel, and continuity. Failed candidates never reach ranking or export.”
 
-### 1:04–1:30 — real failure and bounded repair
+### 1:00–1:22 — measured repair
 
-**Screen:** Reveal a rejected candidate with a measured clearance witness; run repair; show patch diff and new report.
+**Screen:** Select the repaired candidate. Open **Repair evidence** and show the failure ID, measurement, patch path, and passing report.
 
-**Narration:** “Here one topology misses the requested moving clearance. Sol receives that structured measurement and proposes a typed local patch. Code rejects intent changes, recompiles, and reruns every check. Repair is capped at eight operations per cycle and five cycles; failure stays failure.”
+**Say:** “This proposal failed a measured clearance check. Sol diagnosed that report and proposed a typed local patch. Code rejected intent changes, applied only allowlisted parameters, regenerated the design, and reran every check. Repair stops after three operations per cycle and five cycles.”
 
-### 1:30–1:54 — design quality
+### 1:22–1:47 — product design
 
-**Screen:** Compare verified candidates; select one; scrub motion while 3D, flat pattern, and program stay synchronized. Brief keyboard interaction.
+**Screen:** Switch candidates, scrub motion, rotate the 3D view, and switch to pattern.
 
-**Narration:** “The candidates optimize fabrication efficiency, mechanical simplicity, and visual expression, with topology differences—not cosmetic variants. The selected 3D view, printable pattern, program, motion, and verifier evidence all share one canonical IR.”
+**Say:** “The three candidates differ by topology, not styling. The selected 3D view, pattern, motion, score, verifier evidence, and provenance stay synchronized because they share the same candidate IR.”
 
-### 1:54–2:16 — exact fabrication handoff
+### 1:47–2:08 — exact handoff
 
-**Screen:** Export GLB, SVG, DXF, and `fabrication.json`; show manifest candidate hash matching the selected card.
+**Screen:** Download GLB, SVG, DXF, and JSON. Show the selected hash and FOLD status.
 
-**Narration:** “Export produces a GLB, print-scale SVG and DXF, canonical JSON, and grounded assembly instructions. Units, layers, calibration, and hashes are checked against the exact selected candidate. FoldForge proves geometry and motion—not material strength.”
+**Say:** “Export produces the exact selected candidate: source-bound GLB, print-scale SVG and DXF, canonical fabrication JSON, and FOLD when the topology fits. Geometry, paths, motion, units, and hashes are verified before download.”
 
-### 2:16–2:37 — impact
+### 2:08–2:27 — evidence and impact
 
-**Screen:** Compact results card with sealed-suite validity/export numbers and completed user-study metric; show only real submission-build results.
+**Screen:** Briefly show `EVALS.md` numbers, then return to the moving result.
 
-**Narration template:** “Across [N] sealed briefs, [X percent] produced a verified candidate or correct refusal, with zero hard-invalid exports. In our target-role study, median time to first verified handoff fell from [baseline] to [FoldForge].”
+**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed every browser flow. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
 
-Do not fill placeholders until the reports pass.
+### 2:27–2:43 — Codex and close
 
-### 2:37–2:50 — Codex, idea, and close
+**Screen:** Show the build SHA, repository, and final moving candidate.
 
-**Screen:** Repository evidence: BUILD_LOG, eval report, Codex session ID, then return to moving result.
+**Say:** “Codex helped build and review the contracts, compiler, verifier, repair loop, security boundary, tests, interface, and exports. The principle is simple: let AI explore; make code prove. This is FoldForge.”
 
-**Narration:** “Codex helped build and independently review the contracts, verifier, tests, security boundaries, UI, and exports. The idea is simple: let AI explore the design space, but make code prove what gets fabricated. That’s FoldForge.”
+## Recording checklist
 
-## Criterion coverage
-
-- **Technological Implementation:** live Sol, typed program, deterministic compiler/verifier, measured repair, exact exports, Codex evidence.
-- **Design:** coherent flow, synchronized views, visible provenance, keyboard interaction, clear failure state.
-- **Potential Impact:** named team workflow, same-task time study, verified handoff outcome.
-- **Quality of the Idea:** prompt-to-program-to-proof thesis, topology diversity, bounded grammar, honest exclusions.
-
-## Capture checklist
-
-- Final cut is shorter than 3:00 and public on YouTube with audible narration.
-- Opening or description names Work & Productivity.
-- Screen shows the submission build SHA and real live/offline state.
-- Prompt is sealed/unseen and not a hidden template trigger.
-- Every narrated number appears in a target report for the same build.
-- Candidate and export hashes match on camera.
-- No secret, access code, API key, personal information, private prompt, browser notification, or unrelated tab appears.
-- Captions are corrected manually; cursor and zoom keep evidence readable at 1080p.
-- Repository, README, and `/feedback` session ID are ready for the submission form.
+- Under 3:00 with audible narration and corrected captions.
+- Public YouTube link; Work & Productivity named in the title or description.
+- `Sol ready` visible and the prompt is genuinely unseen.
+- Submission build SHA matches the deployed build and repository.
+- Failure ID, patch path, passing report, selected hash, and downloads are readable.
+- No access code, API key, cookie, private tab, notification, or personal data appears.
+- Do not claim force, strength, durability, or material validation.
+- Include the requested Codex session ID in the submission form, not on screen if it harms readability.

@@ -1,112 +1,155 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { stableHash } from "../src/core/canonical";
-import { generateCandidates } from "../src/core/candidates";
-import { DEMO_CONSTRAINT } from "../src/core/constraints";
-import { exportFold } from "../src/core/export/fold";
-import { exportSvg } from "../src/core/export/svg";
 import {
-  selectRepresentatives,
-  verifyCandidate,
-} from "../src/core/verification";
+  buildFabricationCandidate,
+  finalizeFabricationCandidate,
+} from "../src/core/fabrication/candidate";
+import { compileFabricationProgram } from "../src/core/fabrication/compiler";
+import { createOfflineFabricationShowcases } from "../src/core/fabrication/examples";
+import { verifyFabricationIr } from "../src/core/fabrication/verification";
+import { sha256HexBytes } from "../src/core/sha256";
 
 const argument = (name: string): string | null => {
   const index = process.argv.indexOf(name);
   return index >= 0 ? (process.argv[index + 1] ?? null) : null;
 };
 
-const fixture = argument("--fixture") ?? "phone-letter-110lb";
-const seed = Number(argument("--seed") ?? 20260714);
+const fixture = argument("--fixture") ?? "fabrication-showcase-pack";
+const seed = Number(argument("--seed") ?? 20_260_714);
 const outputDirectory = path.resolve(
-  argument("--output") ?? "artifacts/kill-test",
+  argument("--output") ?? "artifacts/fabrication-showcase-pack",
 );
 
-if (fixture !== "phone-letter-110lb") {
-  throw new Error(`Unknown fixture: ${fixture}`);
+if (fixture !== "fabrication-showcase-pack") {
+  throw new Error(`Unknown fabrication fixture: ${fixture}`);
 }
-
-if (!Number.isSafeInteger(seed)) {
+if (!Number.isSafeInteger(seed))
   throw new Error("Seed must be a safe integer.");
-}
-
-const allCandidates = generateCandidates(DEMO_CONSTRAINT, seed).map(
-  (candidate) => ({
-    candidate,
-    report: verifyCandidate(candidate, DEMO_CONSTRAINT),
-  }),
-);
-const representatives = selectRepresentatives(allCandidates);
-const passing = representatives.find((entry) => entry.report.valid);
-const failing = representatives.find((entry) => !entry.report.valid);
-
-if (!passing || !failing) {
-  throw new Error(
-    "Kill-test fixture requires both a passing and a failing representative.",
-  );
-}
 
 await mkdir(outputDirectory, { recursive: true });
+const showcases = createOfflineFabricationShowcases();
+const entries = [];
+for (const [index, showcase] of showcases.entries()) {
+  const candidateId = `fixture-${showcase.showcaseId}`;
+  const built = buildFabricationCandidate({
+    candidateId,
+    intent: showcase.intent,
+    program: showcase.program,
+    rank: 1,
+    selectionStatus: "selected",
+    provenance: {
+      compilerVersion: "foldforge-fabrication-v1",
+      generatedAtIso: "2026-07-14T12:00:00.000Z",
+      deterministicSeed: seed + index,
+      modelId: null,
+      modelResponseId: null,
+      parentCandidateId: null,
+      appliedPatchIds: [],
+      repairCycle: 0,
+    },
+  });
+  if (!built.ok) throw new Error(JSON.stringify(built.error));
+  const finalized = finalizeFabricationCandidate({
+    candidate: built.value,
+    requestedFormats: ["svg", "dxf", "glb", "json", "fold"],
+  });
+  if (!finalized.ok) throw new Error(JSON.stringify(finalized.error));
+  const artifactEntries = [];
+  for (const artifact of finalized.value.artifacts) {
+    const fileName = `${showcase.showcaseId}.${artifact.format === "json" ? "fabrication.json" : artifact.format}`;
+    await writeFile(path.join(outputDirectory, fileName), artifact.bytes);
+    artifactEntries.push({
+      format: artifact.format,
+      fileName,
+      sha256: artifact.metadata.sha256,
+      byteLength: artifact.metadata.byteLength,
+      sourceIrHash: artifact.metadata.sourceIrHash,
+    });
+  }
+  entries.push({
+    showcaseId: showcase.showcaseId,
+    candidateId,
+    sourcePrompt: showcase.prompt,
+    topologyId: showcase.program.topologyId,
+    irHash: finalized.value.candidate.verification.irHash,
+    valid: finalized.value.candidate.verification.valid,
+    sourceEquivalent: finalized.value.candidate.exportMetadata.sourceEquivalent,
+    artifacts: artifactEntries,
+    foldOmission: finalized.value.foldOmission,
+  });
+}
 
-const artifacts = await Promise.all(
-  representatives.map(async ({ candidate, report }) => {
-    const svg = exportSvg(candidate, DEMO_CONSTRAINT);
-    const fold = exportFold(candidate);
-    const stem = candidate.id.replaceAll(/[^a-z0-9-]/gi, "-");
-    const svgFile = `${stem}.svg`;
-    const foldFile = `${stem}.fold`;
-    await Promise.all([
-      writeFile(path.join(outputDirectory, svgFile), svg, "utf8"),
-      writeFile(path.join(outputDirectory, foldFile), fold, "utf8"),
-    ]);
-
-    return {
-      id: candidate.id,
-      strategy: candidate.strategy,
-      variant: candidate.variant,
-      parameters: candidate.parameters,
-      report,
-      svgFile,
-      foldFile,
-      svgHash: stableHash(svg),
-      foldHash: stableHash(fold),
-    };
-  }),
+const invalidSource = showcases[0]!;
+const invalidCompiled = compileFabricationProgram(
+  invalidSource.intent,
+  invalidSource.program,
+);
+if (!invalidCompiled.ok) throw new Error(JSON.stringify(invalidCompiled.error));
+const invalidIr = {
+  ...invalidCompiled.value,
+  irId: "!deliberately-invalid-fixture",
+};
+const invalidReport = verifyFabricationIr(
+  invalidIr,
+  "fixture-deliberately-invalid",
+);
+const invalidReportBytes = new TextEncoder().encode(
+  `${JSON.stringify(invalidReport, null, 2)}\n`,
+);
+const invalidReportFile = "deliberately-invalid-report.json";
+await writeFile(
+  path.join(outputDirectory, invalidReportFile),
+  invalidReportBytes,
 );
 
 const manifest = {
-  version: 1,
+  version: 2,
   fixture,
   seed,
-  constraint: DEMO_CONSTRAINT,
-  constraintHash: stableHash(DEMO_CONSTRAINT),
   generatedAt: "deterministic-fixture",
-  candidates: artifacts,
-  passingCandidateId: passing.candidate.id,
-  failingCandidateId: failing.candidate.id,
-  physicalStatus: "awaiting_user",
+  validationScope: "geometric-and-kinematic-software",
+  showcases: entries,
+  deliberatelyInvalid: {
+    candidateId: "fixture-deliberately-invalid",
+    expectedFailedAtStage: "schema",
+    actualFailedAtStage: invalidReport.failedAtStage,
+    valid: invalidReport.valid,
+    reportFile: invalidReportFile,
+    reportSha256: sha256HexBytes(invalidReportBytes),
+  },
 };
+await writeFile(
+  path.join(outputDirectory, "manifest.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`,
+  "utf8",
+);
 
-const instructions = `# FoldForge physical kill test\n\nStatus: awaiting user.\n\n1. Open the passing SVG and print at 100% / actual size on 110 lb cover cardstock.\n2. Measure the 50 mm calibration line; accept only 49.5–50.5 mm.\n3. Cut solid lines and the two red slots. Score dashed lines.\n4. Fold the lip up, bring the backrest and rear brace into position, and insert both tabs into the base slots.\n5. Unlock and return to flat ten times.\n6. Hold the documented phone for 60 seconds centered, then 60 seconds with a 5 mm offset.\n7. Record collapse, release, tear, slip over 3 mm, buckling, or tipping as failure.\n\nThis artifact is not physically validated until the user records the result.\n`;
-
-await Promise.all([
-  writeFile(
-    path.join(outputDirectory, "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  ),
-  writeFile(
-    path.join(outputDirectory, "FOLDING_INSTRUCTIONS.md"),
-    instructions,
-    "utf8",
-  ),
-]);
+const notes = showcases
+  .map(
+    (showcase) =>
+      `## ${showcase.intent.title}\n\n${showcase.program.blueprint.assemblyOperations
+        .toSorted((left, right) => left.order - right.order)
+        .map((operation) => `${operation.order}. ${operation.instruction}`)
+        .join(
+          "\n",
+        )}\n\nSoftware boundary: ${showcase.limitation ?? "No additional limitation recorded."}`,
+  )
+  .join("\n\n");
+await writeFile(
+  path.join(outputDirectory, "ASSEMBLY_NOTES.md"),
+  `# FoldForge deterministic showcase pack\n\nThese notes are generated from the same verified programs as the exports. They describe software-checked geometry and motion only.\n\n${notes}\n`,
+  "utf8",
+);
 
 process.stdout.write(
   `${JSON.stringify({
     outputDirectory,
-    passingCandidateId: manifest.passingCandidateId,
-    failingCandidateId: manifest.failingCandidateId,
-    physicalStatus: manifest.physicalStatus,
+    showcaseCount: entries.length,
+    artifactCount: entries.reduce(
+      (total, entry) => total + entry.artifacts.length,
+      0,
+    ),
+    invalidRejectedAt: invalidReport.failedAtStage,
   })}\n`,
 );

@@ -1,71 +1,144 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { ParameterPatch } from "../src/core/schemas";
+import { fabricationProgramHash } from "../src/core/fabrication/compiler";
+import { createModularCableOrganizerShowcase } from "../src/core/fabrication/examples";
 import type {
-  RepairDiagnosisInput,
-  RepairDiagnosisModel,
-} from "../src/server/ai/repair";
-import {
-  RuleBasedRepairDiagnosisModel,
-  runRepairLoop,
-} from "../src/server/orchestration/repair-loop";
-import { REPAIR_FIXTURES } from "../tests/fixtures/repair-fixtures";
+  FabricationProgramV1,
+  ProgramPatchV1,
+  VerificationReportV2,
+} from "../src/core/fabrication/types";
+import type { FabricationRepairModel } from "../src/server/fabrication-ai/models";
+import { runFabricationRepairLoop } from "../src/server/fabrication-ai/orchestration";
 
-class PassFailOnlyModel implements RepairDiagnosisModel {
-  async diagnose(
-    input: RepairDiagnosisInput,
-    _safetyId: string,
-  ): Promise<ParameterPatch> {
-    return {
-      operations: [
-        {
-          operation: "increase",
-          parameter: "baseDepthMm",
-          value: Math.min(10, 130 - input.parameters.baseDepthMm),
-          unit: "mm",
-          verificationId: "unknown.failure",
-          reason: "Generic adjustment without verifier evidence.",
-          expectedEffect: "Attempt to improve a binary failed result.",
-          affectedConstraint: "unknown",
-        },
-      ],
-    };
+const showcase = createModularCableOrganizerShowcase();
+const panelId = "panel-organizer-module";
+const pathToX =
+  `/blueprint/panels/${panelId}/flatTransform/translationMm/xMm` as const;
+
+const invalidProgram = (index: number): FabricationProgramV1 => ({
+  ...showcase.program,
+  programId: `program-ablation-${index + 1}`,
+  blueprint: {
+    ...showcase.program.blueprint,
+    panels: showcase.program.blueprint.panels.map((panel) =>
+      panel.panelId === panelId
+        ? {
+            ...panel,
+            flatTransform: {
+              ...panel.flatTransform,
+              translationMm: {
+                ...panel.flatTransform.translationMm,
+                xMm: -(index + 1),
+              },
+            },
+          }
+        : panel,
+    ),
+  },
+});
+
+const patch = (
+  program: FabricationProgramV1,
+  report: VerificationReportV2,
+  repairCycle: number,
+  grounded: boolean,
+): ProgramPatchV1 => {
+  const panel = program.blueprint.panels.find(
+    (candidate) => candidate.panelId === panelId,
+  )!;
+  const failure = report.failures.find((candidate) =>
+    candidate.repairableProgramPaths.includes(pathToX),
+  );
+  return {
+    version: "1",
+    patchId: `patch-ablation-${program.programId}-${repairCycle}-${grounded ? "full" : "binary"}`,
+    programId: program.programId,
+    baseProgramHash: fabricationProgramHash(program),
+    repairCycle,
+    diagnosis: grounded
+      ? `${failure?.failureId ?? "packing.failure"} identifies the panel offset.`
+      : "The binary result says only that the candidate failed.",
+    operations: [
+      {
+        operationId: `operation-ablation-${repairCycle}`,
+        operation: "set_number",
+        path: grounded ? pathToX : `/blueprint/panels/${panelId}/widthMm`,
+        value: grounded ? 30 : 125,
+        expectedCurrentValue: grounded
+          ? panel.flatTransform.translationMm.xMm
+          : panel.widthMm,
+        unit: "mm",
+        failureIds: [
+          grounded ? (failure?.failureId ?? "packing.failure") : "binary.fail",
+        ],
+        reason: grounded
+          ? "Move the panel inside the printable margin."
+          : "Try a generic size change without geometric evidence.",
+        expectedEffect: grounded
+          ? "The panel and derived paths should fit the sheet."
+          : "The binary failure might change.",
+      },
+    ],
+    authoredBy: "ai",
+    changesIntent: false,
+  };
+};
+
+class FullReportModel implements FabricationRepairModel {
+  diagnoseRepair(
+    program: FabricationProgramV1,
+    report: VerificationReportV2,
+    repairCycle: number,
+  ): Promise<ProgramPatchV1> {
+    return Promise.resolve(patch(program, report, repairCycle, true));
   }
 }
 
-class NoFeedbackModel implements RepairDiagnosisModel {
-  async diagnose(
-    _input: RepairDiagnosisInput,
-    _safetyId: string,
-  ): Promise<null> {
-    return null;
+class PassFailOnlyModel implements FabricationRepairModel {
+  diagnoseRepair(
+    program: FabricationProgramV1,
+    report: VerificationReportV2,
+    repairCycle: number,
+  ): Promise<ProgramPatchV1> {
+    return Promise.resolve(patch(program, report, repairCycle, false));
+  }
+}
+
+class NoFeedbackModel implements FabricationRepairModel {
+  diagnoseRepair(): Promise<null> {
+    return Promise.resolve(null);
   }
 }
 
 const evaluate = async (
   label: string,
-  model: RepairDiagnosisModel,
-): Promise<{ readonly label: string; readonly successRate: number }> => {
-  const repairable = REPAIR_FIXTURES.filter(
-    (fixture) => fixture.expectedStatus === "passed",
-  );
+  model: FabricationRepairModel,
+): Promise<{
+  readonly label: string;
+  readonly successRate: number;
+  readonly successes: number;
+}> => {
   let successes = 0;
-  for (const fixture of repairable) {
-    const outcome = await runRepairLoop(
-      fixture.candidate,
-      fixture.constraint,
+  for (let index = 0; index < 40; index += 1) {
+    const outcome = await runFabricationRepairLoop(
+      {
+        ...showcase.intent,
+        intentId: showcase.intent.intentId,
+      },
+      invalidProgram(index),
+      `candidate-ablation-${label}-${index + 1}`,
+      `ff_ablation_${label}_${index + 1}`,
       model,
-      `ff_ablation_${label}`,
-      { maximumCycles: 3, now: () => "2026-07-14T12:00:00.000Z" },
+      3,
     );
     if (outcome.status === "passed") successes += 1;
   }
-  return { label, successRate: successes / repairable.length };
+  return { label, successes, successRate: successes / 40 };
 };
 
 const variants = await Promise.all([
-  evaluate("full_verifier_feedback", new RuleBasedRepairDiagnosisModel()),
+  evaluate("full_verifier_feedback", new FullReportModel()),
   evaluate("pass_fail_only", new PassFailOnlyModel()),
   evaluate("no_feedback", new NoFeedbackModel()),
 ]);
@@ -75,8 +148,9 @@ const strongestBaseline = Math.max(
   variants[2]?.successRate ?? 0,
 );
 const report = {
-  mode: "offline-repair-ablation",
-  fixtureCount: REPAIR_FIXTURES.length,
+  reportVersion: 1,
+  mode: "fabrication-repair-ablation-offline",
+  fixtureCount: 40,
   variants,
   absoluteImprovement: full - strongestBaseline,
   materiallyOutperforms: full - strongestBaseline >= 0.2,
@@ -89,3 +163,4 @@ await writeFile(
   "utf8",
 );
 process.stdout.write(`${JSON.stringify(report)}\n`);
+if (!report.materiallyOutperforms) process.exitCode = 1;
