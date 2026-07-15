@@ -60,18 +60,18 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 
 ### End-to-end and browser
 
-| Gate                                                   | Result                         | Status |
-| ------------------------------------------------------ | ------------------------------ | ------ |
-| Offline showcase compile → verify → rank → export      | 15/15; 3 topology fingerprints | Pass   |
-| Main access/generate/repair/checkpoint/export journey  | 1/1                            | Pass   |
-| Duplicate topology rejection                           | 1/1                            | Pass   |
-| Honest Sol-off state                                   | 1/1                            | Pass   |
-| Malformed strict API response                          | 1/1                            | Pass   |
-| 390 / 768 / 1280 / 1440 px horizontal overflow         | 0                              | Pass   |
-| Keyboard focus and reduced motion                      | 1/1                            | Pass   |
-| Axe serious or critical violations, before/after forge | 0                              | Pass   |
+| Gate                                                    | Result                         | Status |
+| ------------------------------------------------------- | ------------------------------ | ------ |
+| Offline showcase compile → verify → rank → export       | 15/15; 3 topology fingerprints | Pass   |
+| Main access/generate/repair/checkpoint/export journey   | 1/1                            | Pass   |
+| Duplicate topology rejection                            | 1/1                            | Pass   |
+| Plain-language examples and honest saved-example flow   | 1/1                            | Pass   |
+| Malformed strict API response                           | 1/1                            | Pass   |
+| 390 / 768 / 1280 / 1440 px horizontal overflow          | 0                              | Pass   |
+| Keyboard focus and reduced motion                       | 1/1                            | Pass   |
+| Axe serious or critical violations, before/after result | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. The complete unit/integration suite has 280 passing tests. The rendered in-app review also found no console warnings, clipping, or mobile horizontal scrolling at the required widths.
+The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower result, 3D/pattern controls, an offline SVG download, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening the saved example makes no intent-model request. The complete unit/integration suite has 280 passing tests. The rendered in-app review also found no console warnings, clipping, or mobile horizontal scrolling at the required widths. Independent follow-up review found no remaining P0–P2 frontend issue.
 
 ### Live GPT-5.6 Sol
 

@@ -1,8 +1,8 @@
 # FoldForge
 
-**A prompt-to-fabrication compiler for bounded flat-sheet mechanisms.**
+**Turn an idea into a buildable paper design.**
 
-Describe a small foldable object or mechanism. GPT-5.6 Sol converts the brief into a strict fabrication program. Deterministic code compiles geometry, simulates motion, rejects invalid designs, repairs bounded failures, ranks valid candidates, and exports the exact selected result.
+Describe a small object made from paper or thin cardboard. FoldForge creates three checked designs, shows how they move or assemble, and gives you a printable cutting pattern plus 3D and CAD files.
 
 > Let AI explore. Make code prove.
 
@@ -49,14 +49,16 @@ The verifier checks schema, topology, panel geometry, cutout ligaments, cut/scor
 
 ## Studio
 
-The one-page flow is intentionally short:
+The one-page flow uses plain task language:
 
 1. **Describe** the object and motion.
-2. **Forge** three sequential, topology-aware proposals.
-3. **Compare** synchronized 3D/pattern views, motion, scores, repair evidence, and `USER` / `AI` / `CODE` provenance.
-4. **Export** the exact selected candidate.
+2. **Create** three different checked designs.
+3. **Compare** the 3D result and cut-and-fold pattern.
+4. **Download** the exact selected design.
 
-The interface passes mocked end-to-end tests at 390, 768, 1280, and 1440 px, keyboard and reduced-motion checks, and automated serious/critical accessibility scanning.
+When live generation is off, the first screen still offers a prepared pop-up flower example. It is clearly labelled as saved—not as a result of the user’s prompt—and can be moved, rotated, inspected, and exported without an OpenAI call.
+
+The first screen also includes three editable, concrete prompts—a playing-card box, pop-up flower card, and duck-shaped gift box—shown with real example images. The interface passes mocked end-to-end tests at 390, 768, 1280, and 1440 px, keyboard and reduced-motion checks, and automated serious/critical accessibility scanning.
 
 ## Local setup
 

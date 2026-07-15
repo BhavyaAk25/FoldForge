@@ -11,7 +11,8 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | Ordered verifier and kinematic sampler                              | Complete   | 0/560 hard-invalid mutations accepted                              |
 | Candidate ranking and bounded repair                                | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted       |
 | GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures                                  |
-| Describe → Forge → Export product experience                        | Complete   | 7/7 Chromium flows at all required widths                          |
+| Describe → Compare → Download product experience                    | Complete   | Plain-language first screen; 7/7 Chromium flows at required widths |
+| Saved example and understandable prompt gallery                     | Complete   | Prepared flower flow plus three illustrated, editable prompts      |
 | Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
 | Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work |
 | Live GPT-5.6 Sol behavior                                           | User gate  | Enable model access, run sealed live evals, then keep or kill      |
@@ -42,6 +43,8 @@ No calendar date blocks implementation.
 - Repair accepts one to three allowlisted operations, cites actual report fields and repairable paths, blocks duplicate canonical input, and stops after five cycles.
 - Only valid candidates are scored, displayed, selected, finalized, or exported.
 - The studio keeps the 3D view, flat pattern, program, motion, report, selection, and downloads on the same candidate IR.
+- The first screen explains the outcome in plain language, shows the three-step journey, and uses named examples that describe an understandable object, purpose, material, size, and motion.
+- When live generation is disabled, the studio offers one prepared pop-up flower candidate that is explicitly labelled as saved and can be fully inspected and exported without misrepresenting it as a prompt result.
 - The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.
 
 ## Deliberate scope
