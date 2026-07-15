@@ -226,11 +226,6 @@ export class LiveRouteAuthorizer {
 
 export const liveRouteAuthorizer = new LiveRouteAuthorizer();
 
-export const authorizeLiveRoute = (
-  input: LiveRouteAuthorizationInput,
-): Promise<LiveRouteAuthorizationResult> =>
-  liveRouteAuthorizer.authorize(input);
-
 export const runAuthorizedLiveRoute = (
   input: LiveRouteAuthorizationInput,
   handler: AuthorizedLiveRouteHandler,

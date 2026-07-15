@@ -2,21 +2,24 @@
 
 FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. This inventory describes the current lockfile and must be regenerated when dependencies change.
 
-| Dependency           | Purpose               | Version | License    | Source / attribution                        |
-| -------------------- | --------------------- | ------: | ---------- | ------------------------------------------- |
-| Next.js              | Application framework | 16.2.10 | MIT        | https://github.com/vercel/next.js           |
-| React / React DOM    | User interface        |  19.2.7 | MIT        | https://github.com/facebook/react           |
-| OpenAI JS            | Responses API client  |  6.46.0 | Apache-2.0 | https://github.com/openai/openai-node       |
-| Zod                  | Runtime validation    |   4.4.3 | MIT        | https://github.com/colinhacks/zod           |
-| Geist                | Sans and mono fonts   |   1.7.2 | OFL-1.1    | https://github.com/vercel/geist-font        |
-| Vitest / V8 coverage | Tests and coverage    |  4.1.10 | MIT        | https://github.com/vitest-dev/vitest        |
-| fast-check           | Property tests        |   4.9.0 | MIT        | https://github.com/dubzzz/fast-check        |
-| Prettier             | Formatting            |   3.9.5 | MIT        | https://github.com/prettier/prettier        |
-| Three.js             | 3D preview            | 0.185.1 | MIT        | https://github.com/mrdoob/three.js          |
-| React Three Fiber    | React 3D renderer     |   9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber |
-| Playwright           | Browser testing       |  1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright     |
-| earcut               | Polygon triangulation |   3.2.3 | ISC        | https://github.com/mapbox/earcut            |
-| axe-core Playwright  | Accessibility testing |  4.10.2 | MPL-2.0    | https://github.com/dequelabs/axe-core-npm   |
+| Dependency           | Purpose               |        Version | License    | Source / attribution                           |
+| -------------------- | --------------------- | -------------: | ---------- | ---------------------------------------------- |
+| Next.js              | Application framework |        16.2.10 | MIT        | https://github.com/vercel/next.js              |
+| React / React DOM    | User interface        |         19.2.7 | MIT        | https://github.com/facebook/react              |
+| OpenAI JS            | Responses API client  |         6.46.0 | Apache-2.0 | https://github.com/openai/openai-node          |
+| Zod                  | Runtime validation    |          4.4.3 | MIT        | https://github.com/colinhacks/zod              |
+| Geist                | Sans and mono fonts   |          1.7.2 | OFL-1.1    | https://github.com/vercel/geist-font           |
+| Vitest / V8 coverage | Tests and coverage    |         4.1.10 | MIT        | https://github.com/vitest-dev/vitest           |
+| fast-check           | Property tests        |          4.9.0 | MIT        | https://github.com/dubzzz/fast-check           |
+| Prettier             | Formatting            |          3.9.5 | MIT        | https://github.com/prettier/prettier           |
+| Three.js             | 3D preview            |        0.185.1 | MIT        | https://github.com/mrdoob/three.js             |
+| React Three Fiber    | React 3D renderer     |          9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber    |
+| Playwright           | Browser testing       |         1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright        |
+| earcut               | Polygon triangulation |          3.2.3 | ISC        | https://github.com/mapbox/earcut               |
+| axe-core Playwright  | Accessibility testing |         4.10.2 | MPL-2.0    | https://github.com/dequelabs/axe-core-npm      |
+| glTF Validator       | GLB compatibility     | 2.0.0-dev.3.10 | Apache-2.0 | https://github.com/KhronosGroup/glTF-Validator |
+| dxf-parser           | DXF compatibility     |          1.1.2 | MIT        | https://github.com/gdsestimating/dxf-parser    |
+| FOLD                 | FOLD compatibility    |         0.12.0 | MIT        | https://github.com/edemaine/fold               |
 
 No third-party dependency is modified. `pnpm licenses list --prod --json` generates the complete installed production dependency report for each release environment. The lockfile is the reproducible component inventory; the generated report is not committed because it can contain machine-specific installation paths.
 

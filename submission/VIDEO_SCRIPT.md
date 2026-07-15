@@ -6,7 +6,7 @@ Target: **2:35–2:50**. Keep the capture continuous, the cursor slow, and the e
 
 Use an unseen supported brief, not an example button:
 
-> Make a two-sheet desk organizer. Pull the front tray out 70 millimetres to open two mirrored side wings. Fit A4. No glue.
+> Make a one-sheet fold-flat desk nameplate, 180 millimetres wide, 70 millimetres high, and 55 millimetres deep. Opening the base should rotate a 150 by 60 millimetre display panel to 65 degrees. Use 0.45 millimetre cardstock, allow cuts, and use no glue. Show three buildable designs.
 
 ## Script
 
@@ -18,7 +18,7 @@ Use an unseen supported brief, not an example button:
 
 ### 0:15–0:35 — live intent
 
-**Screen:** Type the unseen prompt. Show `Sol ready`. Select **Forge 3 candidates**.
+**Screen:** Type the unseen prompt. Show `Sol ready`. Select **Create 3 designs**.
 
 **Say:** “GPT-5.6 Sol interprets this unseen request and proposes strict fabrication programs. It explores the design space, but it cannot declare a design valid or write trusted export geometry.”
 
@@ -36,9 +36,9 @@ Use an unseen supported brief, not an example button:
 
 ### 1:22–1:47 — product design
 
-**Screen:** Switch candidates, scrub motion, rotate the 3D view, and switch to pattern.
+**Screen:** Switch candidates, press **Closed** and **Open**, rotate the 3D view, then switch to the cut-and-fold pattern and use its pan/zoom controls.
 
-**Say:** “The three candidates differ by topology, not styling. The selected 3D view, pattern, motion, score, verifier evidence, and provenance stay synchronized because they share the same candidate IR.”
+**Say:** “The three candidates differ by topology, not styling. The selected 3D view, flat pattern, motion, score, verifier evidence, and provenance stay synchronized because they share the same candidate IR.”
 
 ### 1:47–2:08 — exact handoff
 
@@ -50,7 +50,7 @@ Use an unseen supported brief, not an example button:
 
 **Screen:** Briefly show `EVALS.md` numbers, then return to the moving result.
 
-**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed every browser flow. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
+**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 284 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
 
 ### 2:27–2:43 — Codex and close
 

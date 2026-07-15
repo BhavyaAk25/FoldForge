@@ -1,15 +1,119 @@
-.preview {
+.previewStack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.canvasFrame,
+.patternPreview,
+.previewUnavailable {
   display: block;
   width: 100%;
   min-height: 18rem;
   max-height: 34rem;
-  overflow: visible;
+  overflow: hidden;
+  border: 1px solid rgb(40 37 31 / 14%);
+  border-radius: 1.25rem;
   background:
     linear-gradient(rgb(40 37 31 / 4%) 1px, transparent 1px),
     linear-gradient(90deg, rgb(40 37 31 / 4%) 1px, transparent 1px), #f6f2e8;
   background-size: 20px 20px;
-  border: 1px solid rgb(40 37 31 / 14%);
-  border-radius: 1.25rem;
+}
+
+.canvasFrame {
+  height: clamp(18rem, 42vw, 34rem);
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvasFrame:active {
+  cursor: grabbing;
+}
+
+.canvasFrame canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.patternPreview {
+  height: clamp(18rem, 42vw, 34rem);
+  overflow: visible;
+}
+
+.previewUnavailable {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #6f685d;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.viewControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewControls > span {
+  margin-right: 2px;
+  color: #6f685d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.viewControls button,
+.viewControls label {
+  min-height: 32px;
+  border: 1px solid rgb(40 37 31 / 20%);
+  background: #fbf8f1;
+  color: #2d2a25;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.viewControls button {
+  padding: 0 10px;
+}
+
+.viewControls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+}
+
+.viewControls input {
+  margin: 0;
+  accent-color: #287a78;
+}
+
+.viewControls button:focus-visible,
+.viewControls label:focus-within {
+  outline: 2px solid #287a78;
+  outline-offset: 2px;
+}
+
+.interactionHint {
+  margin: 0;
+  color: #6f685d;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .paperShadow {
@@ -56,11 +160,39 @@
   stroke-width: 2.4;
 }
 
+.cutLines,
 .scoreLines {
   fill: none;
+  stroke-width: 1;
+}
+
+.cutLines {
+  stroke: #2d2a25;
+}
+
+.scoreLines {
   stroke: #287a78;
   stroke-dasharray: 5 3;
-  stroke-width: 1;
+}
+
+@media (hover: hover) {
+  .viewControls button:hover {
+    border-color: #287a78;
+  }
+}
+
+@media (max-width: 480px) {
+  .canvasFrame,
+  .patternPreview {
+    height: 20rem;
+    min-height: 20rem;
+  }
+
+  .viewControls button,
+  .viewControls label {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

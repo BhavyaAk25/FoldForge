@@ -4,6 +4,7 @@ import type { RefObject } from "react";
 import styles from "./foldforge-app.module.css";
 
 export type AccessState = "granted" | "needed" | "unknown";
+export type SavedExampleId = "duck" | "flower";
 
 export interface ExamplePrompt {
   readonly description: string;
@@ -11,6 +12,7 @@ export interface ExamplePrompt {
   readonly imageAlt: string;
   readonly imageSrc: string;
   readonly prompt: string;
+  readonly savedExampleId?: SavedExampleId;
   readonly title: string;
 }
 
@@ -32,6 +34,7 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     imageAlt: "An open paper card with a pink flower rising from its center",
     prompt:
       "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+    savedExampleId: "flower",
   },
   {
     id: "duck-shaped-gift-box",
@@ -41,6 +44,7 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     imageAlt: "A faceted yellow paper duck-shaped gift box",
     prompt:
       "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
+    savedExampleId: "duck",
   },
 ] as const;
 
@@ -55,7 +59,7 @@ interface FoldForgeStartProps {
   readonly liveGenerationAvailable: boolean;
   readonly onAccessCodeChange: (value: string) => void;
   readonly onCreate: () => void;
-  readonly onOpenSavedExample: () => void;
+  readonly onOpenSavedExample: (exampleId: SavedExampleId) => void;
   readonly onPromptChange: (value: string) => void;
   readonly onSelectExample: (example: ExamplePrompt) => void;
   readonly onSubmitAccess: () => void;
@@ -137,7 +141,7 @@ export function FoldForgeStart({
             <button
               className={styles.secondaryAction}
               type="button"
-              onClick={onOpenSavedExample}
+              onClick={() => onOpenSavedExample("flower")}
             >
               Explore a finished example
             </button>
@@ -181,25 +185,41 @@ export function FoldForgeStart({
           <p>Each prompt is ready to edit.</p>
         </div>
         <div className={styles.exampleGrid}>
-          {EXAMPLE_PROMPTS.map((example) => (
-            <article className={styles.exampleCard} key={example.id}>
-              <Image
-                className={styles.exampleImage}
-                src={example.imageSrc}
-                alt={example.imageAlt}
-                width={768}
-                height={576}
-                sizes="(max-width: 759px) 100vw, (max-width: 1039px) 50vw, 33vw"
-              />
-              <div>
-                <h3>{example.title}</h3>
-                <p>{example.description}</p>
-                <button type="button" onClick={() => onSelectExample(example)}>
-                  Use this prompt
-                </button>
-              </div>
-            </article>
-          ))}
+          {EXAMPLE_PROMPTS.map((example) => {
+            const savedExampleId = example.savedExampleId;
+            return (
+              <article className={styles.exampleCard} key={example.id}>
+                <Image
+                  className={styles.exampleImage}
+                  src={example.imageSrc}
+                  alt={example.imageAlt}
+                  width={768}
+                  height={576}
+                  sizes="(max-width: 759px) 100vw, (max-width: 1039px) 50vw, 33vw"
+                />
+                <div>
+                  <h3>{example.title}</h3>
+                  <p>{example.description}</p>
+                  <div className={styles.exampleActions}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectExample(example)}
+                    >
+                      Use this prompt
+                    </button>
+                    {savedExampleId ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenSavedExample(savedExampleId)}
+                      >
+                        Open finished design
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </>

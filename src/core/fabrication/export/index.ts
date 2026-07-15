@@ -7,9 +7,13 @@ export {
   type FabricationExportResult,
   type VerifiedFabricationExportSource,
 } from "./artifact";
-export { exportFabricationDxf } from "./dxf";
+export { dxfArtifactMatchesSource, exportFabricationDxf } from "./dxf";
 export {
   exportFabricationFold,
+  foldArtifactMatchesSource,
+  inspectFabricationFoldCompatibility,
+  type FabricationFoldCompatibilitySource,
+  type FoldCompatibilityResult,
   type FoldExportResult,
   type FoldOmissionCode,
   type FoldOmissionReason,

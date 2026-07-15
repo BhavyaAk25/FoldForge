@@ -10,9 +10,13 @@ import {
   FoldForgeStart,
   type AccessState,
   type ExamplePrompt,
+  type SavedExampleId,
 } from "@/components/foldforge-start";
 import { buildFabricationCandidate } from "@/core/fabrication/candidate";
-import { createPullTabPopUpFlowerShowcase } from "@/core/fabrication/examples";
+import {
+  createFacetedDuckGiftBoxShowcase,
+  createPullTabPopUpFlowerShowcase,
+} from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type {
   CandidateV2,
@@ -134,6 +138,7 @@ export function FoldForgeApp() {
   const [intent, setIntent] = useState<FabricationIntentV1 | null>(null);
   const [candidates, setCandidates] = useState<readonly CandidateV2[]>([]);
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("live");
+  const [savedLimitation, setSavedLimitation] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [repairEvidence, setRepairEvidence] = useState<
     Record<string, readonly RepairEvidence[]>
@@ -298,6 +303,7 @@ export function FoldForgeApp() {
     if (!solAvailable || busy || prompt.trim().length === 0) return;
     setError("");
     setExperienceMode("live");
+    setSavedLimitation(null);
     setPhase("intent");
     setStatusMessage("Understanding your request…");
     const generatedAtIso = new Date().toISOString();
@@ -455,22 +461,28 @@ export function FoldForgeApp() {
     setRepairEvidence({});
     setNarrative(null);
     setExperienceMode("live");
+    setSavedLimitation(null);
     setPhase("idle");
     setError("");
     setStatusMessage(`${example.title} prompt ready to edit.`);
     promptRef.current?.focus();
   };
 
-  const openSavedExample = () => {
-    const showcase = createPullTabPopUpFlowerShowcase();
+  const openSavedExample = (exampleId: SavedExampleId) => {
+    const showcase =
+      exampleId === "duck"
+        ? createFacetedDuckGiftBoxShowcase()
+        : createPullTabPopUpFlowerShowcase();
+    const isDuck = exampleId === "duck";
     const program: FabricationProgramV1 = {
       ...showcase.program,
-      candidateLabel: "Pop-up flower card",
-      designSummary:
-        "A prepared pull-tab card whose paper flower travels upward along a checked 30 mm guide.",
+      candidateLabel: isDuck ? "Duck-shaped gift box" : "Pop-up flower card",
+      designSummary: isDuck
+        ? showcase.program.designSummary
+        : "A prepared motion study: a rigid flower crown moves 30 mm on a vertical guide. The paper linkage that would turn a card opening or horizontal pull into lift is not modeled.",
     };
     const candidate = buildCandidate(
-      "saved-example-pop-up-flower",
+      `saved-example-${exampleId}`,
       showcase.intent,
       program,
       1,
@@ -492,12 +504,15 @@ export function FoldForgeApp() {
     setRepairEvidence({});
     setNarrative(null);
     setExperienceMode("saved");
+    setSavedLimitation(showcase.limitation);
     setPreviewMode("assembled");
-    setMotionPosition(0.65);
+    setMotionPosition(isDuck ? 0 : 0.65);
     setError("");
     shouldFocusResultsRef.current = true;
     setPhase("ready");
-    setStatusMessage("Saved pop-up flower example opened.");
+    setStatusMessage(
+      `Saved ${isDuck ? "duck gift-box" : "pop-up flower"} example opened.`,
+    );
   };
 
   const exportFormat = async (format: ExportFormat) => {
@@ -537,7 +552,10 @@ export function FoldForgeApp() {
   };
 
   const limitations = baseSelected
-    ? (narrative?.limitations ?? fallbackLimitations(baseSelected))
+    ? (narrative?.limitations ?? [
+        ...(savedLimitation ? [savedLimitation] : []),
+        ...fallbackLimitations(baseSelected),
+      ])
     : [];
   const assemblySteps = baseSelected
     ? [...baseSelected.program.blueprint.assemblyOperations]
@@ -613,6 +631,7 @@ export function FoldForgeApp() {
         {candidates.length > 0 && baseSelected ? (
           <FoldForgeResults
             assemblySteps={assemblySteps}
+            buildSha={health?.buildSha ?? null}
             candidates={candidates}
             experienceMode={experienceMode}
             exportingFormat={exportingFormat}

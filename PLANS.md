@@ -10,23 +10,26 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | Pure deterministic compiler and geometry kernel                     | Complete   | 120/120 valid controls; 0 crashes                                  |
 | Ordered verifier and kinematic sampler                              | Complete   | 0/560 hard-invalid mutations accepted                              |
 | Candidate ranking and bounded repair                                | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted       |
-| GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures                                  |
+| GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures; independent consumer parsers    |
+| Interactive 3D and flat-pattern controls                            | Complete   | Real motion/orbit/pan/zoom; pattern-only controls; browser-tested  |
 | Describe → Compare → Download product experience                    | Complete   | Plain-language first screen; 7/7 Chromium flows at required widths |
-| Saved example and understandable prompt gallery                     | Complete   | Prepared flower flow plus three illustrated, editable prompts      |
+| Saved examples and understandable prompt gallery                    | Complete   | Prepared flower and fold-only duck plus three editable prompts     |
 | Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
 | Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work |
 | Live GPT-5.6 Sol behavior                                           | User gate  | Enable model access, run sealed live evals, then keep or kill      |
-| Submission script and documentation                                 | Complete   | Concise video script, rubric, README, limitations, eval evidence   |
-| Public video recording                                              | User-owned | Record the implemented build after the live gate passes            |
+| Submission script and documentation                                 | Complete   | Devpost-ready README, concise video script, rubric, eval evidence  |
+| Public video and `/feedback` session ID                             | User-owned | Record/upload after the live gate, then enter the primary task ID  |
 
 ## What remains
 
-One external activation sequence remains:
+One software activation sequence remains:
 
 1. Confirm GPT-5.6 Sol credits/model access.
 2. Set `ENABLE_LIVE_OPENAI=true` while leaving `LIVE_MODEL_KILL_SWITCH=false`.
 3. Run `ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live`; the suite is capped at five prompts and requires four complete end-to-end passes.
-4. If it passes, deploy the same configuration and record the demo. If it fails, return the kill switch to a blocked state and use the report to repair the live path.
+4. If it passes, deploy the same configuration. If it fails, return the kill switch to a blocked state and use the report to repair the live path.
+
+After the software passes, the user must record/upload the required public narrated video and enter the primary Codex task's `/feedback` session ID in Devpost. Those are submission actions, not missing product code.
 
 No calendar date blocks implementation.
 
@@ -44,7 +47,7 @@ No calendar date blocks implementation.
 - Only valid candidates are scored, displayed, selected, finalized, or exported.
 - The studio keeps the 3D view, flat pattern, program, motion, report, selection, and downloads on the same candidate IR.
 - The first screen explains the outcome in plain language, shows the three-step journey, and uses named examples that describe an understandable object, purpose, material, size, and motion.
-- When live generation is disabled, the studio offers one prepared pop-up flower candidate that is explicitly labelled as saved and can be fully inspected and exported without misrepresenting it as a prompt result.
+- When live generation is disabled, the studio offers prepared flower and fold-only duck candidates that are explicitly labelled as saved and can be inspected and exported without misrepresenting them as prompt results.
 - The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.
 
 ## Deliberate scope

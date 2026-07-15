@@ -189,10 +189,6 @@ export const liveAccessConfigurationValid = (
   (environment.DEMO_ACCESS_CODE?.length ?? 0) >= 12 &&
   (environment.ACCESS_COOKIE_SECRET?.length ?? 0) >= 32;
 
-export const hasLiveModelAccess = (request: NextRequest): boolean =>
-  liveAccessConfigurationValid() &&
-  readAccessSessionFromRequest(request) !== null;
-
 export const accessCookie = (
   token: string,
   options: AccessCookieOptions = {},

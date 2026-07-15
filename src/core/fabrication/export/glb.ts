@@ -667,6 +667,8 @@ export const exportFabricationGlb = (
     );
   }
   const animations: GltfAnimation[] = [];
+  const animationSamplers: GltfAnimationSampler[] = [];
+  const animationChannels: GltfAnimationChannel[] = [];
   for (const track of tracks) {
     const node = bodyNodeIndex.get(track.targetBodyId);
     const frames = track.keyframes;
@@ -718,8 +720,6 @@ export const exportFabricationGlb = (
       [times[0]!],
       [times[times.length - 1]!],
     );
-    const samplers: GltfAnimationSampler[] = [];
-    const channels: GltfAnimationChannel[] = [];
     if (hasTranslations) {
       const translations = frames.flatMap((frame) => {
         const translation = frame.translationMm!;
@@ -736,13 +736,13 @@ export const exportFabricationGlb = (
         "VEC3",
         null,
       );
-      const sampler = samplers.length;
-      samplers.push({
+      const sampler = animationSamplers.length;
+      animationSamplers.push({
         input: timeAccessor,
         output: translationAccessor,
         interpolation: "LINEAR",
       });
-      channels.push({
+      animationChannels.push({
         sampler,
         target: { node, path: "translation" },
       });
@@ -759,21 +759,31 @@ export const exportFabricationGlb = (
         "VEC4",
         null,
       );
-      const sampler = samplers.length;
-      samplers.push({
+      const sampler = animationSamplers.length;
+      animationSamplers.push({
         input: timeAccessor,
         output: rotationAccessor,
         interpolation: "LINEAR",
       });
-      channels.push({ sampler, target: { node, path: "rotation" } });
+      animationChannels.push({
+        sampler,
+        target: { node, path: "rotation" },
+      });
     }
+  }
+  if (tracks.length > 0) {
     animations.push({
-      name: `motion:${track.trackId}`,
-      samplers,
-      channels,
+      // One clip controls the complete rigid-body tree. Emitting a separate
+      // clip per body makes common GLB viewers animate only one panel at once.
+      name: "FoldForge Open Close",
+      samplers: animationSamplers,
+      channels: animationChannels,
       extras: {
-        sourceTrackId: track.trackId,
-        targetBodyId: track.targetBodyId,
+        sourceDriverId: prepared.ir.driver?.driverId ?? "",
+        sourceTrackIds: canonicalSerialize(
+          tracks.map((track) => track.trackId),
+        ),
+        behavior: prepared.ir.behavior,
       },
     });
   }

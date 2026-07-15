@@ -1,13 +1,8 @@
 import OpenAI from "openai";
 
-import {
-  assertLiveModelEnabled,
-  isLiveModelEnabled,
-} from "@/server/live-model";
+import { assertLiveModelEnabled } from "@/server/live-model";
 
 let client: OpenAI | null = null;
-
-export const isLiveAiEnabled = (): boolean => isLiveModelEnabled();
 
 export const getOpenAIClient = (): OpenAI => {
   assertLiveModelEnabled();

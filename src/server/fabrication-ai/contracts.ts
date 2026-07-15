@@ -77,20 +77,5 @@ export type ProgramProposalV1 = z.infer<typeof ProgramProposalV1Schema>;
 export type FabricationNarrativeV1 = z.infer<
   typeof FabricationNarrativeV1Schema
 >;
-export type DescribeFabricationRequest = z.infer<
-  typeof DescribeFabricationRequestSchema
->;
-export type ForgeFabricationRequest = z.infer<
-  typeof ForgeFabricationRequestSchema
->;
-export type RepairFabricationRequest = z.infer<
-  typeof RepairFabricationRequestSchema
->;
-export type CompileFabricationRequest = z.infer<
-  typeof CompileFabricationRequestSchema
->;
-export type FinalizeFabricationRequest = z.infer<
-  typeof FinalizeFabricationRequestSchema
->;
 
 export { ProgramPatchV1Schema };

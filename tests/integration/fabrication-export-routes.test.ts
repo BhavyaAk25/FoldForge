@@ -9,6 +9,7 @@ import {
   buildFabricationCandidate,
   type CandidateProvenanceInput,
 } from "@/core/fabrication/candidate";
+import { createFacetedDuckGiftBoxShowcase } from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type { CandidateV2 } from "@/core/fabrication/types";
 import { sha256HexBytes } from "@/core/sha256";
@@ -150,6 +151,41 @@ describe("fabrication export routes", () => {
         code: "FORMAT_UNAVAILABLE",
         message: expect.stringMatching(/coupling/i),
       },
+    });
+  });
+
+  it("downloads a parseable FOLD file for the fold-only duck showcase", async () => {
+    const showcase = createFacetedDuckGiftBoxShowcase();
+    const built = buildFabricationCandidate({
+      candidateId: "candidate-duck-fold-route",
+      intent: showcase.intent,
+      program: showcase.program,
+      rank: 1,
+      selectionStatus: "selected",
+      provenance,
+    });
+    if (!built.ok) throw new Error(JSON.stringify(built.error));
+
+    const response = await foldPost(
+      request("http://localhost/api/export/fold", {
+        candidate: built.value,
+      }),
+    );
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const document: unknown = JSON.parse(new TextDecoder().decode(bytes));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain(
+      "application/vnd.fold+json",
+    );
+    expect(response.headers.get("content-disposition")).toContain(".fold");
+    expect(response.headers.get("x-foldforge-artifact-sha256")).toBe(
+      sha256HexBytes(bytes),
+    );
+    expect(document).toMatchObject({
+      file_spec: 1.2,
+      frame_unit: "mm",
+      foldforge_sourceCandidateId: "candidate-duck-fold-route",
     });
   });
 
