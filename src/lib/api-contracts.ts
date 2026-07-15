@@ -110,10 +110,5 @@ export const StudioCheckpointSchema = z
   .strict();
 
 export type HealthApiResponse = z.infer<typeof HealthApiResponseSchema>;
-export type IntentApiResponse = z.infer<typeof IntentApiResponseSchema>;
-export type ProgramsApiResponse = z.infer<typeof ProgramsApiResponseSchema>;
-export type CompileApiResponse = z.infer<typeof CompileApiResponseSchema>;
-export type RepairApiResponse = z.infer<typeof RepairApiResponseSchema>;
 export type FinalizeApiResponse = z.infer<typeof FinalizeApiResponseSchema>;
 export type RepairEvidence = z.infer<typeof RepairEvidenceSchema>;
-export type StudioCheckpoint = z.infer<typeof StudioCheckpointSchema>;
