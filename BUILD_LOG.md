@@ -52,6 +52,17 @@
 
 - Production live-model verification depends on GPT-5.6 Sol access and usable credits. No paid API call has been made.
 
+## 2026-07-15 — plain-language product clarity
+
+- Rebuilt the first screen around one understandable promise: describe a paper object, compare three checked designs, and download the pattern.
+- Added three illustrated, editable prompts for a playing-card box, pop-up flower card, and duck-shaped gift box. Each example states the object, purpose, material, size, and requested behavior in everyday language.
+- Added a prepared pop-up flower result that works while live generation is off. It is explicitly labelled as saved, makes no model request, and supports the real 3D, pattern, motion, verification, and export controls.
+- Simplified result labels, download explanations, status messages, and error text while keeping technical evidence available in a collapsed details section.
+- Reset the browser checkpoint version so older technical copy cannot silently replace the clearer first screen.
+- Matched the approved paper, graphite, and teal reference at 1280 × 720, then checked responsive layout, keyboard flow, reduced motion, and accessibility at all required widths.
+- Fixed every P1/P2 from independent frontend review: nearby access focus, visible prompt-selection feedback, screen-reader percentage values, saved-example export coverage, and separation of orchestration from the start/results views. The follow-up review found no remaining P0–P2 issue.
+- Converted the three source-quality example renders to high-quality JPEGs, reducing their combined repository and transfer footprint from about 5.9 MB to about 1.0 MB without a visible quality loss.
+
 ## 2026-07-14 — prompt-to-fabrication documentation pivot
 
 - Reframed FoldForge for the OpenAI Build Week Work & Productivity track as a bounded prompt-to-fabrication compiler; retained the deployed stand, its tests, and its metrics as an explicitly labelled legacy baseline.

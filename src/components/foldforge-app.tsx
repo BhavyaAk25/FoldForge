@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
+import type { FabricationPreviewMode } from "@/components/fabrication-preview";
+import { FoldForgeResults } from "@/components/foldforge-results";
 import {
-  FabricationPreview,
-  type FabricationPreviewMode,
-} from "@/components/fabrication-preview";
+  DEFAULT_PROMPT,
+  FoldForgeStart,
+  type AccessState,
+  type ExamplePrompt,
+} from "@/components/foldforge-start";
 import { buildFabricationCandidate } from "@/core/fabrication/candidate";
+import { createPullTabPopUpFlowerShowcase } from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type {
   CandidateV2,
@@ -37,29 +42,23 @@ import {
 
 import styles from "./foldforge-app.module.css";
 
-type AccessState = "granted" | "needed" | "unknown";
 type StudioPhase = "idle" | "intent" | "programs" | "repair" | "ready";
+type ExperienceMode = "live" | "saved";
 
-const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v3";
+const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v4";
 const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const COMPILER_VERSION = "foldforge-fabrication-v1";
 const MODEL_ID = "gpt-5.6-sol";
 const BASE_SEED = 20_260_714;
 
-const EXAMPLE_PROMPTS = [
-  "Make a one-sheet desk organizer with a sliding front tray and two folding wings.",
-  "Create a pop-up fox card with recognizable ears, muzzle, and a fold-flat mechanism.",
-  "Design a compact cardstock display that opens one side panel through 90 degrees.",
-] as const;
-
-const DEFAULT_PROMPT = EXAMPLE_PROMPTS[0];
+const SAVED_EXAMPLE_GENERATED_AT = "2026-07-14T00:00:00.000Z";
 
 const formatFailure = (error: unknown): string => {
   if (error instanceof FoldForgeApiError) return error.message;
   if (error instanceof z.ZodError) {
-    return "The server returned data outside the strict fabrication contract.";
+    return "The response could not be checked safely. Please try again.";
   }
-  return "The forge stopped safely. Your previous checkpoint is unchanged.";
+  return "FoldForge stopped safely. Your saved work is unchanged.";
 };
 
 const candidateIdFor = (ordinal: number, program: FabricationProgramV1) =>
@@ -83,6 +82,7 @@ const buildCandidate = (
   generatedAtIso: string,
   appliedPatchIds: readonly string[],
   repairCycle: number,
+  modelId: string | null = MODEL_ID,
 ): CandidateV2 | null => {
   const built = buildFabricationCandidate({
     candidateId,
@@ -94,7 +94,7 @@ const buildCandidate = (
       compilerVersion: COMPILER_VERSION,
       generatedAtIso,
       deterministicSeed: BASE_SEED + ordinal,
-      modelId: MODEL_ID,
+      modelId,
       modelResponseId: null,
       parentCandidateId: null,
       appliedPatchIds,
@@ -121,9 +121,9 @@ const rankedCandidates = (
     );
 
 const fallbackLimitations = (candidate: CandidateV2): readonly string[] => [
-  `Stock is fixed to ${candidate.program.sheets.map((sheet) => sheet.material.label).join(", ")}.`,
-  `Budget: ${candidate.intent.fabricationBudget.maximumPanels} panels and ${candidate.intent.fabricationBudget.maximumJointAndConnectorCount} joints/connectors maximum.`,
-  `Assembly strategy: ${candidate.program.assemblyStrategy.replaceAll("_", " ")}; glue ${candidate.intent.fabricationBudget.glueAllowed ? "is allowed" : "is not allowed"}.`,
+  `Use ${candidate.program.sheets.map((sheet) => sheet.material.label).join(", ")}.`,
+  `This design uses no more than ${candidate.intent.fabricationBudget.maximumPanels} pieces and ${candidate.intent.fabricationBudget.maximumJointAndConnectorCount} joins.`,
+  `Glue ${candidate.intent.fabricationBudget.glueAllowed ? "may be used" : "is not needed"}.`,
 ];
 
 export function FoldForgeApp() {
@@ -133,6 +133,7 @@ export function FoldForgeApp() {
   const [prompt, setPrompt] = useState<string>(DEFAULT_PROMPT);
   const [intent, setIntent] = useState<FabricationIntentV1 | null>(null);
   const [candidates, setCandidates] = useState<readonly CandidateV2[]>([]);
+  const [experienceMode, setExperienceMode] = useState<ExperienceMode>("live");
   const [selectedId, setSelectedId] = useState("");
   const [repairEvidence, setRepairEvidence] = useState<
     Record<string, readonly RepairEvidence[]>
@@ -152,6 +153,8 @@ export function FoldForgeApp() {
   );
   const [finalizing, setFinalizing] = useState(false);
   const [checkpointReady, setCheckpointReady] = useState(false);
+  const accessCodeInputRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusResultsRef = useRef(false);
 
@@ -176,7 +179,11 @@ export function FoldForgeApp() {
     void getJson("/api/health", HealthApiResponseSchema)
       .then((nextHealth) => {
         setHealth(nextHealth);
-        if (!nextHealth.liveAiEnabled) setStatusMessage("Sol is off.");
+        if (!nextHealth.liveAiEnabled) {
+          setStatusMessage(
+            "Live generation is off. Saved examples are still available.",
+          );
+        }
       })
       .catch((healthError: unknown) => setError(formatFailure(healthError)));
   }, []);
@@ -198,6 +205,7 @@ export function FoldForgeApp() {
 
     const restoreTimer = window.setTimeout(() => {
       if (restored) {
+        setExperienceMode("live");
         setPrompt(restored.prompt);
         setIntent(restored.intent);
         setCandidates(restored.candidates);
@@ -215,7 +223,7 @@ export function FoldForgeApp() {
   }, []);
 
   useEffect(() => {
-    if (!checkpointReady) return;
+    if (!checkpointReady || experienceMode === "saved") return;
     const checkpoint = StudioCheckpointSchema.parse({
       version: 3,
       savedAt: new Date().toISOString(),
@@ -234,6 +242,7 @@ export function FoldForgeApp() {
   }, [
     candidates,
     checkpointReady,
+    experienceMode,
     intent,
     narrative,
     prompt,
@@ -253,13 +262,17 @@ export function FoldForgeApp() {
     resultsHeadingRef.current?.focus();
   }, [candidates, phase]);
 
+  useEffect(() => {
+    if (accessState === "needed") accessCodeInputRef.current?.focus();
+  }, [accessState]);
+
   const requireAccess = useCallback((requestError: unknown): boolean => {
     if (
       requestError instanceof FoldForgeApiError &&
       requestError.code === "ACCESS_REQUIRED"
     ) {
       setAccessState("needed");
-      setError("Enter the studio access code, then forge again.");
+      setError("Enter the demo access code, then try again.");
       return true;
     }
     return false;
@@ -284,8 +297,9 @@ export function FoldForgeApp() {
   const forge = async () => {
     if (!solAvailable || busy || prompt.trim().length === 0) return;
     setError("");
+    setExperienceMode("live");
     setPhase("intent");
-    setStatusMessage("Normalizing fabrication intent…");
+    setStatusMessage("Understanding your request…");
     const generatedAtIso = new Date().toISOString();
 
     try {
@@ -299,7 +313,7 @@ export function FoldForgeApp() {
         setError(
           nextIntent.clarificationQuestion ??
             nextIntent.unsupportedReason ??
-            "This request needs one more fabrication constraint.",
+            "Add one more detail so FoldForge can build this safely.",
         );
         return;
       }
@@ -311,7 +325,7 @@ export function FoldForgeApp() {
 
       for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
         setPhase("programs");
-        setStatusMessage(`Forging candidate ${ordinal} of 3…`);
+        setStatusMessage(`Creating design ${ordinal} of 3…`);
         const generated = await postJson(
           "/api/programs",
           {
@@ -343,7 +357,7 @@ export function FoldForgeApp() {
           cycle += 1
         ) {
           setPhase("repair");
-          setStatusMessage(`Repairing candidate ${ordinal}, cycle ${cycle}…`);
+          setStatusMessage(`Checking and improving design ${ordinal}…`);
           const failure =
             evaluation.report.failures.find(
               (entry) => entry.severity === "hard",
@@ -407,7 +421,7 @@ export function FoldForgeApp() {
 
       const ranked = rankedCandidates(accepted).slice(0, 3);
       if (ranked.length === 0) {
-        throw new Error("No hard-valid candidates were produced.");
+        throw new Error("No checked designs were produced.");
       }
       setIntent(nextIntent);
       setCandidates(ranked);
@@ -418,7 +432,7 @@ export function FoldForgeApp() {
       setPhase("ready");
       setAccessState("granted");
       setStatusMessage(
-        `${ranked.length} hard-valid candidate${ranked.length === 1 ? "" : "s"} ready.`,
+        `${ranked.length} checked design${ranked.length === 1 ? " is" : "s are"} ready.`,
       );
     } catch (forgeError) {
       setPhase(candidates.length > 0 ? "ready" : "idle");
@@ -430,7 +444,60 @@ export function FoldForgeApp() {
     setSelectedId(candidateId);
     setMotionPosition(0.65);
     setNarrative(null);
-    setStatusMessage("Candidate selected.");
+    setStatusMessage("Design selected.");
+  };
+
+  const applyExamplePrompt = (example: ExamplePrompt) => {
+    setPrompt(example.prompt);
+    setIntent(null);
+    setCandidates([]);
+    setSelectedId("");
+    setRepairEvidence({});
+    setNarrative(null);
+    setExperienceMode("live");
+    setPhase("idle");
+    setError("");
+    setStatusMessage(`${example.title} prompt ready to edit.`);
+    promptRef.current?.focus();
+  };
+
+  const openSavedExample = () => {
+    const showcase = createPullTabPopUpFlowerShowcase();
+    const program: FabricationProgramV1 = {
+      ...showcase.program,
+      candidateLabel: "Pop-up flower card",
+      designSummary:
+        "A prepared pull-tab card whose paper flower travels upward along a checked 30 mm guide.",
+    };
+    const candidate = buildCandidate(
+      "saved-example-pop-up-flower",
+      showcase.intent,
+      program,
+      1,
+      SAVED_EXAMPLE_GENERATED_AT,
+      [],
+      0,
+      null,
+    );
+    if (!candidate) {
+      setError("The saved example could not be opened safely.");
+      return;
+    }
+
+    const ranked = rankedCandidates([candidate]);
+    setPrompt(showcase.prompt);
+    setIntent(showcase.intent);
+    setCandidates(ranked);
+    setSelectedId(ranked[0]?.candidateId ?? "");
+    setRepairEvidence({});
+    setNarrative(null);
+    setExperienceMode("saved");
+    setPreviewMode("assembled");
+    setMotionPosition(0.65);
+    setError("");
+    shouldFocusResultsRef.current = true;
+    setPhase("ready");
+    setStatusMessage("Saved pop-up flower example opened.");
   };
 
   const exportFormat = async (format: ExportFormat) => {
@@ -494,96 +561,42 @@ export function FoldForgeApp() {
           >
             <span aria-hidden="true" />
             {!health
-              ? "Checking Sol"
+              ? "Checking live generation"
               : solAvailable
                 ? accessState === "granted"
-                  ? "Sol ready · access granted"
+                  ? "Live generation ready · access granted"
                   : accessState === "needed"
-                    ? "Sol ready · access needed"
-                    : "Sol ready"
-                : "Sol is off"}
+                    ? "Live generation ready · access needed"
+                    : "Live generation ready"
+                : "Live generation off"}
           </span>
           {candidates.length > 0 ? (
-            <span className={styles.checkpointLabel}>Checkpoint saved</span>
+            <span className={styles.checkpointLabel}>
+              {experienceMode === "saved"
+                ? "Saved example open"
+                : "Checkpoint saved"}
+            </span>
           ) : null}
         </div>
       </header>
 
       <main className={styles.main} id="studio-main">
-        <section className={styles.compose} aria-labelledby="studio-title">
-          <div className={styles.intro}>
-            <p className={styles.eyebrow}>Prompt-to-fabrication studio</p>
-            <h1 id="studio-title">Describe. Forge. Export.</h1>
-            <p>
-              Sol proposes bounded sheet programs. Code compiles, verifies, and
-              ranks every candidate before it appears here.
-            </p>
-          </div>
-
-          <div className={styles.promptPanel}>
-            <label htmlFor="fabrication-prompt">
-              Describe what to fabricate
-            </label>
-            <textarea
-              id="fabrication-prompt"
-              maxLength={4_000}
-              rows={5}
-              value={prompt}
-              onChange={(event) => setPrompt(event.currentTarget.value)}
-            />
-            <div className={styles.promptMeta}>
-              <span>{prompt.length}/4,000</span>
-              <span>Access codes are never saved.</span>
-            </div>
-            <div className={styles.exampleChips} aria-label="Example prompts">
-              {EXAMPLE_PROMPTS.map((example, index) => (
-                <button
-                  key={example}
-                  type="button"
-                  onClick={() => setPrompt(example)}
-                >
-                  Example {index + 1}
-                </button>
-              ))}
-            </div>
-            <button
-              className={styles.forgeButton}
-              type="button"
-              disabled={!solAvailable || busy || prompt.trim().length === 0}
-              onClick={() => void forge()}
-            >
-              {busy ? "Forging…" : "Forge 3 candidates"}
-            </button>
-            {!solAvailable && health ? (
-              <p className={styles.offlineNote}>
-                Sol is off. Arbitrary generation is unavailable until live
-                service is enabled.
-              </p>
-            ) : null}
-          </div>
-        </section>
-
-        {accessState === "needed" ? (
-          <form
-            className={styles.accessBar}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void unlock();
-            }}
-          >
-            <label htmlFor="access-code">Studio access code</label>
-            <input
-              id="access-code"
-              type="password"
-              autoComplete="off"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.currentTarget.value)}
-            />
-            <button type="submit" disabled={accessCode.length === 0}>
-              Unlock
-            </button>
-          </form>
-        ) : null}
+        <FoldForgeStart
+          accessCode={accessCode}
+          accessCodeInputRef={accessCodeInputRef}
+          accessState={accessState}
+          busy={busy}
+          healthKnown={health !== null}
+          liveGenerationAvailable={solAvailable}
+          onAccessCodeChange={setAccessCode}
+          onCreate={() => void forge()}
+          onOpenSavedExample={openSavedExample}
+          onPromptChange={setPrompt}
+          onSelectExample={applyExamplePrompt}
+          onSubmitAccess={() => void unlock()}
+          prompt={prompt}
+          promptRef={promptRef}
+        />
 
         <p className={styles.liveRegion} aria-live="polite" aria-atomic="true">
           {statusMessage}
@@ -598,233 +611,28 @@ export function FoldForgeApp() {
         ) : null}
 
         {candidates.length > 0 && baseSelected ? (
-          <section className={styles.results} aria-labelledby="results-title">
-            <div className={styles.sectionHeading}>
-              <p className={styles.eyebrow}>Hard-valid only</p>
-              <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
-                Compare candidates.
-              </h2>
-            </div>
-
-            <div className={styles.candidateRail}>
-              {candidates.map((candidate) => (
-                <button
-                  key={candidate.candidateId}
-                  className={
-                    candidate.candidateId === baseSelected.candidateId
-                      ? styles.selectedCard
-                      : undefined
-                  }
-                  type="button"
-                  aria-pressed={
-                    candidate.candidateId === baseSelected.candidateId
-                  }
-                  data-testid="candidate-card"
-                  onClick={() => chooseCandidate(candidate.candidateId)}
-                >
-                  <span className={styles.rank}>#{candidate.rank}</span>
-                  <span>
-                    <strong>{candidate.label}</strong>
-                    <small>{candidate.program.topologyId}</small>
-                  </span>
-                  <b>{candidate.score.totalScore?.toFixed(1)}</b>
-                </button>
-              ))}
-            </div>
-
-            <div className={styles.workbench}>
-              <div className={styles.previewColumn}>
-                <div className={styles.previewToolbar}>
-                  <div className={styles.segmented} aria-label="Preview mode">
-                    {(["assembled", "pattern"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={previewMode === mode}
-                        onClick={() => setPreviewMode(mode)}
-                      >
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                  <span>
-                    {baseSelected.program.behavior.replaceAll("_", " ")}
-                  </span>
-                </div>
-                <FabricationPreview
-                  ir={baseSelected.ir}
-                  mode={previewMode}
-                  motionPosition={motionPosition}
-                  rotationDeg={rotationDeg}
-                  label={`${baseSelected.label} ${previewMode} preview`}
-                />
-                <div className={styles.controls}>
-                  <label>
-                    Motion
-                    <input
-                      aria-label="Motion position"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      disabled={!baseSelected.ir.driver}
-                      value={motionPosition}
-                      onChange={(event) =>
-                        setMotionPosition(Number(event.currentTarget.value))
-                      }
-                    />
-                    <output>{Math.round(motionPosition * 100)}%</output>
-                  </label>
-                  <label>
-                    Rotation
-                    <input
-                      aria-label="Preview rotation"
-                      type="range"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={rotationDeg}
-                      onChange={(event) =>
-                        setRotationDeg(Number(event.currentTarget.value))
-                      }
-                    />
-                    <output>{rotationDeg}°</output>
-                  </label>
-                </div>
-                <dl className={styles.metrics}>
-                  <div>
-                    <dt>Score</dt>
-                    <dd>{baseSelected.score.totalScore?.toFixed(1)}</dd>
-                  </div>
-                  <div>
-                    <dt>Panels</dt>
-                    <dd>{baseSelected.ir.panels.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Sheets</dt>
-                    <dd>{baseSelected.ir.sheets.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Cut paths</dt>
-                    <dd>
-                      {
-                        baseSelected.ir.paths.filter(
-                          (path) => path.kind === "cut",
-                        ).length
-                      }
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              <aside
-                className={styles.inspector}
-                aria-label="Candidate details"
-              >
-                <section className={styles.summaryCard}>
-                  <span>Selected program</span>
-                  <h3>{baseSelected.label}</h3>
-                  <p>{baseSelected.program.designSummary}</p>
-                </section>
-
-                {selectedRepairs.length > 0 ? (
-                  <details className={styles.evidenceCard} open>
-                    <summary>Repair evidence</summary>
-                    {selectedRepairs.map((entry) => (
-                      <div key={`${entry.patch.patchId}-${entry.cycle}`}>
-                        <strong>
-                          Cycle {entry.cycle}: {entry.beforeFailureId}
-                        </strong>
-                        <p>{entry.beforeFailureMessage}</p>
-                        <p>
-                          Patch: {entry.patch.diagnosis} (
-                          {entry.result.replace("_", " ")})
-                        </p>
-                        <ul>
-                          {entry.patch.operations.map((operation) => (
-                            <li key={operation.operationId}>
-                              {operation.path}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </details>
-                ) : null}
-
-                <details className={styles.evidenceCard}>
-                  <summary>
-                    Verifier evidence ·{" "}
-                    {baseSelected.verification.checks.length} checks
-                  </summary>
-                  <ul>
-                    {baseSelected.verification.checks.map((check) => (
-                      <li key={check.checkId}>
-                        <span>{check.status}</span> {check.message}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </aside>
-            </div>
-
-            <div className={styles.deliveryGrid}>
-              <section className={styles.exportPanel}>
-                <p className={styles.eyebrow}>Exact selected candidate</p>
-                <h3>Export.</h3>
-                <div className={styles.exportButtons}>
-                  {(["svg", "dxf", "glb", "json", "fold"] as const).map(
-                    (format) => (
-                      <button
-                        key={format}
-                        type="button"
-                        disabled={exportingFormat !== null}
-                        onClick={() => void exportFormat(format)}
-                      >
-                        {exportingFormat === format
-                          ? "Preparing…"
-                          : `Download ${format.toUpperCase()}`}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <button
-                  className={styles.narrativeButton}
-                  type="button"
-                  disabled={!solAvailable || finalizing}
-                  onClick={() => void finalizeNarrative()}
-                >
-                  {finalizing ? "Writing…" : "Add Sol build notes"}
-                </button>
-              </section>
-
-              <section className={styles.buildPanel}>
-                <h3>Assembly</h3>
-                <ol>
-                  {(assemblySteps.length > 0
-                    ? assemblySteps
-                    : [baseSelected.program.designSummary]
-                  ).map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-                <h3>Limitations</h3>
-                <ul>
-                  {limitations.map((limitation) => (
-                    <li key={limitation}>{limitation}</li>
-                  ))}
-                </ul>
-                {narrative ? (
-                  <p className={styles.narrativeSummary}>
-                    <strong>{narrative.summary}</strong> {narrative.mechanism}
-                    {narrative.assemblySteps.length > 0
-                      ? ` Sol notes: ${narrative.assemblySteps.join(" ")}`
-                      : ""}
-                  </p>
-                ) : null}
-              </section>
-            </div>
-          </section>
+          <FoldForgeResults
+            assemblySteps={assemblySteps}
+            candidates={candidates}
+            experienceMode={experienceMode}
+            exportingFormat={exportingFormat}
+            finalizing={finalizing}
+            limitations={limitations}
+            liveGenerationAvailable={solAvailable}
+            motionPosition={motionPosition}
+            narrative={narrative}
+            onChooseCandidate={chooseCandidate}
+            onExport={(format) => void exportFormat(format)}
+            onFinalize={() => void finalizeNarrative()}
+            onMotionPositionChange={setMotionPosition}
+            onPreviewModeChange={setPreviewMode}
+            onRotationChange={setRotationDeg}
+            previewMode={previewMode}
+            repairs={selectedRepairs}
+            resultsHeadingRef={resultsHeadingRef}
+            rotationDeg={rotationDeg}
+            selected={baseSelected}
+          />
         ) : null}
       </main>
     </div>

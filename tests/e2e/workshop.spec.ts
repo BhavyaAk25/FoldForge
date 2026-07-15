@@ -331,24 +331,27 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   });
 
   await page.goto("/");
-  await expect(page.getByText("Sol ready", { exact: true })).toBeVisible();
-  const prompt = page.getByLabel("Describe what to fabricate");
+  await expect(
+    page.getByText("Live generation ready", { exact: true }),
+  ).toBeVisible();
+  const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
 
-  const access = page.getByLabel("Studio access code");
+  const access = page.getByLabel("Demo access code");
   await expect(access).toBeVisible();
+  await expect(access).toBeFocused();
   await access.fill("e2e-secret");
-  await page.getByRole("button", { name: "Unlock" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(
     page.getByText("Access granted.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Compare candidates." }),
+    page.getByRole("heading", { name: "Compare your designs." }),
   ).toBeFocused();
   await expect(page.getByTestId("candidate-card")).toHaveCount(3);
   await expect(page.locator('[data-inner-cut-count="1"]')).toHaveCount(1);
@@ -376,7 +379,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
 
   await page.getByTestId("candidate-card").nth(1).click();
   await expect(
-    page.getByText("Repair evidence", { exact: true }),
+    page.getByText("What FoldForge fixed", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("geometry.minimum_feature#panel-wing", { exact: false }),
@@ -385,21 +388,23 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     page.getByText("/blueprint/panels/panel-wing/widthMm", { exact: true }),
   ).toBeVisible();
   const verifier = page.locator("details").filter({
-    hasText: "Verifier evidence",
+    hasText: "Technical checks",
   });
   await expect(verifier).not.toHaveAttribute("open", "");
 
-  await page.getByRole("button", { name: "pattern" }).click();
+  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
   await expect(
     page.getByRole("img", { name: /Repaired narrow wing pattern preview/iu }),
   ).toBeVisible();
-  await page.getByLabel("Motion position").fill("0.4");
-  await page.getByLabel("Preview rotation").fill("35");
+  await page.getByLabel("Open and close the design").fill("0.4");
+  await page.getByLabel("Rotate the preview").fill("35");
   await expect(page.getByText("40%", { exact: true })).toBeVisible();
   await expect(page.getByText("35°", { exact: true })).toBeVisible();
-  await expect(page.getByText("Panels", { exact: true })).toBeVisible();
+  await expect(page.getByText("Pieces", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add Sol build notes" }).click();
+  await page
+    .getByRole("button", { name: "Add plain-language build notes" })
+    .click();
   await expect(
     page.getByText("A compact, code-verified folding display.", {
       exact: false,
@@ -448,12 +453,12 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v3"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
       ),
     )
     .not.toBeNull();
   const checkpoint = await page.evaluate(() =>
-    window.localStorage.getItem("foldforge.studio.checkpoint.v3"),
+    window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
   );
   expect(checkpoint).not.toContain("e2e-secret");
 
@@ -480,7 +485,7 @@ test("rejects duplicate program fingerprints before compile", async ({
     duplicateSecondFingerprint: true,
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
   await expect(page.getByTestId("candidate-card")).toHaveCount(2);
   expect(state.compileRequests.map((request) => request.candidateId)).toEqual([
     "candidate-1-two-panel-fold-a",
@@ -489,40 +494,79 @@ test("rejects duplicate program fingerprints before compile", async ({
   expect(state.repairRequests).toEqual([]);
 });
 
-test("keeps examples fill-only and disables arbitrary generation when Sol is off", async ({
+test("keeps prompt examples honest and provides a saved result when live generation is off", async ({
   page,
 }) => {
   const state = await installStudioMocks(page, { liveAiEnabled: false });
   await page.goto("/");
-  const prompt = page.getByLabel("Describe what to fabricate");
+  const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill("A completely arbitrary paper mechanism.");
-  await page.getByRole("button", { name: "Example 2" }).click();
+  const flowerExample = page.locator("article").filter({
+    hasText: "Pop-up flower card",
+  });
+  await flowerExample.getByRole("button", { name: "Use this prompt" }).click();
+  await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
-    "Create a pop-up fox card with recognizable ears, muzzle, and a fold-flat mechanism.",
+    "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
   );
   await expect(
-    page.getByRole("button", { name: "Forge 3 candidates" }),
+    page.getByRole("button", { name: "Create 3 designs" }),
   ).toBeDisabled();
   await expect(
     page.getByText(
-      "Sol is off. Arbitrary generation is unavailable until live service is enabled.",
+      "Live generation is currently unavailable. You can still explore saved examples.",
       { exact: true },
     ),
   ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Explore a finished example" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Explore the pop-up flower card." }),
+  ).toBeFocused();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
+  await expect(
+    page.getByText("This example is not a response to your current prompt.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
+  await expect(
+    page.getByRole("img", { name: /Pop-up flower card pattern preview/iu }),
+  ).toBeVisible();
+  await page.getByLabel("Open and close the design").fill("0.4");
+  await page.getByLabel("Rotate the preview").fill("35");
+  await expect(page.getByText("40%", { exact: true })).toBeVisible();
+  await expect(page.getByText("35°", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Open and close the design")).toHaveAttribute(
+    "aria-valuetext",
+    "40 percent",
+  );
+
+  const savedDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  const savedDownload = await savedDownloadPromise;
+  expect(savedDownload.suggestedFilename()).toMatch(/\.svg$/u);
+  expect(state.exportRequests.map((request) => request.format)).toEqual([
+    "svg",
+  ]);
   expect(state.intentPrompts).toEqual([]);
 });
 
 test("fails safely on malformed strict API data", async ({ page }) => {
   await installStudioMocks(page, { malformedIntent: true });
   await page.goto("/");
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
   await expect(
     page.getByRole("alert").filter({
-      hasText: "outside the strict fabrication contract",
+      hasText: "could not be checked safely",
     }),
-  ).toContainText("outside the strict fabrication contract");
+  ).toContainText("could not be checked safely");
   await expect(
-    page.getByRole("heading", { name: "Describe. Forge. Export." }),
+    page.getByRole("heading", {
+      name: "Turn an idea into a buildable paper design.",
+    }),
   ).toBeVisible();
   await expect(page.getByTestId("candidate-card")).toHaveCount(0);
 });
@@ -533,7 +577,7 @@ test("has no horizontal overflow with results at required widths", async ({
   await installStudioMocks(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
   await expect(page.getByTestId("candidate-card")).toHaveCount(3);
 
   for (const width of [390, 768, 1280, 1440]) {
@@ -563,15 +607,21 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Skip to studio" }),
   ).toBeFocused();
-  const prompt = page.getByLabel("Describe what to fabricate");
+  const prompt = page.getByLabel("What do you want to make?");
   await prompt.focus();
   expect(
     await prompt.evaluate((element) => getComputedStyle(element).outlineWidth),
   ).not.toBe("0px");
-  await page.getByRole("button", { name: "Example 3" }).focus();
+  const duckExample = page.locator("article").filter({
+    hasText: "Duck-shaped gift box",
+  });
+  const duckPromptButton = duckExample.getByRole("button", {
+    name: "Use this prompt",
+  });
+  await duckPromptButton.focus();
   await page.keyboard.press("Enter");
   await expect(prompt).toHaveValue(
-    "Design a compact cardstock display that opens one side panel through 90 degrees.",
+    "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
   );
 
   const styles = await page.evaluate(() => {
@@ -606,7 +656,7 @@ test("has no serious accessibility violations before or after forging", async ({
 
   expect(await seriousViolations()).toEqual([]);
 
-  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await page.getByRole("button", { name: "Create 3 designs" }).click();
   await expect(page.getByTestId("candidate-card")).toHaveCount(3);
   expect(await seriousViolations()).toEqual([]);
 });

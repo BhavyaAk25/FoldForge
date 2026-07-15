@@ -2,7 +2,7 @@
   width: min(1440px, calc(100% - clamp(24px, 5vw, 80px)));
   min-width: 0;
   margin: 0 auto;
-  padding-bottom: clamp(40px, 7vw, 96px);
+  padding-bottom: clamp(18px, 2vw, 28px);
 }
 
 .skipLink {
@@ -104,9 +104,9 @@
 
 .compose {
   display: grid;
-  gap: clamp(28px, 6vw, 90px);
+  gap: clamp(30px, 5vw, 72px);
   align-items: center;
-  padding: clamp(38px, 7vw, 100px) 0 clamp(32px, 5vw, 72px);
+  padding: clamp(30px, 3vw, 42px) 0 clamp(16px, 1.5vw, 20px);
 }
 
 .intro {
@@ -132,25 +132,68 @@
 }
 
 .intro h1 {
-  max-width: 760px;
-  font-size: clamp(3rem, 8vw, 6.8rem);
+  max-width: 720px;
+  font-size: clamp(3rem, 4.8vw, 4.75rem);
 }
 
-.intro > p:last-child {
+.intro h1 + p {
   max-width: 620px;
-  margin: 22px 0 0;
+  margin: 16px 0 0;
   color: var(--muted);
   font-size: clamp(0.96rem, 1.4vw, 1.12rem);
-  line-height: 1.65;
+  line-height: 1.58;
+}
+
+.processSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 720px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.processSteps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 18px;
+  border-right: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.processSteps li:first-child {
+  padding-left: 0;
+}
+
+.processSteps li:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.processSteps span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 750;
 }
 
 .promptPanel {
   display: grid;
   min-width: 0;
-  padding: clamp(18px, 3vw, 30px);
+  padding: 18px;
   border: 1px solid var(--border-dark);
   background: var(--surface-raised);
-  box-shadow: 12px 12px 0 rgb(32 32 29 / 6%);
+  box-shadow: 10px 10px 0 rgb(32 32 29 / 5%);
 }
 
 .promptPanel > label,
@@ -177,44 +220,55 @@
   resize: vertical;
 }
 
-.promptMeta {
+.promptGuide {
   display: flex;
+  align-items: start;
   justify-content: space-between;
   gap: 16px;
-  margin: 9px 0 15px;
+  margin: 9px 0 14px;
   color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.promptGuide p {
+  max-width: 62ch;
+  margin: 0;
+}
+
+.promptGuide span {
+  flex: none;
   font-family: var(--font-mono);
   font-size: 0.64rem;
 }
 
-.exampleChips {
+.heroActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 17px;
-}
-
-.exampleChips button,
-.segmented button {
-  min-height: 34px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 650;
-}
-
-.exampleChips button {
-  padding: 0 12px;
-  border-radius: 999px;
+  align-items: stretch;
+  gap: 10px 14px;
 }
 
 .forgeButton {
+  flex: 1 1 240px;
   min-height: 50px;
+  padding: 0 18px;
   border: 1px solid var(--graphite);
   background: var(--graphite);
   color: var(--surface-raised);
   font-weight: 740;
+}
+
+.secondaryAction {
+  flex: 1 1 190px;
+  min-height: 50px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 720;
 }
 
 .forgeButton:disabled,
@@ -226,10 +280,102 @@
 }
 
 .offlineNote {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
   color: var(--warning);
   font-size: 0.78rem;
   line-height: 1.5;
+}
+
+.examples {
+  padding: 14px 0 10px;
+  border-top: 1px solid var(--border-dark);
+}
+
+.examplesHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 8px;
+}
+
+.examplesHeading h2 {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 720;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.examplesHeading > p {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.exampleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.exampleCard {
+  display: grid;
+  grid-template-columns: minmax(126px, 1.08fr) minmax(0, 0.92fr);
+  min-width: 0;
+  min-height: 168px;
+  padding: 8px;
+  gap: 18px;
+}
+
+.exampleCard + .exampleCard {
+  border-left: 1px solid var(--border);
+}
+
+.exampleImage {
+  width: 100%;
+  height: 100%;
+  min-height: 152px;
+  object-fit: cover;
+}
+
+.exampleCard > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 7px 6px 4px 0;
+}
+
+.exampleCard h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.exampleCard p {
+  margin: 8px 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.exampleCard button {
+  min-height: 35px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dashed var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 720;
 }
 
 .accessBar {
@@ -241,6 +387,15 @@
   padding: 16px;
   border: 1px solid var(--warning);
   background: var(--warning-soft);
+}
+
+.promptPanel .accessBar {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  margin: 6px 0 0;
+}
+
+.promptPanel .accessBar label {
+  grid-column: 1 / -1;
 }
 
 .accessBar label {
@@ -305,9 +460,17 @@
   font-size: clamp(2.15rem, 5vw, 4.8rem);
 }
 
+.sectionIntro {
+  max-width: 720px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.58;
+}
+
 .candidateRail {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -345,8 +508,7 @@
 
 .candidateRail small {
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.68rem;
 }
 
 .candidateRail b {
@@ -415,8 +577,13 @@
 }
 
 .segmented button {
+  min-height: 36px;
   padding: 0 12px;
-  text-transform: capitalize;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
 }
 
 .segmented button + button {
@@ -584,6 +751,14 @@
   font-size: 1.25rem;
 }
 
+.panelIntro {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .exportButtons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -593,8 +768,8 @@
 
 .exportButtons button,
 .narrativeButton {
-  min-height: 43px;
-  padding: 0 12px;
+  min-height: 62px;
+  padding: 10px 12px;
   border: 1px solid var(--border-dark);
   background: transparent;
   color: var(--graphite);
@@ -602,8 +777,27 @@
   font-weight: 700;
 }
 
+.exportButtons button {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  text-align: left;
+}
+
+.exportButtons button strong {
+  font-size: 0.76rem;
+}
+
+.exportButtons button span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 .narrativeButton {
   width: 100%;
+  min-height: 43px;
   margin-top: 8px;
   border-color: var(--accent);
   color: var(--accent);
@@ -626,7 +820,8 @@
 }
 
 @media (hover: hover) {
-  .exampleChips button:hover,
+  .exampleCard button:hover,
+  .secondaryAction:hover,
   .segmented button:hover,
   .candidateRail > button:hover,
   .exportButtons button:hover,
@@ -667,7 +862,45 @@
   }
 }
 
+@media (min-width: 760px) and (max-width: 1039px) {
+  .exampleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .exampleCard + .exampleCard {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
 @media (max-width: 759px) {
+  .processSteps {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .processSteps li,
+  .processSteps li:first-child,
+  .processSteps li:last-child {
+    padding: 0;
+    border-right: 0;
+  }
+
+  .examplesHeading {
+    display: grid;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .exampleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .exampleCard + .exampleCard {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
   .candidateRail {
     grid-template-columns: 1fr;
   }
@@ -679,6 +912,10 @@
   .accessBar {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .promptPanel .accessBar {
+    grid-template-columns: 1fr;
   }
 
   .metrics {
@@ -715,19 +952,36 @@
     font-size: 0.66rem;
   }
 
-  .promptMeta,
   .previewToolbar,
   .errorBanner {
     align-items: flex-start;
   }
 
-  .promptMeta {
-    flex-direction: column;
-    gap: 4px;
+  .promptGuide {
+    display: grid;
+    gap: 5px;
   }
 
-  .exampleChips button {
-    flex: 1 1 calc(50% - 8px);
+  .heroActions {
+    display: grid;
+  }
+
+  .forgeButton,
+  .secondaryAction {
+    width: 100%;
+  }
+
+  .exampleCard {
+    grid-template-columns: 1fr;
+  }
+
+  .exampleImage {
+    min-height: 210px;
+    max-height: 280px;
+  }
+
+  .exampleCard > div {
+    padding: 4px 4px 8px;
   }
 
   .errorBanner {
