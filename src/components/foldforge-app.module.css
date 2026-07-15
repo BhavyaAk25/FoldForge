@@ -366,9 +366,14 @@
   line-height: 1.5;
 }
 
-.exampleCard button {
-  min-height: 35px;
+.exampleActions {
+  display: grid;
+  gap: 6px;
   margin-top: auto;
+}
+
+.exampleActions button {
+  min-height: 35px;
   padding: 0;
   border: 0;
   border-bottom: 1px dashed var(--accent);
@@ -752,6 +757,50 @@
   text-transform: uppercase;
 }
 
+.designTrace {
+  margin: 14px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.designTrace li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.designTrace strong,
+.proofHashes dt {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+}
+
+.evidenceCard .designTrace span {
+  color: var(--muted);
+  font-family: inherit;
+  text-transform: none;
+}
+
+.proofHashes {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.proofHashes div + div {
+  margin-top: 10px;
+}
+
+.proofHashes dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 .deliveryGrid {
   display: grid;
   gap: 16px;
@@ -813,6 +862,13 @@
   font-size: 0.66rem;
   font-weight: 500;
   line-height: 1.35;
+}
+
+.exportButtons button[data-export-status="unavailable"]:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+  border-style: dashed;
+  background: var(--paper);
 }
 
 .narrativeButton {

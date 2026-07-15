@@ -4,6 +4,7 @@ import { z } from "zod";
 import { canonicalSerialize } from "@/core/canonical";
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import {
+  createFacetedDuckGiftBoxShowcase,
   createModularCableOrganizerShowcase,
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
@@ -24,6 +25,12 @@ import {
   type FabricationJsonExportSource,
   type VerifiedFabricationExportSource,
 } from "@/core/fabrication/export";
+import { homeMotionState } from "@/core/fabrication/kinematics";
+import {
+  decomposeRigidMatrix4,
+  inverseRigidMatrix4,
+  multiplyMatrices4,
+} from "@/core/fabrication/matrix";
 import type {
   CandidateProvenanceV2,
   CandidateScoreV2,
@@ -828,7 +835,32 @@ describe("fabrication exporters", () => {
     expect(gltf.nodes[bodyANodeIndex]?.children).toEqual(
       expect.arrayContaining([bodyBNodeIndex, panelANodeIndex]),
     );
-    expect(gltf.nodes[bodyBNodeIndex]?.translation).toEqual([0.12, 0, 0.01]);
+    const home = homeMotionState(mainIr);
+    if (!home.ok) throw new Error(JSON.stringify(home.error));
+    const parentMatrix = home.value.bodyMatrices[bodyA.bodyId];
+    const childMatrix = home.value.bodyMatrices[bodyB.bodyId];
+    if (!parentMatrix || !childMatrix) {
+      throw new Error("Static GLB home transforms are missing.");
+    }
+    const inverseParent = inverseRigidMatrix4(parentMatrix);
+    if (!inverseParent) throw new Error("Static GLB parent is not invertible.");
+    const expectedLocal = decomposeRigidMatrix4(
+      multiplyMatrices4(inverseParent, childMatrix),
+    );
+    if (!expectedLocal) throw new Error("Static GLB local pose is invalid.");
+    expect(gltf.nodes[bodyBNodeIndex]?.translation).toEqual(
+      [
+        expectedLocal.translationMm.xMm,
+        expectedLocal.translationMm.yMm,
+        expectedLocal.translationMm.zMm,
+      ].map((value) => value / 1_000),
+    );
+    expect(gltf.nodes[bodyBNodeIndex]?.rotation).toEqual([
+      expectedLocal.rotation.x,
+      expectedLocal.rotation.y,
+      expectedLocal.rotation.z,
+      expectedLocal.rotation.w,
+    ]);
     expect(
       gltf.materials.some(
         (material) => material.name === "fabrication-path:cut",
@@ -941,6 +973,10 @@ describe("fabrication exporters", () => {
     const animation = parsed.json.animations?.[0];
     const crownNode = parsed.json.nodes.findIndex(
       (node) => node.name === "body:body-flower-crown",
+    );
+    expect(parsed.json.nodes[crownNode]?.translation?.[2]).toBeCloseTo(
+      0.0015,
+      7,
     );
     const translationChannel = animation?.channels.find(
       (channel) =>
@@ -1385,5 +1421,42 @@ describe("fabrication exporters", () => {
       );
     });
     expect(duplicateCuts).toEqual([]);
+  });
+
+  it("omits FOLD when zero-angle and explicit-angle creases are mixed", () => {
+    const showcase = createFacetedDuckGiftBoxShowcase();
+    const compiled = compileFabricationProgram(
+      showcase.intent,
+      showcase.program,
+    );
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.error));
+    const mixedAngleIr: FabricationIRV1 = {
+      ...compiled.value,
+      joints: compiled.value.joints.map((joint) =>
+        joint.kind === "fold" && joint.jointId === "joint-duck-lid"
+          ? { ...joint, homeAngleDeg: 45 }
+          : joint,
+      ),
+    };
+    const candidateId = "candidate-mixed-fold-angles";
+    const source = verifiedSourceFor(mixedAngleIr, candidateId);
+
+    expect(
+      inspectFabricationFoldCompatibility({
+        ir: mixedAngleIr,
+        sourceCandidateId: candidateId,
+        sourceIrHash: source.verification.irHash,
+      }),
+    ).toMatchObject({
+      status: "omitted",
+      reason: {
+        code: "mixed_fold_angle_semantics",
+        geometryIds: ["joint-duck-lid", "joint-duck-beak"],
+      },
+    });
+    expect(exportFabricationFold(source)).toMatchObject({
+      status: "omitted",
+      reason: { code: "mixed_fold_angle_semantics" },
+    });
   });
 });

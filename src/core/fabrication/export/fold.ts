@@ -25,6 +25,7 @@ export type FoldOmissionCode =
   | "coupling_semantics"
   | "motion_semantics"
   | "unsupported_path_semantics"
+  | "mixed_fold_angle_semantics"
   | "unmapped_score_path";
 
 export interface FoldOmissionReason {
@@ -226,6 +227,20 @@ export const inspectFabricationFoldCompatibility = (
       "unmapped_score_path",
       "Every score path and fold joint must have an exact one-to-one mapping.",
       geometryId ? [geometryId] : [],
+    );
+  }
+  const directionOnlyFolds = folds.filter(
+    (joint) => Math.abs(joint.homeAngleDeg) <= Number.EPSILON,
+  );
+  const explicitAngleFolds = folds.filter(
+    (joint) => Math.abs(joint.homeAngleDeg) > Number.EPSILON,
+  );
+  if (directionOnlyFolds.length > 0 && explicitAngleFolds.length > 0) {
+    return omitCompatibility(
+      source,
+      "mixed_fold_angle_semantics",
+      "This FOLD profile cannot mix direction-only flat creases with explicit nonzero fold angles without emitting contradictory M/V zero-angle edges.",
+      folds.map((joint) => joint.jointId),
     );
   }
   return {

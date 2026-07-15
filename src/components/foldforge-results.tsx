@@ -48,6 +48,7 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
 
 interface FoldForgeResultsProps {
   readonly assemblySteps: readonly string[];
+  readonly buildSha: string | null;
   readonly candidates: readonly CandidateV2[];
   readonly experienceMode: ExperienceMode;
   readonly exportingFormat: ExportFormat | null;
@@ -71,6 +72,7 @@ interface FoldForgeResultsProps {
 
 export function FoldForgeResults({
   assemblySteps,
+  buildSha,
   candidates,
   experienceMode,
   exportingFormat,
@@ -107,7 +109,7 @@ export function FoldForgeResults({
         </p>
         <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
           {experienceMode === "saved"
-            ? "Explore the pop-up flower card."
+            ? `Explore the ${selected.label.toLowerCase()}.`
             : "Compare your designs."}
         </h2>
         <p className={styles.sectionIntro}>
@@ -274,6 +276,51 @@ export function FoldForgeResults({
                 </li>
               ))}
             </ul>
+          </details>
+
+          <details className={styles.evidenceCard} data-testid="design-trace">
+            <summary>Who did what · selected proof</summary>
+            <ol className={styles.designTrace}>
+              <li>
+                <strong>USER</strong>
+                <span>
+                  {experienceMode === "saved"
+                    ? "Opened this disclosed prepared example."
+                    : "Provided the brief and fabrication constraints."}
+                </span>
+              </li>
+              <li>
+                <strong>AI</strong>
+                <span>
+                  {experienceMode === "saved"
+                    ? "Not called for this prepared example."
+                    : `${selected.provenance.modelId ?? "The configured model"} proposed the typed design program${repairs.length > 0 ? " and bounded repair" : ""}.`}
+                </span>
+              </li>
+              <li>
+                <strong>CODE</strong>
+                <span>
+                  Compiled the geometry, ran{" "}
+                  {selected.verification.checks.length}
+                  checks, applied any allowed patch, and ranked only valid
+                  candidates.
+                </span>
+              </li>
+            </ol>
+            <dl className={styles.proofHashes}>
+              <div>
+                <dt>Selected candidate hash</dt>
+                <dd>
+                  <code>{selected.verification.irHash}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Build SHA</dt>
+                <dd>
+                  <code>{buildSha ?? "Unavailable in this environment"}</code>
+                </dd>
+              </div>
+            </dl>
           </details>
         </aside>
       </div>

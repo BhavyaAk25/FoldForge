@@ -303,6 +303,7 @@ function AssembledPreview({
   const [pitchDeg, setPitchDeg] = useState(DEFAULT_PITCH_DEG);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [viewAnnouncement, setViewAnnouncement] = useState("3D view ready.");
   const dragRef = useRef<DragState | null>(null);
   const hintId = useId();
   const scene = useMemo(
@@ -315,6 +316,7 @@ function AssembledPreview({
     setPitchDeg(DEFAULT_PITCH_DEG);
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setViewAnnouncement("3D view reset.");
   };
 
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -350,8 +352,12 @@ function AssembledPreview({
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId !== event.pointerId) return;
+    const drag = dragRef.current;
+    if (drag?.pointerId !== event.pointerId) return;
     dragRef.current = null;
+    setViewAnnouncement(
+      drag.mode === "orbit" ? "3D view rotated." : "3D view panned.",
+    );
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -366,6 +372,7 @@ function AssembledPreview({
         MAXIMUM_ZOOM,
       ),
     );
+    setViewAnnouncement(event.deltaY > 0 ? "3D zoomed out." : "3D zoomed in.");
   };
 
   if (!scene) {
@@ -428,50 +435,64 @@ function AssembledPreview({
         <button
           type="button"
           aria-label="Rotate view left"
-          onClick={() => onRotationChange(wrapRotation(rotationDeg - 15))}
+          onClick={() => {
+            onRotationChange(wrapRotation(rotationDeg - 15));
+            setViewAnnouncement("3D view rotated left 15 degrees.");
+          }}
         >
           Left
         </button>
         <button
           type="button"
           aria-label="Rotate view right"
-          onClick={() => onRotationChange(wrapRotation(rotationDeg + 15))}
+          onClick={() => {
+            onRotationChange(wrapRotation(rotationDeg + 15));
+            setViewAnnouncement("3D view rotated right 15 degrees.");
+          }}
         >
           Right
         </button>
         <button
           type="button"
           aria-label="Tilt view up"
-          onClick={() => setPitchDeg((current) => clamp(current - 10, -75, 75))}
+          onClick={() => {
+            setPitchDeg((current) => clamp(current - 10, -75, 75));
+            setViewAnnouncement("3D view tilted up 10 degrees.");
+          }}
         >
           Up
         </button>
         <button
           type="button"
           aria-label="Tilt view down"
-          onClick={() => setPitchDeg((current) => clamp(current + 10, -75, 75))}
+          onClick={() => {
+            setPitchDeg((current) => clamp(current + 10, -75, 75));
+            setViewAnnouncement("3D view tilted down 10 degrees.");
+          }}
         >
           Down
         </button>
         <button
           type="button"
           aria-label="Zoom out"
-          onClick={() =>
+          onClick={() => {
             setZoom((current) =>
               clamp(current / 1.15, MINIMUM_ZOOM, MAXIMUM_ZOOM),
-            )
-          }
+            );
+            setViewAnnouncement("3D zoomed out.");
+          }}
         >
           Zoom −
         </button>
         <button
           type="button"
           aria-label="Zoom in"
-          onClick={() =>
+          onClick={() => {
             setZoom((current) =>
               clamp(current * 1.15, MINIMUM_ZOOM, MAXIMUM_ZOOM),
-            )
-          }
+            );
+            setViewAnnouncement("3D zoomed in.");
+          }}
         >
           Zoom +
         </button>
@@ -482,54 +503,61 @@ function AssembledPreview({
         <button
           type="button"
           aria-label="Pan 3D view left"
-          onClick={() =>
+          onClick={() => {
             setPan((current) => ({
               ...current,
               x: clamp(current.x - 0.16, -1.6, 1.6),
-            }))
-          }
+            }));
+            setViewAnnouncement("3D view panned left.");
+          }}
         >
           Left
         </button>
         <button
           type="button"
           aria-label="Pan 3D view right"
-          onClick={() =>
+          onClick={() => {
             setPan((current) => ({
               ...current,
               x: clamp(current.x + 0.16, -1.6, 1.6),
-            }))
-          }
+            }));
+            setViewAnnouncement("3D view panned right.");
+          }}
         >
           Right
         </button>
         <button
           type="button"
           aria-label="Pan 3D view up"
-          onClick={() =>
+          onClick={() => {
             setPan((current) => ({
               ...current,
               y: clamp(current.y + 0.16, -1.2, 1.2),
-            }))
-          }
+            }));
+            setViewAnnouncement("3D view panned up.");
+          }}
         >
           Up
         </button>
         <button
           type="button"
           aria-label="Pan 3D view down"
-          onClick={() =>
+          onClick={() => {
             setPan((current) => ({
               ...current,
               y: clamp(current.y - 0.16, -1.2, 1.2),
-            }))
-          }
+            }));
+            setViewAnnouncement("3D view panned down.");
+          }}
         >
           Down
         </button>
       </div>
       <p className={styles.interactionHint} id={hintId}>
         Drag to orbit. Shift-drag to pan. Scroll to zoom.
+      </p>
+      <p className={styles.visuallyHidden} aria-live="polite">
+        {viewAnnouncement}
       </p>
     </div>
   );
@@ -556,9 +584,13 @@ function PatternPreview({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showCuts, setShowCuts] = useState(true);
   const [showFolds, setShowFolds] = useState(true);
+  const [viewAnnouncement, setViewAnnouncement] = useState(
+    "Pattern view ready.",
+  );
   const resetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setViewAnnouncement("Pattern fitted to the view.");
   };
 
   return (
@@ -638,50 +670,60 @@ function PatternPreview({
         <button
           type="button"
           aria-label="Pan pattern left"
-          onClick={() =>
-            setPan((current) => ({ ...current, x: current.x - 0.08 }))
-          }
+          onClick={() => {
+            setPan((current) => ({ ...current, x: current.x - 0.08 }));
+            setViewAnnouncement("Pattern panned left.");
+          }}
         >
           Left
         </button>
         <button
           type="button"
           aria-label="Pan pattern right"
-          onClick={() =>
-            setPan((current) => ({ ...current, x: current.x + 0.08 }))
-          }
+          onClick={() => {
+            setPan((current) => ({ ...current, x: current.x + 0.08 }));
+            setViewAnnouncement("Pattern panned right.");
+          }}
         >
           Right
         </button>
         <button
           type="button"
           aria-label="Pan pattern up"
-          onClick={() =>
-            setPan((current) => ({ ...current, y: current.y - 0.08 }))
-          }
+          onClick={() => {
+            setPan((current) => ({ ...current, y: current.y - 0.08 }));
+            setViewAnnouncement("Pattern panned up.");
+          }}
         >
           Up
         </button>
         <button
           type="button"
           aria-label="Pan pattern down"
-          onClick={() =>
-            setPan((current) => ({ ...current, y: current.y + 0.08 }))
-          }
+          onClick={() => {
+            setPan((current) => ({ ...current, y: current.y + 0.08 }));
+            setViewAnnouncement("Pattern panned down.");
+          }}
         >
           Down
         </button>
         <button
           type="button"
           aria-label="Zoom pattern out"
-          onClick={() => setZoom((current) => clamp(current / 1.2, 0.65, 4))}
+          onClick={() => {
+            setZoom((current) => clamp(current / 1.2, 0.65, 4));
+            setViewAnnouncement("Pattern zoomed out.");
+          }}
         >
           Zoom −
         </button>
         <button
           type="button"
           aria-label="Zoom pattern in"
-          onClick={() => setZoom((current) => clamp(current * 1.2, 0.65, 4))}
+          onClick={() => {
+            setZoom((current) => clamp(current * 1.2, 0.65, 4));
+            setViewAnnouncement("Pattern zoomed in.");
+          }}
         >
           Zoom +
         </button>
@@ -692,7 +734,12 @@ function PatternPreview({
           <input
             type="checkbox"
             checked={showCuts}
-            onChange={(event) => setShowCuts(event.currentTarget.checked)}
+            onChange={(event) => {
+              setShowCuts(event.currentTarget.checked);
+              setViewAnnouncement(
+                `Cut lines ${event.currentTarget.checked ? "shown" : "hidden"}.`,
+              );
+            }}
           />
           Cut lines
         </label>
@@ -700,11 +747,19 @@ function PatternPreview({
           <input
             type="checkbox"
             checked={showFolds}
-            onChange={(event) => setShowFolds(event.currentTarget.checked)}
+            onChange={(event) => {
+              setShowFolds(event.currentTarget.checked);
+              setViewAnnouncement(
+                `Fold lines ${event.currentTarget.checked ? "shown" : "hidden"}.`,
+              );
+            }}
           />
           Fold lines
         </label>
       </div>
+      <p className={styles.visuallyHidden} aria-live="polite">
+        {viewAnnouncement}
+      </p>
     </div>
   );
 }
