@@ -396,6 +396,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await expect(trace.getByText("USER", { exact: true })).toBeVisible();
   await expect(trace.getByText("AI", { exact: true })).toBeVisible();
   await expect(trace.getByText("CODE", { exact: true })).toBeVisible();
+  await expect(trace).toContainText(/ran \d+ checks/u);
   await expect(trace.getByText("Selected candidate hash")).toBeVisible();
   await expect(trace.getByText("e2e-mock", { exact: true })).toBeVisible();
 
