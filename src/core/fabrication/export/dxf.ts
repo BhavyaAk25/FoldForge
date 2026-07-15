@@ -1,4 +1,8 @@
-import type { FabricationPathV1 } from "../types";
+import type {
+  CandidateProvenanceV2,
+  FabricationIRV1,
+  FabricationPathV1,
+} from "../types";
 import {
   CALIBRATION_LENGTH_MM,
   createSheetLayout,
@@ -6,6 +10,7 @@ import {
   fabricationExportOk,
   formatExportNumber,
   prepareExportSource,
+  sourceIrHash,
   type FabricationExportArtifact,
   type FabricationExportResult,
   type VerifiedFabricationExportSource,
@@ -213,5 +218,33 @@ export const exportFabricationDxf = (
   const text = `${lines.join("\n")}\n`;
   return fabricationExportOk(
     createTextArtifact("dxf", "dxf", "application/dxf", text, prepared),
+  );
+};
+
+/** Byte-for-byte regeneration binds DXF units, layers, paths, calibration, and
+ * source metadata to the exact selected IR. */
+export const dxfArtifactMatchesSource = (
+  bytes: Uint8Array,
+  ir: FabricationIRV1,
+  sourceCandidateId: string,
+  provenance?: CandidateProvenanceV2,
+): boolean => {
+  const expected = exportFabricationDxf({
+    ir,
+    sourceCandidateId,
+    selectionStatus: "selected",
+    verification: {
+      candidateId: sourceCandidateId,
+      irHash: sourceIrHash(ir),
+      irId: ir.irId,
+      programId: ir.programId,
+      valid: true,
+    },
+    ...(provenance ? { provenance } : {}),
+  });
+  return (
+    expected.ok &&
+    expected.value.bytes.byteLength === bytes.byteLength &&
+    expected.value.bytes.every((byte, index) => byte === bytes[index])
   );
 };

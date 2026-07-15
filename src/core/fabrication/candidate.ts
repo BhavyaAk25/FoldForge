@@ -9,11 +9,13 @@ import {
 } from "./compiler";
 import {
   CALIBRATION_LENGTH_MM,
+  dxfArtifactMatchesSource,
   exportFabricationDxf,
   exportFabricationFold,
   exportFabricationGlb,
   exportFabricationJson,
   exportFabricationSvg,
+  foldArtifactMatchesSource,
   glbArtifactMatchesSource,
   type FabricationExportArtifact,
   type FabricationExportError,
@@ -431,6 +433,20 @@ const artifactIsSourceEquivalent = (
   artifact.metadata.verified &&
   artifact.metadata.byteLength === artifact.bytes.byteLength &&
   artifact.metadata.sha256 === sha256HexBytes(artifact.bytes) &&
+  (artifact.format !== "dxf" ||
+    dxfArtifactMatchesSource(
+      artifact.bytes,
+      candidate.ir,
+      candidate.candidateId,
+      candidate.provenance,
+    )) &&
+  (artifact.format !== "fold" ||
+    foldArtifactMatchesSource(
+      artifact.bytes,
+      candidate.ir,
+      candidate.candidateId,
+      candidate.provenance,
+    )) &&
   (artifact.format !== "glb" ||
     glbArtifactMatchesSource(
       artifact.bytes,

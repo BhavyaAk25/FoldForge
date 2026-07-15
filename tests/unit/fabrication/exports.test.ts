@@ -3,15 +3,21 @@ import { z } from "zod";
 
 import { canonicalSerialize } from "@/core/canonical";
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
-import { createModularCableOrganizerShowcase } from "@/core/fabrication/examples";
+import {
+  createModularCableOrganizerShowcase,
+  createPullTabPopUpFlowerShowcase,
+} from "@/core/fabrication/examples";
 import {
   CALIBRATION_LENGTH_MM,
+  dxfArtifactMatchesSource,
   exportFabricationDxf,
   exportFabricationFold,
   exportFabricationGlb,
   exportFabricationJson,
   exportFabricationSvg,
+  foldArtifactMatchesSource,
   glbArtifactMatchesSource,
+  inspectFabricationFoldCompatibility,
   sourceIrHash,
   type FabricationExportArtifact,
   type FabricationExportResult,
@@ -534,15 +540,27 @@ const GltfSchema = z
       .array(
         z.object({
           name: z.string(),
+          samplers: z.array(
+            z.object({
+              input: z.number().int().nonnegative(),
+              output: z.number().int().nonnegative(),
+              interpolation: z.literal("LINEAR"),
+            }),
+          ),
           channels: z.array(
             z.object({
+              sampler: z.number().int().nonnegative(),
               target: z.object({
                 node: z.number().int().nonnegative(),
                 path: z.enum(["translation", "rotation"]),
               }),
             }),
           ),
-          extras: z.object({ targetBodyId: z.string() }),
+          extras: z.object({
+            sourceDriverId: z.string(),
+            sourceTrackIds: z.string(),
+            behavior: z.string(),
+          }),
         }),
       )
       .optional(),
@@ -574,6 +592,27 @@ const parseGlb = (
     json: GltfSchema.parse(parsedJson),
     binary: copy.slice(binaryHeader + 8, binaryHeader + 8 + binaryLength),
   };
+};
+
+const floatAccessorValues = (
+  parsed: ReturnType<typeof parseGlb>,
+  accessorIndex: number,
+): readonly number[] => {
+  const accessor = parsed.json.accessors[accessorIndex];
+  if (!accessor || accessor.componentType !== 5126) {
+    throw new Error("Expected a float GLB accessor.");
+  }
+  const componentCount = { SCALAR: 1, VEC3: 3, VEC4: 4 }[accessor.type];
+  const bufferView = parsed.json.bufferViews[accessor.bufferView];
+  if (!bufferView) throw new Error("GLB accessor buffer view is missing.");
+  const view = new DataView(
+    parsed.binary.buffer,
+    parsed.binary.byteOffset + bufferView.byteOffset,
+    bufferView.byteLength,
+  );
+  return Array.from({ length: accessor.count * componentCount }, (_, index) =>
+    view.getFloat32(index * 4, true),
+  );
 };
 
 const record = (value: unknown): Record<string, unknown> => {
@@ -713,6 +752,16 @@ describe("fabrication exporters", () => {
     const endX = Number(calibration.find((entry) => entry.code === 11)?.value);
     expect(endX - startX).toBe(CALIBRATION_LENGTH_MM);
     expect(first.metadata.sha256).toBe(sha256HexBytes(first.bytes));
+    expect(
+      dxfArtifactMatchesSource(first.bytes, mainIr, candidateId, provenance),
+    ).toBe(true);
+    const corrupted = Uint8Array.from(first.bytes);
+    const cutLayerOffset = text.indexOf("CUT");
+    expect(cutLayerOffset).toBeGreaterThanOrEqual(0);
+    corrupted[cutLayerOffset] = "X".charCodeAt(0);
+    expect(
+      dxfArtifactMatchesSource(corrupted, mainIr, candidateId, provenance),
+    ).toBe(false);
   });
 
   it("emits canonical fabrication JSON and rejects a mismatched verification hash", () => {
@@ -841,16 +890,23 @@ describe("fabrication exporters", () => {
     const gltf = parseGlb(artifact.bytes).json;
 
     expect(gltf.asset.extras.motionSampleCount).toBe(11);
-    expect(gltf.animations).toHaveLength(compiled.value.bodies.length);
+    expect(gltf.animations).toHaveLength(1);
+    expect(gltf.animations?.[0]?.name).toBe("FoldForge Open Close");
+    expect(gltf.animations?.[0]?.extras.sourceDriverId).toBe(
+      compiled.value.driver?.driverId,
+    );
+    expect(gltf.animations?.[0]?.channels).toHaveLength(
+      compiled.value.bodies.length * 2,
+    );
     expect(
       new Set(
-        gltf.animations?.map((animation) => animation.extras.targetBodyId),
-      ),
-    ).toEqual(new Set(compiled.value.bodies.map((body) => body.bodyId)));
+        gltf.animations?.[0]?.channels.map((channel) => channel.target.node),
+      ).size,
+    ).toBe(compiled.value.bodies.length);
     expect(
-      gltf.animations?.every((animation) =>
-        ["translation", "rotation"].every((path) =>
-          animation.channels.some((channel) => channel.target.path === path),
+      ["translation", "rotation"].every((path) =>
+        gltf.animations?.[0]?.channels.some(
+          (channel) => channel.target.path === path,
         ),
       ),
     ).toBe(true);
@@ -866,6 +922,55 @@ describe("fabrication exporters", () => {
     expect(
       glbArtifactMatchesSource(corrupted, compiled.value, dynamicCandidateId),
     ).toBe(false);
+  });
+
+  it("round-trips one externally playable clip with exact flower travel", () => {
+    const showcase = createPullTabPopUpFlowerShowcase();
+    const compiled = compileFabricationProgram(
+      showcase.intent,
+      showcase.program,
+    );
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.error));
+    const sourceCandidateId = "candidate-flower-glb-round-trip";
+    const artifact = artifactFrom(
+      exportFabricationGlb(
+        verifiedSourceFor(compiled.value, sourceCandidateId),
+      ),
+    );
+    const parsed = parseGlb(artifact.bytes);
+    const animation = parsed.json.animations?.[0];
+    const crownNode = parsed.json.nodes.findIndex(
+      (node) => node.name === "body:body-flower-crown",
+    );
+    const translationChannel = animation?.channels.find(
+      (channel) =>
+        channel.target.node === crownNode &&
+        channel.target.path === "translation",
+    );
+    const sampler = animation?.samplers[translationChannel?.sampler ?? -1];
+    if (!animation || !sampler) {
+      throw new Error("Flower GLB translation animation is missing.");
+    }
+    const times = floatAccessorValues(parsed, sampler.input);
+    const translations = floatAccessorValues(parsed, sampler.output);
+
+    expect(animation.name).toBe("FoldForge Open Close");
+    expect(times).toHaveLength(11);
+    expect(times[0]).toBeCloseTo(0, 7);
+    expect(times[5]).toBeCloseTo(2, 7);
+    expect(times[10]).toBeCloseTo(4, 7);
+    expect(translations).toHaveLength(33);
+    expect(translations[2]).toBeCloseTo(0.0015, 7);
+    expect(translations[17]).toBeCloseTo(0.0165, 7);
+    expect(translations[32]).toBeCloseTo(0.0315, 7);
+    expect(translations[32]! - translations[2]!).toBeCloseTo(0.03, 7);
+    expect(
+      glbArtifactMatchesSource(
+        artifact.bytes,
+        compiled.value,
+        sourceCandidateId,
+      ),
+    ).toBe(true);
   });
 
   it("rejects malformed GLB containers and JSON roots", () => {
@@ -1067,10 +1172,7 @@ describe("fabrication exporters", () => {
       },
       (document) => {
         const animations = document.animations as unknown[];
-        const first = record(record(animations[0]).extras).targetBodyId;
-        for (const animationValue of animations) {
-          record(record(animationValue).extras).targetBodyId = first;
-        }
+        record(record(animations[0]).extras).sourceDriverId = "wrong-driver";
       },
       (document) => {
         const animations = document.animations as unknown[];
@@ -1178,6 +1280,13 @@ describe("fabrication exporters", () => {
 
   it("generates FOLD only for a lossless all-fold single-sheet profile", () => {
     const source = verifiedSourceFor(foldIr, "candidate-fold");
+    expect(
+      inspectFabricationFoldCompatibility({
+        ir: source.ir,
+        sourceCandidateId: source.sourceCandidateId,
+        sourceIrHash: source.verification.irHash,
+      }),
+    ).toMatchObject({ status: "available" });
     const first = exportFabricationFold(source);
     const second = exportFabricationFold(source);
     expect(first.status).toBe("generated");
@@ -1213,6 +1322,14 @@ describe("fabrication exporters", () => {
     );
     expect(first.artifact.metadata.sha256).toBe(
       sha256HexBytes(first.artifact.bytes),
+    );
+    expect(
+      foldArtifactMatchesSource(first.artifact.bytes, foldIr, "candidate-fold"),
+    ).toBe(true);
+    const corrupted = Uint8Array.from(first.artifact.bytes);
+    corrupted[corrupted.byteLength - 2] = " ".charCodeAt(0);
+    expect(foldArtifactMatchesSource(corrupted, foldIr, "candidate-fold")).toBe(
+      false,
     );
 
     const omitted = exportFabricationFold(mainSource);

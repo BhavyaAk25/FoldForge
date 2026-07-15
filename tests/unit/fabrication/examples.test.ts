@@ -10,6 +10,10 @@ import {
   type OfflineFabricationShowcase,
 } from "@/core/fabrication/examples";
 import {
+  exportFabricationFold,
+  inspectFabricationFoldCompatibility,
+} from "@/core/fabrication/export";
+import {
   FabricationIntentV1Schema,
   FabricationProgramV1Schema,
 } from "@/core/fabrication/schemas";
@@ -110,6 +114,11 @@ describe("offline fabrication showcases", () => {
       connectors: [{ kind: "tab" }, { kind: "slot" }],
       driver: { control: "pull_tab" },
     });
+    expect(
+      showcases[2]?.program.blueprint.panels.find(
+        (panel) => panel.panelId === "panel-flower-crown",
+      )?.contour.vertices,
+    ).toHaveLength(32);
   });
 
   it("keeps measurable showcase requirements hard and recognition claims soft", () => {
@@ -138,5 +147,51 @@ describe("offline fabrication showcases", () => {
       expect(orders).toEqual([...orders].sort((left, right) => left - right));
       expect(showcase.limitation).toMatch(/not simulate|not model/i);
     }
+  });
+
+  it("offers FOLD for the fold-only duck and explains the moving flower omission", () => {
+    const [duck, , flower] = createOfflineFabricationShowcases();
+    if (!duck || !flower) throw new Error("Showcase fixtures are incomplete.");
+    const duckIr = compileShowcase(duck);
+    const flowerIr = compileShowcase(flower);
+    const duckCandidateId = "candidate-faceted-duck-gift-box";
+    const flowerCandidateId = "candidate-pull-tab-pop-up-flower";
+    const duckReport = verifyFabricationIr(duckIr, duckCandidateId);
+    const flowerReport = verifyFabricationIr(flowerIr, flowerCandidateId);
+
+    expect(
+      inspectFabricationFoldCompatibility({
+        ir: duckIr,
+        sourceCandidateId: duckCandidateId,
+        sourceIrHash: duckReport.irHash,
+      }),
+    ).toMatchObject({ status: "available" });
+    const duckFold = exportFabricationFold({
+        ir: duckIr,
+        sourceCandidateId: duckCandidateId,
+        selectionStatus: "selected",
+        verification: duckReport,
+      });
+    expect(duckFold).toMatchObject({ status: "generated" });
+    if (duckFold.status !== "generated") {
+      throw new Error("The fold-only duck should produce a FOLD artifact.");
+    }
+    const duckFoldDocument: unknown = JSON.parse(
+      new TextDecoder().decode(duckFold.artifact.bytes),
+    );
+    expect(duckFoldDocument).not.toHaveProperty("edges_foldAngle");
+
+    const flowerCompatibility = inspectFabricationFoldCompatibility({
+      ir: flowerIr,
+      sourceCandidateId: flowerCandidateId,
+      sourceIrHash: flowerReport.irHash,
+    });
+    expect(flowerCompatibility).toMatchObject({
+      status: "omitted",
+      reason: {
+        code: "non_fold_joint",
+        geometryIds: ["joint-flower-lift"],
+      },
+    });
   });
 });
