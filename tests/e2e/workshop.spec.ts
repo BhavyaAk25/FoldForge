@@ -354,7 +354,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     page.getByRole("heading", { name: "Compare your designs." }),
   ).toBeFocused();
   await expect(page.getByTestId("candidate-card")).toHaveCount(3);
-  await expect(page.locator('[data-inner-cut-count="1"]')).toHaveCount(1);
+  await expect(page.getByTestId("fabrication-3d-preview")).toBeVisible();
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
     ["two-panel-fold-a"],
@@ -392,14 +392,44 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   });
   await expect(verifier).not.toHaveAttribute("open", "");
 
-  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
-  await expect(
-    page.getByRole("img", { name: /Repaired narrow wing pattern preview/iu }),
-  ).toBeVisible();
+  const assembledPreview = page.getByTestId("fabrication-3d-preview");
+  await expect(assembledPreview).toBeVisible();
+  const initialGeometrySignature = await assembledPreview.getAttribute(
+    "data-state-signature",
+  );
   await page.getByLabel("Open and close the design").fill("0.4");
-  await page.getByLabel("Rotate the preview").fill("35");
   await expect(page.getByText("40%", { exact: true })).toBeVisible();
-  await expect(page.getByText("35°", { exact: true })).toBeVisible();
+  await expect
+    .poll(() => assembledPreview.getAttribute("data-state-signature"))
+    .not.toBe(initialGeometrySignature);
+  const initialRotation =
+    await assembledPreview.getAttribute("data-rotation-deg");
+  await page.getByRole("button", { name: "Rotate view right" }).click();
+  await expect
+    .poll(() => assembledPreview.getAttribute("data-rotation-deg"))
+    .not.toBe(initialRotation);
+  const initialPan = await assembledPreview.getAttribute("data-pan-x");
+  await page.getByRole("button", { name: "Pan 3D view right" }).click();
+  await expect
+    .poll(() => assembledPreview.getAttribute("data-pan-x"))
+    .not.toBe(initialPan);
+
+  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
+  const patternPreview = page.getByRole("img", {
+    name: /Repaired narrow wing pattern preview/iu,
+  });
+  await expect(patternPreview).toBeVisible();
+  await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
+  await expect(page.getByLabel("3D view controls")).toHaveCount(0);
+  const fittedViewBox = await patternPreview.getAttribute("viewBox");
+  await page.getByRole("button", { name: "Zoom pattern in" }).click();
+  await expect
+    .poll(() => patternPreview.getAttribute("viewBox"))
+    .not.toBe(fittedViewBox);
+  await page.getByLabel("Cut lines").uncheck();
+  await expect(page.getByTestId("pattern-cut-lines")).toHaveCount(0);
+  await page.getByRole("button", { name: "Fit pattern" }).click();
+  await expect(patternPreview).toHaveAttribute("viewBox", fittedViewBox ?? "");
   await expect(page.getByText("Pieces", { exact: true })).toBeVisible();
 
   await page
@@ -414,7 +444,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     page.getByText("Use the specified 0.30 mm card stock.", { exact: true }),
   ).toBeVisible();
 
-  for (const format of ["svg", "dxf", "glb", "json", "fold"] as const) {
+  for (const format of ["svg", "dxf", "glb", "json"] as const) {
     const downloadPromise = page.waitForEvent("download");
     await page
       .getByRole("button", { name: `Download ${format.toUpperCase()}` })
@@ -432,12 +462,19 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     }
   }
 
+  const unavailableFold = page.getByRole("button", {
+    name: "FOLD unavailable",
+  });
+  await expect(unavailableFold).toBeDisabled();
+  await expect(unavailableFold).toContainText(
+    "Motion couplings cannot be represented losslessly",
+  );
+
   expect(state.exportRequests.map((request) => request.format)).toEqual([
     "svg",
     "dxf",
     "glb",
     "json",
-    "fold",
   ]);
   for (const request of state.exportRequests) {
     expect(request.candidate.candidateId).toBe("candidate-2-two-panel-fold-b");
@@ -531,17 +568,38 @@ test("keeps prompt examples honest and provides a saved result when live generat
       exact: false,
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
-  await expect(
-    page.getByRole("img", { name: /Pop-up flower card pattern preview/iu }),
-  ).toBeVisible();
+  const savedAssembledPreview = page.getByTestId("fabrication-3d-preview");
+  const savedInitialSignature = await savedAssembledPreview.getAttribute(
+    "data-state-signature",
+  );
   await page.getByLabel("Open and close the design").fill("0.4");
-  await page.getByLabel("Rotate the preview").fill("35");
   await expect(page.getByText("40%", { exact: true })).toBeVisible();
-  await expect(page.getByText("35°", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Open and close the design")).toHaveAttribute(
-    "aria-valuetext",
-    "40 percent",
+  await expect
+    .poll(() => savedAssembledPreview.getAttribute("data-state-signature"))
+    .not.toBe(savedInitialSignature);
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await expect(savedAssembledPreview).toHaveAttribute(
+    "data-rotation-deg",
+    "-18",
+  );
+  await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
+  const savedPatternPreview = page.getByRole("img", {
+    name: /Pop-up flower card pattern preview/iu,
+  });
+  await expect(savedPatternPreview).toBeVisible();
+  await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
+  await expect(page.getByLabel("Pattern view controls")).toBeVisible();
+  const savedFittedViewBox = await savedPatternPreview.getAttribute("viewBox");
+  await page.getByRole("button", { name: "Pan pattern right" }).click();
+  await expect
+    .poll(() => savedPatternPreview.getAttribute("viewBox"))
+    .not.toBe(savedFittedViewBox);
+  const savedUnavailableFold = page.getByRole("button", {
+    name: "FOLD unavailable",
+  });
+  await expect(savedUnavailableFold).toBeDisabled();
+  await expect(savedUnavailableFold).toContainText(
+    "Revolute and prismatic joints cannot be represented losslessly",
   );
 
   const savedDownloadPromise = page.waitForEvent("download");

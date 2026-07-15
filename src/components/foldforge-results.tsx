@@ -4,6 +4,7 @@ import {
   FabricationPreview,
   type FabricationPreviewMode,
 } from "@/components/fabrication-preview";
+import { inspectFabricationFoldCompatibility } from "@/core/fabrication/export";
 import type { CandidateV2, ExportFormat } from "@/core/fabrication/types";
 import type { FinalizeApiResponse, RepairEvidence } from "@/lib/api-contracts";
 
@@ -21,22 +22,22 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
   {
     format: "svg",
     label: "SVG pattern",
-    description: "Print it or send it to a cutting machine.",
+    description: "Open in any browser. Print at 100% or send to a cutter.",
   },
   {
     format: "dxf",
     label: "DXF drawing",
-    description: "Open it in CAD or laser-cutting software.",
+    description: "Open in CAD, choose Zoom Extents, and keep units in mm.",
   },
   {
     format: "glb",
     label: "GLB model",
-    description: "View the assembled design in a 3D app.",
+    description: "Open in a 3D viewer and play “FoldForge Open Close”.",
   },
   {
     format: "fold",
     label: "FOLD file",
-    description: "Open it in compatible folding software.",
+    description: "Open the crease pattern in FOLD-compatible origami software.",
   },
   {
     format: "json",
@@ -90,6 +91,12 @@ export function FoldForgeResults({
   rotationDeg,
   selected,
 }: FoldForgeResultsProps) {
+  const foldCompatibility = inspectFabricationFoldCompatibility({
+    ir: selected.ir,
+    sourceCandidateId: selected.candidateId,
+    sourceIrHash: selected.verification.irHash,
+  });
+
   return (
     <section className={styles.results} aria-labelledby="results-title">
       <div className={styles.sectionHeading}>
@@ -163,43 +170,47 @@ export function FoldForgeResults({
             ir={selected.ir}
             mode={previewMode}
             motionPosition={motionPosition}
+            onRotationChange={onRotationChange}
             rotationDeg={rotationDeg}
             label={`${selected.label} ${previewMode} preview`}
           />
-          <div className={styles.controls}>
-            <label>
-              Open and close
-              <input
-                aria-label="Open and close the design"
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                disabled={!selected.ir.driver}
-                value={motionPosition}
-                aria-valuetext={`${Math.round(motionPosition * 100)} percent`}
-                onChange={(event) =>
-                  onMotionPositionChange(Number(event.currentTarget.value))
-                }
-              />
-              <output>{Math.round(motionPosition * 100)}%</output>
-            </label>
-            <label>
-              Rotate view
-              <input
-                aria-label="Rotate the preview"
-                type="range"
-                min="-180"
-                max="180"
-                step="1"
-                value={rotationDeg}
-                onChange={(event) =>
-                  onRotationChange(Number(event.currentTarget.value))
-                }
-              />
-              <output>{rotationDeg}°</output>
-            </label>
-          </div>
+          {previewMode === "assembled" ? (
+            <div className={styles.controls} data-testid="motion-controls">
+              <label>
+                Open and close
+                <input
+                  aria-label="Open and close the design"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  disabled={!selected.ir.driver}
+                  value={motionPosition}
+                  aria-valuetext={`${Math.round(motionPosition * 100)} percent`}
+                  onChange={(event) =>
+                    onMotionPositionChange(Number(event.currentTarget.value))
+                  }
+                />
+                <output>{Math.round(motionPosition * 100)}%</output>
+              </label>
+              <div className={styles.motionEndpoints}>
+                <button
+                  type="button"
+                  disabled={!selected.ir.driver}
+                  onClick={() => onMotionPositionChange(0)}
+                >
+                  Closed
+                </button>
+                <button
+                  type="button"
+                  disabled={!selected.ir.driver}
+                  onClick={() => onMotionPositionChange(1)}
+                >
+                  Open
+                </button>
+              </div>
+            </div>
+          ) : null}
           <dl className={styles.metrics}>
             <div>
               <dt>Design score</dt>
@@ -272,25 +283,41 @@ export function FoldForgeResults({
           <p className={styles.eyebrow}>Exact files for this design</p>
           <h3>Download your design.</h3>
           <p className={styles.panelIntro}>
-            Pick the format that matches what you want to do next.
+            The pattern preview above is what SVG and DXF contain. Pick the file
+            for your next tool.
           </p>
           <div className={styles.exportButtons}>
-            {EXPORT_OPTIONS.map((option) => (
-              <button
-                key={option.format}
-                type="button"
-                disabled={exportingFormat !== null}
-                aria-label={`Download ${option.format.toUpperCase()}`}
-                onClick={() => onExport(option.format)}
-              >
-                <strong>
-                  {exportingFormat === option.format
-                    ? "Preparing…"
-                    : option.label}
-                </strong>
-                <span>{option.description}</span>
-              </button>
-            ))}
+            {EXPORT_OPTIONS.map((option) => {
+              const foldUnavailable =
+                option.format === "fold" &&
+                foldCompatibility.status === "omitted";
+              const description = foldUnavailable
+                ? foldCompatibility.reason.message
+                : option.description;
+              return (
+                <button
+                  key={option.format}
+                  type="button"
+                  disabled={exportingFormat !== null || foldUnavailable}
+                  aria-label={
+                    foldUnavailable
+                      ? "FOLD unavailable"
+                      : `Download ${option.format.toUpperCase()}`
+                  }
+                  data-export-status={foldUnavailable ? "unavailable" : "ready"}
+                  onClick={() => onExport(option.format)}
+                >
+                  <strong>
+                    {exportingFormat === option.format
+                      ? "Preparing…"
+                      : foldUnavailable
+                        ? "FOLD unavailable"
+                        : option.label}
+                  </strong>
+                  <span>{description}</span>
+                </button>
+              );
+            })}
           </div>
           {liveGenerationAvailable ? (
             <button

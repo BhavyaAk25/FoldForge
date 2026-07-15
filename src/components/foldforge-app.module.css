@@ -624,6 +624,26 @@
   text-align: right;
 }
 
+.motionEndpoints {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.motionEndpoints button {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--graphite);
+  font-size: 0.7rem;
+  font-weight: 680;
+}
+
+.motionEndpoints button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -823,6 +843,7 @@
   .exampleCard button:hover,
   .secondaryAction:hover,
   .segmented button:hover,
+  .motionEndpoints button:hover:not(:disabled),
   .candidateRail > button:hover,
   .exportButtons button:hover,
   .narrativeButton:hover,
