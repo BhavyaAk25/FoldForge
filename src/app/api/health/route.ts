@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { accessRequired } from "@/server/access";
-import { isLiveAiEnabled } from "@/server/ai/client";
+import { publicLiveState } from "@/server/api/public-live-state";
+import { readBuildSha } from "@/server/build-info";
 
-export const GET = (): NextResponse =>
-  NextResponse.json({
-    status: "ok",
-    service: "foldforge",
-    model: "gpt-5.6-sol",
-    liveAiEnabled: isLiveAiEnabled(),
-    accessRequired: accessRequired(),
-    physicalStatus: "awaiting_user",
-  });
+export const GET = (): NextResponse => {
+  const live = publicLiveState();
+  return NextResponse.json(
+    {
+      status: "ok",
+      service: "foldforge",
+      liveAiEnabled: live.enabled,
+      liveAiBlockReason: live.blockReason,
+      buildSha: readBuildSha(),
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+};

@@ -1,56 +1,150 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { hasLiveModelAccess } from "@/server/access";
-import { isLiveAiEnabled } from "@/server/ai/client";
-import { OpenAIRepairDiagnosisModel } from "@/server/ai/repair";
-import { safetyIdentifier } from "@/server/ai/safety";
-import { apiError, parseJsonBody } from "@/server/api/response";
-import { RepairRequestSchema, toCandidate } from "@/server/api/schemas";
-import { enforceRateLimit } from "@/server/rate-limit";
+import { compileFabricationProgram } from "@/core/fabrication/compiler";
+import { applyProgramPatch } from "@/core/fabrication/repair";
+import { ProgramPatchV1Schema } from "@/core/fabrication/schemas";
+import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
+import type {
+  CandidateScoreV2,
+  FabricationIntentV1,
+  FabricationIRV1,
+  FabricationProgramV1,
+  ProgramPatchV1,
+  VerificationReportV2,
+} from "@/core/fabrication/types";
+import { verifyFabricationIr } from "@/core/fabrication/verification";
+import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
+import { apiError } from "@/server/api/response";
 import {
-  RuleBasedRepairDiagnosisModel,
-  runRepairLoop,
-} from "@/server/orchestration/repair-loop";
+  API_BODY_LIMIT_BYTES,
+  LIVE_OPERATION_POLICIES,
+} from "@/server/api/security-policy";
+import { RepairFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
+import { OpenAIFabricationRepairModel } from "@/server/fabrication-ai/models";
+
+export const dynamic = "force-dynamic";
+
+type RepairStatus = "infeasible" | "passed" | "still_invalid";
+
+interface Evaluation {
+  readonly ir: FabricationIRV1;
+  readonly report: VerificationReportV2;
+  readonly score: CandidateScoreV2;
+}
+
+const evaluate = (
+  intent: FabricationIntentV1,
+  program: FabricationProgramV1,
+  candidateId: string,
+): Evaluation | null => {
+  const compiled = compileFabricationProgram(intent, program);
+  if (!compiled.ok) return null;
+  const report = verifyFabricationIr(compiled.value, candidateId);
+  return {
+    ir: compiled.value,
+    report,
+    score: scoreFabricationCandidate(compiled.value, report, intent),
+  };
+};
+
+const outcome = (
+  status: RepairStatus,
+  candidateId: string,
+  patch: ProgramPatchV1 | null,
+  program: FabricationProgramV1,
+  evaluation: Evaluation | null,
+): NextResponse =>
+  NextResponse.json({
+    status,
+    candidateId,
+    patch,
+    program,
+    ir: evaluation?.ir ?? null,
+    report: evaluation?.report ?? null,
+    score: evaluation?.score ?? null,
+  });
+
+const invalidRequest = (): NextResponse =>
+  apiError(
+    "INVALID_REQUEST",
+    "The fabrication repair request is malformed.",
+    400,
+  );
+
+const invalidModelResponse = (): NextResponse =>
+  apiError(
+    "MODEL_RESPONSE_ERROR",
+    "The model did not return a valid bounded repair.",
+    502,
+  );
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const body = await parseJsonBody(request);
-  if (!body.ok) return body.response;
-  const parsed = RepairRequestSchema.safeParse(body.value);
-  if (!parsed.success)
-    return apiError("INVALID_REQUEST", "Repair input is malformed.", 400);
+  const response = await runAuthorizedLiveRoute(
+    {
+      request,
+      operation: "repair",
+      reservedInputTokens: API_BODY_LIMIT_BYTES.repair / 4,
+      reservedOutputTokens: LIVE_OPERATION_POLICIES.repair.maximumOutputTokens,
+    },
+    async ({ body, safetyIdentifier }) => {
+      const parsedRequest = RepairFabricationRequestSchema.safeParse(body);
+      if (!parsedRequest.success) return invalidRequest();
+      const { candidateId, intent, program, repairCycle } = parsedRequest.data;
+      const before = evaluate(intent, program, candidateId);
+      if (!before) {
+        return outcome("infeasible", candidateId, null, program, null);
+      }
+      if (before.report.valid) {
+        return outcome("passed", candidateId, null, program, before);
+      }
 
-  const live = isLiveAiEnabled();
-  const limited = live
-    ? enforceRateLimit(request, "repair", 6, 60 * 60 * 1_000)
-    : null;
-  if (limited) return limited;
-  if (live && !hasLiveModelAccess(request)) {
-    return apiError(
-      "ACCESS_REQUIRED",
-      "Enter the judge access code to use GPT-5.6.",
-      401,
-    );
-  }
-
-  try {
-    const outcome = await runRepairLoop(
-      toCandidate(parsed.data.candidate),
-      parsed.data.constraint,
-      live
-        ? new OpenAIRepairDiagnosisModel()
-        : new RuleBasedRepairDiagnosisModel(),
-      safetyIdentifier(parsed.data.installationId),
-    );
-    return NextResponse.json({
-      mode: live ? "gpt-5.6-sol" : "deterministic-offline-repair",
-      outcome,
-    });
-  } catch {
-    return apiError(
-      "REPAIR_ERROR",
-      "The bounded repair loop could not complete safely.",
-      502,
-    );
-  }
+      try {
+        const proposedPatch =
+          await new OpenAIFabricationRepairModel().diagnoseRepair(
+            program,
+            before.report,
+            repairCycle,
+            safetyIdentifier,
+          );
+        if (!proposedPatch) {
+          return outcome("infeasible", candidateId, null, program, before);
+        }
+        const parsedPatch = ProgramPatchV1Schema.safeParse(proposedPatch);
+        if (!parsedPatch.success) return invalidModelResponse();
+        if (parsedPatch.data.repairCycle !== repairCycle) {
+          return outcome("infeasible", candidateId, null, program, before);
+        }
+        const applied = applyProgramPatch(
+          program,
+          parsedPatch.data,
+          before.report,
+        );
+        if (!applied.ok) {
+          return outcome("infeasible", candidateId, null, program, before);
+        }
+        const after = evaluate(intent, applied.value, candidateId);
+        if (!after) {
+          return outcome(
+            "infeasible",
+            candidateId,
+            parsedPatch.data,
+            applied.value,
+            null,
+          );
+        }
+        return outcome(
+          after.report.valid ? "passed" : "still_invalid",
+          candidateId,
+          parsedPatch.data,
+          applied.value,
+          after,
+        );
+      } catch {
+        return invalidModelResponse();
+      }
+    },
+  );
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 };

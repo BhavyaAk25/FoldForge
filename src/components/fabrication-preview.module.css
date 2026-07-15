@@ -1,0 +1,70 @@
+.preview {
+  display: block;
+  width: 100%;
+  min-height: 18rem;
+  max-height: 34rem;
+  overflow: visible;
+  background:
+    linear-gradient(rgb(40 37 31 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(40 37 31 / 4%) 1px, transparent 1px), #f6f2e8;
+  background-size: 20px 20px;
+  border: 1px solid rgb(40 37 31 / 14%);
+  border-radius: 1.25rem;
+}
+
+.paperShadow {
+  fill: none;
+  stroke: rgb(25 23 20 / 12%);
+  stroke-width: 5;
+  transform: translate(2px, 3px);
+}
+
+.panel {
+  fill: #e8dfca;
+  stroke: #2d2a25;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+  transition:
+    fill 180ms ease,
+    opacity 180ms ease,
+    stroke 180ms ease;
+}
+
+.structural {
+  fill: #ded2b8;
+}
+
+.driver {
+  fill: #e9b567;
+}
+
+.output {
+  fill: #d99b75;
+}
+
+.decorative {
+  fill: #b9c8aa;
+}
+
+.mechanism {
+  fill: #9db8b2;
+}
+
+.highlighted {
+  fill: #ef796f;
+  stroke: #8c211f;
+  stroke-width: 2.4;
+}
+
+.scoreLines {
+  fill: none;
+  stroke: #287a78;
+  stroke-dasharray: 5 3;
+  stroke-width: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
+  }
+}

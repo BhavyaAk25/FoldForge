@@ -1,81 +1,75 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { compareCandidates, verifyCandidate } from "@/core/verification";
-import { hasLiveModelAccess } from "@/server/access";
-import { isLiveAiEnabled } from "@/server/ai/client";
-import { generateFinalNarrative } from "@/server/ai/finalize";
-import { safetyIdentifier } from "@/server/ai/safety";
-import { apiError, parseJsonBody } from "@/server/api/response";
-import { FinalizeRequestSchema, toCandidate } from "@/server/api/schemas";
-import { deterministicInstructions } from "@/server/instructions";
-import { enforceRateLimit } from "@/server/rate-limit";
+import { validateFabricationCandidateBinding } from "@/core/fabrication/candidate";
+import { apiError } from "@/server/api/response";
+import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
+import { LIVE_OPERATION_POLICIES } from "@/server/api/security-policy";
+import { FinalizeFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
+import { OpenAIFabricationNarrativeModel } from "@/server/fabrication-ai/models";
 
-export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const body = await parseJsonBody(request);
-  if (!body.ok) return body.response;
-  const parsed = FinalizeRequestSchema.safeParse(body.value);
-  if (!parsed.success)
-    return apiError("INVALID_REQUEST", "Finalization input is malformed.", 400);
+export const dynamic = "force-dynamic";
 
-  const evaluated = parsed.data.candidates.map((input) => {
-    const candidate = toCandidate(input);
-    return {
-      candidate,
-      report: verifyCandidate(candidate, parsed.data.constraint),
-    };
-  });
-  const comparison = compareCandidates(evaluated);
-  const winner = evaluated.find(
-    (entry) => entry.candidate.id === comparison.recommendedCandidateId,
-  );
-  if (!winner) {
-    return apiError(
-      "NO_VALID_CANDIDATE",
-      "No candidate passes every deterministic hard check.",
-      422,
-      evaluated.flatMap((entry) => entry.report.hardFailures),
-    );
-  }
-
-  const live = isLiveAiEnabled();
-  const limited = live
-    ? enforceRateLimit(request, "finalize", 20, 60 * 60 * 1_000)
-    : null;
-  if (limited) return limited;
-  if (live && !hasLiveModelAccess(request)) {
-    return apiError(
-      "ACCESS_REQUIRED",
-      "Enter the judge access code to use GPT-5.6.",
-      401,
-    );
-  }
-
-  try {
-    const narrative = live
-      ? await generateFinalNarrative(
-          winner.candidate,
-          parsed.data.constraint,
-          winner.report,
-          comparison,
-          safetyIdentifier(parsed.data.installationId),
-        )
-      : deterministicInstructions(
-          winner.candidate,
-          parsed.data.constraint,
-          winner.report,
-        );
-    return NextResponse.json({
-      mode: live ? "gpt-5.6-sol" : "deterministic-instructions",
-      comparison,
-      winner,
-      narrative,
-    });
-  } catch {
-    return apiError(
-      "FINALIZATION_ERROR",
-      "The final explanation could not be generated safely.",
-      502,
-    );
-  }
+const noStore = <T>(response: NextResponse<T>): NextResponse<T> => {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 };
+
+export const POST = (request: NextRequest): Promise<NextResponse> =>
+  runAuthorizedLiveRoute(
+    {
+      request,
+      operation: "finalize",
+      reservedInputTokens: 12_000,
+      reservedOutputTokens:
+        LIVE_OPERATION_POLICIES.finalize.maximumOutputTokens,
+    },
+    async (context) => {
+      const parsed = FinalizeFabricationRequestSchema.safeParse(context.body);
+      if (!parsed.success) {
+        return noStore(
+          apiError(
+            "INVALID_REQUEST",
+            "A strict selected candidate is required.",
+            400,
+          ),
+        );
+      }
+      if (parsed.data.candidate.selectionStatus !== "selected") {
+        return noStore(
+          apiError(
+            "CANDIDATE_NOT_SELECTED",
+            "Select a verified candidate before finalizing.",
+            409,
+          ),
+        );
+      }
+      const bound = validateFabricationCandidateBinding(parsed.data.candidate);
+      if (!bound.ok) {
+        return noStore(
+          apiError(
+            "CANDIDATE_NOT_VERIFIED",
+            "The selected candidate no longer matches its verification evidence.",
+            422,
+          ),
+        );
+      }
+
+      try {
+        const narrative =
+          await new OpenAIFabricationNarrativeModel().generateNarrative(
+            bound.value,
+            context.safetyIdentifier,
+          );
+        return noStore(NextResponse.json({ narrative }));
+      } catch {
+        return noStore(
+          apiError(
+            "MODEL_RESPONSE_INVALID",
+            "The explanation did not match the required contract.",
+            502,
+          ),
+        );
+      }
+    },
+  ).then(noStore);

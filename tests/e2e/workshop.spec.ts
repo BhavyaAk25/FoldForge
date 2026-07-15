@@ -1,167 +1,612 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
-test("generates, repairs, restores, finalizes, and downloads", async ({
+import {
+  compileFabricationProgram,
+  fabricationProgramHash,
+} from "@/core/fabrication/compiler";
+import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
+import type {
+  CandidateV2,
+  ExportFormat,
+  FabricationIntentV1,
+  FabricationProgramV1,
+} from "@/core/fabrication/types";
+import { verifyFabricationIr } from "@/core/fabrication/verification";
+
+import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
+
+interface StudioMockOptions {
+  readonly duplicateSecondFingerprint?: boolean;
+  readonly liveAiEnabled?: boolean;
+  readonly malformedIntent?: boolean;
+  readonly requireAccessOnce?: boolean;
+}
+
+interface ProgramRequestBody {
+  readonly candidateOrdinal: number;
+  readonly intent: FabricationIntentV1;
+  readonly usedTopologyIds: readonly string[];
+}
+
+interface CompileRequestBody {
+  readonly candidateId: string;
+  readonly intent: FabricationIntentV1;
+  readonly program: FabricationProgramV1;
+}
+
+interface RepairRequestBody extends CompileRequestBody {
+  readonly repairCycle: number;
+}
+
+interface ExportRequest {
+  readonly candidate: CandidateV2;
+  readonly format: ExportFormat;
+}
+
+interface StudioMockState {
+  readonly accessCodes: string[];
+  readonly compileRequests: CompileRequestBody[];
+  readonly endpointOrder: string[];
+  readonly exportRequests: ExportRequest[];
+  readonly intentPrompts: string[];
+  readonly programRequests: ProgramRequestBody[];
+  readonly repairRequests: RepairRequestBody[];
+  readonly unexpectedPaths: string[];
+}
+
+const respondJson = (
+  route: Route,
+  json: unknown,
+  status = 200,
+): Promise<void> => route.fulfill({ status, json });
+
+const programFor = (ordinal: number): FabricationProgramV1 => {
+  const base = fixtureProgram();
+  const labels = ["Direct fold", "Repaired narrow wing", "Wide fold"];
+  const suffixes = ["a", "b", "c"];
+  const panels = base.blueprint.panels.map((panel) => {
+    if (panel.panelId === "panel-base") {
+      return {
+        ...panel,
+        innerCutContours: [
+          {
+            vertices: [
+              { u: 0.4, v: 0.4 },
+              { u: 0.6, v: 0.4 },
+              { u: 0.6, v: 0.6 },
+              { u: 0.4, v: 0.6 },
+            ],
+          },
+        ],
+      };
+    }
+    return ordinal === 2 && panel.panelId === "panel-wing"
+      ? { ...panel, widthMm: 0.5 }
+      : panel;
+  });
+  return {
+    ...base,
+    programId: `program-winged-display-${suffixes[ordinal - 1]}`,
+    candidateLabel: labels[ordinal - 1] ?? `Candidate ${ordinal}`,
+    topologyId: `two-panel-fold-${suffixes[ordinal - 1]}`,
+    blueprint: { ...base.blueprint, panels },
+  };
+};
+
+const repairedProgram = (
+  program: FabricationProgramV1,
+): FabricationProgramV1 => ({
+  ...program,
+  blueprint: {
+    ...program.blueprint,
+    panels: program.blueprint.panels.map((panel) =>
+      panel.panelId === "panel-wing" ? { ...panel, widthMm: 30 } : panel,
+    ),
+  },
+});
+
+const evaluateProgram = (body: CompileRequestBody) => {
+  const compiled = compileFabricationProgram(body.intent, body.program);
+  if (!compiled.ok) throw new Error("The E2E program fixture did not compile.");
+  const report = verifyFabricationIr(compiled.value, body.candidateId);
+  const score = scoreFabricationCandidate(compiled.value, report, body.intent);
+  return {
+    status: report.valid ? ("passed" as const) : ("invalid" as const),
+    candidateId: body.candidateId,
+    ir: compiled.value,
+    report,
+    score,
+  };
+};
+
+const installStudioMocks = async (
+  page: Page,
+  options: StudioMockOptions = {},
+): Promise<StudioMockState> => {
+  const state: StudioMockState = {
+    accessCodes: [],
+    compileRequests: [],
+    endpointOrder: [],
+    exportRequests: [],
+    intentPrompts: [],
+    programRequests: [],
+    repairRequests: [],
+    unexpectedPaths: [],
+  };
+  const liveAiEnabled = options.liveAiEnabled ?? true;
+  let deniedAccess = false;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+
+    if (pathname === "/api/health") {
+      state.endpointOrder.push("health");
+      await respondJson(route, {
+        status: "ok",
+        service: "foldforge",
+        liveAiEnabled,
+        liveAiBlockReason: liveAiEnabled ? null : "disabled",
+        buildSha: "e2e-mock",
+      });
+      return;
+    }
+
+    if (pathname === "/api/access") {
+      const body = request.postDataJSON() as { readonly code: string };
+      state.endpointOrder.push("access");
+      state.accessCodes.push(body.code);
+      await respondJson(route, { granted: true, required: true });
+      return;
+    }
+
+    if (pathname === "/api/intent") {
+      const body = request.postDataJSON() as { readonly prompt: string };
+      state.intentPrompts.push(body.prompt);
+      if (options.requireAccessOnce && !deniedAccess) {
+        deniedAccess = true;
+        state.endpointOrder.push("intent:access-required");
+        await respondJson(
+          route,
+          {
+            error: {
+              code: "ACCESS_REQUIRED",
+              message: "Studio access is required.",
+              details: [],
+            },
+          },
+          401,
+        );
+        return;
+      }
+      state.endpointOrder.push("intent");
+      if (options.malformedIntent) {
+        await respondJson(route, { scopeStatus: "supported" });
+        return;
+      }
+      await respondJson(route, {
+        ...fixtureIntent(),
+        sourcePrompt: body.prompt,
+      });
+      return;
+    }
+
+    if (pathname === "/api/programs") {
+      const body = request.postDataJSON() as ProgramRequestBody;
+      state.programRequests.push(body);
+      state.endpointOrder.push(`programs:${body.candidateOrdinal}`);
+      const fingerprintOrdinal =
+        options.duplicateSecondFingerprint && body.candidateOrdinal === 2
+          ? 1
+          : body.candidateOrdinal;
+      await respondJson(route, {
+        proposal: {
+          diversityClaim: `Topology ${body.candidateOrdinal} uses a distinct panel program.`,
+          program: programFor(body.candidateOrdinal),
+        },
+        programStructureFingerprint: String(fingerprintOrdinal).repeat(64),
+      });
+      return;
+    }
+
+    if (pathname === "/api/compile") {
+      const body = request.postDataJSON() as CompileRequestBody;
+      state.compileRequests.push(body);
+      state.endpointOrder.push(`compile:${body.candidateId}`);
+      await respondJson(route, evaluateProgram(body));
+      return;
+    }
+
+    if (pathname === "/api/repair") {
+      const body = request.postDataJSON() as RepairRequestBody;
+      state.repairRequests.push(body);
+      state.endpointOrder.push(
+        `repair:${body.candidateId}:${body.repairCycle}`,
+      );
+      const program = repairedProgram(body.program);
+      const evaluation = evaluateProgram({ ...body, program });
+      if (evaluation.status !== "passed") {
+        throw new Error("The E2E repair fixture remained invalid.");
+      }
+      await respondJson(route, {
+        status: "passed",
+        candidateId: body.candidateId,
+        patch: {
+          version: "1",
+          patchId: `patch-wing-width-${body.repairCycle}`,
+          programId: body.program.programId,
+          baseProgramHash: fabricationProgramHash(body.program),
+          repairCycle: body.repairCycle,
+          diagnosis: "The wing edge is below the minimum feature size.",
+          operations: [
+            {
+              operationId: "set-wing-width",
+              path: "/blueprint/panels/panel-wing/widthMm",
+              failureIds: ["geometry.minimum_feature#panel-wing"],
+              reason: "Restore a cuttable wing width.",
+              expectedEffect: "Clear the minimum-feature hard failure.",
+              operation: "set_number",
+              value: 30,
+              expectedCurrentValue: 0.5,
+              unit: "mm",
+            },
+          ],
+          authoredBy: "ai",
+          changesIntent: false,
+        },
+        program,
+        ir: evaluation.ir,
+        report: evaluation.report,
+        score: evaluation.score,
+      });
+      return;
+    }
+
+    if (pathname === "/api/finalize") {
+      const body = request.postDataJSON() as {
+        readonly candidate: CandidateV2;
+      };
+      state.endpointOrder.push(`finalize:${body.candidate.candidateId}`);
+      await respondJson(route, {
+        narrative: {
+          summary: "A compact, code-verified folding display.",
+          mechanism: "The scored joint drives the wing through 90 degrees.",
+          assemblySteps: [
+            "Cut the perimeter and score the shared edge.",
+            "Fold the wing slowly through its full range.",
+          ],
+          limitations: ["Use the specified 0.30 mm card stock."],
+          sourceLabels: [
+            { claim: "The fold travels 90 degrees.", source: "Calculated" },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (pathname.startsWith("/api/export/")) {
+      const format = pathname.split("/").at(-1) as ExportFormat;
+      const body = request.postDataJSON() as {
+        readonly candidate: CandidateV2;
+      };
+      state.endpointOrder.push(
+        `export:${format}:${body.candidate.candidateId}`,
+      );
+      state.exportRequests.push({ format, candidate: body.candidate });
+      await route.fulfill({
+        status: 200,
+        body:
+          format === "svg"
+            ? '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+            : `mock-${format}`,
+        headers: {
+          "Content-Disposition": `attachment; filename="foldforge-${body.candidate.candidateId}.${format}"`,
+          "Content-Type": "application/octet-stream",
+        },
+      });
+      return;
+    }
+
+    state.unexpectedPaths.push(pathname);
+    await respondJson(
+      route,
+      { error: { code: "UNEXPECTED_API", message: pathname, details: [] } },
+      500,
+    );
+  });
+
+  return state;
+};
+
+test("runs access, sequential forge, real repair evidence, checkpoint, and exact exports", async ({
   page,
 }) => {
+  const state = await installStudioMocks(page, { requireAccessOnce: true });
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Generate candidates" }).click();
+  await expect(page.getByText("Sol ready", { exact: true })).toBeVisible();
+  const prompt = page.getByLabel("Describe what to fabricate");
+  await prompt.fill(
+    "Build an arbitrary folding display with one moving cardstock wing.",
+  );
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+
+  const access = page.getByLabel("Studio access code");
+  await expect(access).toBeVisible();
+  await access.fill("e2e-secret");
+  await page.getByRole("button", { name: "Unlock" }).click();
   await expect(
-    page.getByRole("heading", { name: "Inspect the evidence." }),
+    page.getByText("Access granted.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Compare candidates." }),
   ).toBeFocused();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await expect(page.locator('[data-inner-cut-count="1"]')).toHaveCount(1);
+  expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
+    [],
+    ["two-panel-fold-a"],
+    ["two-panel-fold-a", "two-panel-fold-b"],
+  ]);
+  expect(state.endpointOrder.slice(0, 11)).toEqual([
+    "health",
+    "intent:access-required",
+    "access",
+    "intent",
+    "programs:1",
+    "compile:candidate-1-two-panel-fold-a",
+    "programs:2",
+    "compile:candidate-2-two-panel-fold-b",
+    "repair:candidate-2-two-panel-fold-b:1",
+    "programs:3",
+    "compile:candidate-3-two-panel-fold-c",
+  ]);
+  expect(state.intentPrompts.at(-1)).toBe(
+    "Build an arbitrary folding display with one moving cardstock wing.",
+  );
+
+  await page.getByTestId("candidate-card").nth(1).click();
   await expect(
-    page.getByText("geometry.rear_run", { exact: true }),
+    page.getByText("Repair evidence", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: "Parameter ranges and derived rear run",
+    page.getByText("geometry.minimum_feature#panel-wing", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("/blueprint/panels/panel-wing/widthMm", { exact: true }),
+  ).toBeVisible();
+  const verifier = page.locator("details").filter({
+    hasText: "Verifier evidence",
+  });
+  await expect(verifier).not.toHaveAttribute("open", "");
+
+  await page.getByRole("button", { name: "pattern" }).click();
+  await expect(
+    page.getByRole("img", { name: /Repaired narrow wing pattern preview/iu }),
+  ).toBeVisible();
+  await page.getByLabel("Motion position").fill("0.4");
+  await page.getByLabel("Preview rotation").fill("35");
+  await expect(page.getByText("40%", { exact: true })).toBeVisible();
+  await expect(page.getByText("35°", { exact: true })).toBeVisible();
+  await expect(page.getByText("Panels", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Sol build notes" }).click();
+  await expect(
+    page.getByText("A compact, code-verified folding display.", {
+      exact: false,
     }),
   ).toBeVisible();
-
-  await page.getByRole("button", { name: "Diagnose & repair" }).click();
-  await expect(page.getByText("Repair passed", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "All hard checks pass" }),
+    page.getByText("Use the specified 0.30 mm card stock.", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Cycle 2", { exact: true })).toBeVisible();
+
+  for (const format of ["svg", "dxf", "glb", "json", "fold"] as const) {
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: `Download ${format.toUpperCase()}` })
+      .click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(
+      new RegExp(`\\.${format}$`, "u"),
+    );
+    if (format === "svg") {
+      const downloadPath = await download.path();
+      expect(downloadPath).not.toBeNull();
+      if (downloadPath) {
+        expect(await readFile(downloadPath, "utf8")).toContain("<svg");
+      }
+    }
+  }
+
+  expect(state.exportRequests.map((request) => request.format)).toEqual([
+    "svg",
+    "dxf",
+    "glb",
+    "json",
+    "fold",
+  ]);
+  for (const request of state.exportRequests) {
+    expect(request.candidate.candidateId).toBe("candidate-2-two-panel-fold-b");
+    expect(request.candidate.selectionStatus).toBe("selected");
+    expect(request.candidate.program.programId).toBe(
+      "program-winged-display-b",
+    );
+    expect(request.candidate.provenance.appliedPatchIds).toEqual([
+      "patch-wing-width-1",
+    ]);
+  }
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("foldforge.studio.checkpoint.v3"),
+      ),
+    )
+    .not.toBeNull();
+  const checkpoint = await page.evaluate(() =>
+    window.localStorage.getItem("foldforge.studio.checkpoint.v3"),
+  );
+  expect(checkpoint).not.toContain("e2e-secret");
 
   await page.reload();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await expect(page.getByTestId("candidate-card").nth(1)).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(
-    page.getByRole("heading", { name: "Inspect the evidence." }),
+    page.getByText("A compact, code-verified folding display.", {
+      exact: false,
+    }),
   ).toBeVisible();
-  await expect(page.getByText("Repair passed", { exact: true })).toBeVisible();
-
-  await page
-    .getByRole("button", { name: "Prepare selected verified export" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Make the digital plan physical." }),
-  ).toBeFocused();
-  await expect(
-    page.getByRole("heading", { level: 3, name: /compact \/ compact-/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Verified in software", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Physical test required", { exact: true }),
-  ).toBeVisible();
-
-  const svgDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download SVG" }).click();
-  const svgDownload = await svgDownloadPromise;
-  expect(svgDownload.suggestedFilename()).toMatch(/\.svg$/);
-  const svgPath = await svgDownload.path();
-  expect(svgPath).not.toBeNull();
-  if (svgPath) {
-    const svg = await readFile(svgPath, "utf8");
-    expect(svg).toContain("<svg");
-    expect(svg).toContain("50 mm calibration");
-  }
-
-  const foldDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download FOLD 1.2" }).click();
-  const foldDownload = await foldDownloadPromise;
-  expect(foldDownload.suggestedFilename()).toMatch(/\.fold$/);
-  const foldPath = await foldDownload.path();
-  expect(foldPath).not.toBeNull();
-  if (foldPath) {
-    const fold = JSON.parse(await readFile(foldPath, "utf8")) as {
-      readonly file_spec?: number;
-    };
-    expect(fold.file_spec).toBe(1.2);
-  }
-
-  expect(consoleErrors).toEqual([]);
+  expect(state.accessCodes).toEqual(["e2e-secret"]);
+  expect(state.unexpectedPaths).toEqual([]);
+  expect(consoleErrors.filter((entry) => !entry.includes("401"))).toEqual([]);
 });
 
-test("has no horizontal overflow at the required viewport matrix", async ({
+test("rejects duplicate program fingerprints before compile", async ({
   page,
 }) => {
-  for (const width of [1440, 1280, 768, 390]) {
+  const state = await installStudioMocks(page, {
+    duplicateSecondFingerprint: true,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(2);
+  expect(state.compileRequests.map((request) => request.candidateId)).toEqual([
+    "candidate-1-two-panel-fold-a",
+    "candidate-3-two-panel-fold-c",
+  ]);
+  expect(state.repairRequests).toEqual([]);
+});
+
+test("keeps examples fill-only and disables arbitrary generation when Sol is off", async ({
+  page,
+}) => {
+  const state = await installStudioMocks(page, { liveAiEnabled: false });
+  await page.goto("/");
+  const prompt = page.getByLabel("Describe what to fabricate");
+  await prompt.fill("A completely arbitrary paper mechanism.");
+  await page.getByRole("button", { name: "Example 2" }).click();
+  await expect(prompt).toHaveValue(
+    "Create a pop-up fox card with recognizable ears, muzzle, and a fold-flat mechanism.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Forge 3 candidates" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(
+      "Sol is off. Arbitrary generation is unavailable until live service is enabled.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(state.intentPrompts).toEqual([]);
+});
+
+test("fails safely on malformed strict API data", async ({ page }) => {
+  await installStudioMocks(page, { malformedIntent: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "outside the strict fabrication contract",
+    }),
+  ).toContainText("outside the strict fabrication contract");
+  await expect(
+    page.getByRole("heading", { name: "Describe. Forge. Export." }),
+  ).toBeVisible();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+});
+
+test("has no horizontal overflow with results at required widths", async ({
+  page,
+}) => {
+  await installStudioMocks(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+
+  for (const width of [390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-    await page.goto("/");
     const dimensions = await page.evaluate(() => ({
+      bodyScrollWidth: document.body.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
+      rootScrollWidth: document.documentElement.scrollWidth,
     }));
     expect(
-      dimensions.scrollWidth,
-      `overflow at ${width}px`,
+      dimensions.rootScrollWidth,
+      `root overflow at ${width}px`,
+    ).toBeLessThanOrEqual(dimensions.clientWidth);
+    expect(
+      dimensions.bodyScrollWidth,
+      `body overflow at ${width}px`,
     ).toBeLessThanOrEqual(dimensions.clientWidth);
   }
 });
 
-test("supports keyboard operation and persistent sound preference", async ({
+test("supports keyboard focus and reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await installStudioMocks(page);
+  await page.goto("/");
+
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "Skip to studio" }),
+  ).toBeFocused();
+  const prompt = page.getByLabel("Describe what to fabricate");
+  await prompt.focus();
+  expect(
+    await prompt.evaluate((element) => getComputedStyle(element).outlineWidth),
+  ).not.toBe("0px");
+  await page.getByRole("button", { name: "Example 3" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(prompt).toHaveValue(
+    "Design a compact cardstock display that opens one side panel through 90 degrees.",
+  );
+
+  const styles = await page.evaluate(() => {
+    const button = document.querySelector("button");
+    return {
+      scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+      transitionDuration: button
+        ? getComputedStyle(button).transitionDuration
+        : "missing",
+    };
+  });
+  expect(styles.scrollBehavior).toBe("auto");
+  expect(Number.parseFloat(styles.transitionDuration)).toBeLessThanOrEqual(
+    0.00001,
+  );
+});
+
+test("has no serious accessibility violations before or after forging", async ({
   page,
 }) => {
+  await installStudioMocks(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.keyboard.press("Tab");
-  await expect(
-    page.getByRole("link", { name: "FoldForge home" }),
-  ).toBeFocused();
-  await page.keyboard.press("Tab");
-  const soundButton = page.getByRole("button", { name: "Workshop sounds" });
-  await expect(soundButton).toBeFocused();
-  await expect(soundButton).toHaveAttribute("aria-pressed", "false");
-  await page.keyboard.press("Enter");
-  await expect(soundButton).toHaveAttribute("aria-pressed", "true");
-  await page.reload();
-  await expect(
-    page.getByRole("button", { name: "Workshop sounds" }),
-  ).toHaveAttribute("aria-pressed", "true");
 
-  const massInput = page.getByLabel("Mass in g");
-  await massInput.focus();
-  await expect(massInput).toBeFocused();
-  expect(
-    await massInput.evaluate(
-      (element) => getComputedStyle(element).outlineWidth,
-    ),
-  ).not.toBe("0px");
-});
-
-test("fails safely when an API returns malformed data", async ({ page }) => {
-  await page.route("**/api/generate", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ candidates: "not-an-array" }),
-    });
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Generate candidates" }).click();
-  await expect(page.locator('[class*="errorBanner"]')).toContainText(
-    "outside the expected strict contract",
-  );
-  await expect(
-    page.getByRole("heading", { name: "Define the physical problem." }),
-  ).toBeVisible();
-});
-
-test.describe("reduced motion", () => {
-  test("removes smooth scrolling and transitions", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/");
-    const styles = await page.evaluate(() => {
-      const button = document.querySelector("button");
-      return {
-        scrollBehavior: getComputedStyle(document.documentElement)
-          .scrollBehavior,
-        transitionDuration: button
-          ? getComputedStyle(button).transitionDuration
-          : "missing",
-      };
-    });
-    expect(styles.scrollBehavior).toBe("auto");
-    expect(Number.parseFloat(styles.transitionDuration)).toBeLessThanOrEqual(
-      0.00001,
+  const seriousViolations = async () => {
+    const result = await new AxeBuilder({ page }).analyze();
+    return result.violations.filter(
+      (violation) =>
+        violation.impact === "critical" || violation.impact === "serious",
     );
-  });
+  };
+
+  expect(await seriousViolations()).toEqual([]);
+
+  await page.getByRole("button", { name: "Forge 3 candidates" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  expect(await seriousViolations()).toEqual([]);
 });

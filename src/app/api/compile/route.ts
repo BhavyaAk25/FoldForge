@@ -1,73 +1,74 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { hasLiveModelAccess } from "@/server/access";
-import {
-  compileConstraints,
-  compileProvidedConstraint,
-  OpenAIConstraintCompilationModel,
-} from "@/server/ai/compiler";
-import { isLiveAiEnabled } from "@/server/ai/client";
-import { CompileRequestSchema } from "@/server/ai/contracts";
-import { safetyIdentifier } from "@/server/ai/safety";
-import { apiError, parseJsonBody } from "@/server/api/response";
-import { enforceRateLimit } from "@/server/rate-limit";
+import { compileFabricationProgram } from "@/core/fabrication/compiler";
+import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
+import { verifyFabricationIr } from "@/core/fabrication/verification";
+import { apiError, parseRouteJsonBody } from "@/server/api/response";
+import { API_BODY_LIMIT_BYTES } from "@/server/api/security-policy";
+import { safeSecurityError } from "@/server/api/security-response";
+import { runBoundedDeterministicRequest } from "@/server/deterministic-route-guard";
+import { CompileFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
+import { guardMutationRequest } from "@/server/request-guard";
 
-export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const body = await parseJsonBody(request);
-  if (!body.ok) return body.response;
-  const parsed = CompileRequestSchema.safeParse(body.value);
-  if (!parsed.success) {
-    return apiError(
-      "INVALID_REQUEST",
-      "The constraint request is malformed.",
-      400,
-      parsed.error.issues.map((issue) => issue.path.join(".")),
-    );
+export const dynamic = "force-dynamic";
+
+const noStore = (response: NextResponse): NextResponse => {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+};
+
+export const POST = async (request: Request): Promise<NextResponse> => {
+  const mutation = guardMutationRequest(request);
+  if (!mutation.ok) {
+    return noStore(safeSecurityError("REQUEST_ORIGIN_DENIED"));
   }
-
-  const live = isLiveAiEnabled();
-  const limited = live
-    ? enforceRateLimit(request, "compile", 20, 60 * 60 * 1_000)
-    : null;
-  if (limited) return limited;
-  if (live && !hasLiveModelAccess(request)) {
-    return apiError(
-      "ACCESS_REQUIRED",
-      "Enter the judge access code to use GPT-5.6.",
-      401,
+  return runBoundedDeterministicRequest(request, "compile", async () => {
+    const body = await parseRouteJsonBody(
+      request,
+      API_BODY_LIMIT_BYTES.compile,
     );
-  }
-
-  if (!live) {
-    if (!parsed.data.providedConstraint) {
-      return apiError(
-        "LIVE_AI_DISABLED",
-        "Live GPT-5.6 compilation is disabled until free API credits are confirmed.",
-        503,
+    if (!body.ok) {
+      return noStore(
+        body.response.status === 413
+          ? safeSecurityError("PAYLOAD_TOO_LARGE")
+          : body.response,
       );
     }
-    return NextResponse.json({
-      mode: "deterministic-controls",
-      outcome: compileProvidedConstraint(
-        parsed.data.providedConstraint,
-        "Structured controls were normalized by deterministic code. GPT-5.6 is disabled.",
-      ),
-    });
-  }
+    const parsed = CompileFabricationRequestSchema.safeParse(body.value);
+    if (!parsed.success) {
+      return noStore(
+        apiError(
+          "INVALID_REQUEST",
+          "The fabrication compile request is malformed.",
+          400,
+        ),
+      );
+    }
 
-  try {
-    const outcome = await compileConstraints(
-      parsed.data.prompt,
-      safetyIdentifier(parsed.data.installationId),
-      new OpenAIConstraintCompilationModel(),
+    const { candidateId, intent, program } = parsed.data;
+    const compiled = compileFabricationProgram(intent, program);
+    if (!compiled.ok) {
+      return noStore(
+        NextResponse.json({
+          status: "compile_error",
+          candidateId,
+          ir: null,
+          report: null,
+          score: null,
+        }),
+      );
+    }
+
+    const report = verifyFabricationIr(compiled.value, candidateId);
+    const score = scoreFabricationCandidate(compiled.value, report, intent);
+    return noStore(
+      NextResponse.json({
+        status: report.valid ? "passed" : "invalid",
+        candidateId,
+        ir: compiled.value,
+        report,
+        score,
+      }),
     );
-    return NextResponse.json({ mode: "gpt-5.6-sol", outcome });
-  } catch {
-    return apiError(
-      "MODEL_RESPONSE_ERROR",
-      "GPT-5.6 did not return a valid strict constraint compilation.",
-      502,
-    );
-  }
+  });
 };

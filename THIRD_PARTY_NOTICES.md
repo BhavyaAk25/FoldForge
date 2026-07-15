@@ -1,6 +1,6 @@
 # Third-party notices
 
-FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses.
+FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. This inventory describes the current lockfile and must be regenerated when dependencies change.
 
 | Dependency           | Purpose               | Version | License    | Source / attribution                        |
 | -------------------- | --------------------- | ------: | ---------- | ------------------------------------------- |
@@ -15,13 +15,21 @@ FoldForge source code is MIT licensed. Direct runtime and development dependenci
 | Three.js             | 3D preview            | 0.185.1 | MIT        | https://github.com/mrdoob/three.js          |
 | React Three Fiber    | React 3D renderer     |   9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber |
 | Playwright           | Browser testing       |  1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright     |
+| earcut               | Polygon triangulation |   3.2.3 | ISC        | https://github.com/mapbox/earcut            |
+| axe-core Playwright  | Accessibility testing |  4.10.2 | MPL-2.0    | https://github.com/dequelabs/axe-core-npm   |
 
-No third-party dependency is modified. `pnpm licenses list --prod --json` generates the complete installed production dependency report for each release environment. The lockfile is the reproducible component inventory; the report is generated rather than committed because it contains machine-specific installation paths.
+No third-party dependency is modified. `pnpm licenses list --prod --json` generates the complete installed production dependency report for each release environment. The lockfile is the reproducible component inventory; the generated report is not committed because it can contain machine-specific installation paths.
 
 Notable transitive/runtime artifacts:
 
 - Geist font files are redistributed to browsers under SIL Open Font License 1.1. The copyright and complete license text are retained in `licenses/GEIST-OFL-1.1.txt`.
 - Next.js may install Sharp (Apache-2.0) and a platform-specific libvips binary (LGPL-3.0-or-later) for image tooling. FoldForge does not modify these packages. Deployment packagers must retain notices and satisfy the applicable LGPL source/relocation requirements described in `licenses/README.md`.
-- `caniuse-lite` data is CC-BY-4.0; the package metadata and lockfile retain its attribution.
+- `caniuse-lite` data is CC-BY-4.0; package metadata and the lockfile retain its attribution.
 
-Related work is cited for context only and is not incorporated: FOLD, OrigamiSimulator, COrigami, Learn2Fold, rigid-origami optimization, TreeMaker, and Origamizer.
+## Standards and related work
+
+SVG, DXF, glTF/GLB, and FOLD are referenced interoperability standards/specifications. Their names and specifications are not bundled source code. Generated FoldForge artifacts remain the user’s/project’s data and do not embed third-party examples by default.
+
+The following work is cited for context only and is not incorporated: FOLD, OrigamiSimulator, Origamizer, TreeMaker, rigid-origami optimization research, COrigami, and Learn2Fold. Primary links and the exact comparison boundary are recorded in [RESEARCH.md](./RESEARCH.md).
+
+No copied crease pattern, mechanism design, image, paper figure, benchmark dataset, source file, or model output from that related work may be added without a separate license/provenance review and an updated notice.

@@ -9,7 +9,7 @@ interface RateWindow {
 
 const windows = new Map<string, RateWindow>();
 
-const clientSubject = (request: Request): string => {
+export const requestSubjectHash = (request: Request): string => {
   const forwarded = request.headers
     .get("x-forwarded-for")
     ?.split(",")[0]
@@ -25,7 +25,7 @@ export const enforceRateLimit = (
   windowMs: number,
 ): NextResponse | null => {
   const now = Date.now();
-  const key = `${scope}:${clientSubject(request)}`;
+  const key = `${scope}:${requestSubjectHash(request)}`;
   const current = windows.get(key);
   const window =
     !current || current.resetsAtMs <= now

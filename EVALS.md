@@ -1,63 +1,112 @@
 # FoldForge evaluations
 
-## Release thresholds
+## Evidence status
 
-- 100% schema-valid model responses reaching normalization.
-- At least 95% unit-normalization accuracy and explicit-constraint recall.
-- At least 90% valid in-range deterministic geometry.
-- At least 80% seeded failures repaired within three cycles.
-- At least 95% no-crash completion for supported requests.
-- Four of five unseen judge prompts succeed or correctly refuse.
-- No hard verifier failure is labelled valid.
+The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. GPT-5.6 Sol live behavior is the only unrun gate and is explicitly blocked on user activation.
 
-## Current results — 2026-07-14
+All generated reports are written under ignored `artifacts/evals/`. Offline evidence never counts as live model evidence.
 
-| Evaluation                                   |                            Result |     Threshold | Status |
-| -------------------------------------------- | --------------------------------: | ------------: | ------ |
-| Deterministic candidates                     | 900 across 100 varied constraints |             — | Pass   |
-| Supported requests with a valid candidate    |                               98% |          ≥90% | Pass   |
-| Candidate pass rate                          |                            47.67% |    diagnostic | —      |
-| Supported-request no-crash                   |                              100% |          ≥95% | Pass   |
-| Identical-seed repeatability                 |                              100% |          100% | Pass   |
-| Corrupted geometry/export mutations accepted |                           0 / 294 |             0 | Pass   |
-| Offline compiler schema validity             |                        100% of 25 |          100% | Pass   |
-| Offline compiler unit normalization          |                              100% |          ≥95% | Pass   |
-| Offline compiler explicit recall             |                              100% |          ≥95% | Pass   |
-| Repair outcome accuracy                      |                        100% of 11 |             — | Pass   |
-| Repairable failures fixed within 3 cycles    |                              100% |          ≥80% | Pass   |
-| End-to-end pipeline                          |                           15 / 15 |      ≥12 / 15 | Pass   |
-| Full-feedback repair ablation                |                   100% vs 0% / 0% | material lift | Pass   |
-| Browser flows                                |                             5 / 5 |           all | Pass   |
-| Core statement / branch coverage             |                   97.81% / 91.05% |   ≥95% / ≥90% | Pass   |
-| Production dependency audit                  |           0 known vulnerabilities |        0 high | Pass   |
+## Release rule
 
-The browser suite covers generation, real failure highlighting, two-cycle repair, refresh restore, exact selected-candidate finalization, stage focus/scroll landing, SVG/FOLD downloads, 1440/1280/768/390 px layouts, keyboard focus visibility, persistent sound preference, reduced motion, and malformed API data. Manual rendered inspection confirmed no horizontal overflow at any required width. Native print handling reached the operating-system save sheet from the verified export guide and was cancelled without writing a file.
+Release requires:
 
-The final coverage run records 97.48% overall statements, 91.01% overall branches, 98.42% functions, and 98.29% lines. `src/core` records 97.81% statements, 91.05% branches, 98.13% functions, and 98.61% lines. Machine-readable reports are generated under ignored `artifacts/evals/` so evaluation output does not become application source.
+- no hard-invalid candidate labelled valid, ranked, shown, finalized, or exported;
+- exact selected-candidate source equivalence across every export;
+- no serious security, accessibility, privacy, or licensing issue;
+- at least 92/100 in the internal harsh review, with no official criterion below 22/25; and
+- a passing sealed live suite before claiming arbitrary GPT-5.6 Sol generation.
 
-## Live compiler status
+## Current results
 
-Live GPT-5.6 evaluation is **not run**. The model integration is implemented, but live use is gated by `ENABLE_LIVE_OPENAI=true`, valid model access, usable credits, and a configured access gate. Offline fixtures cover 25 metric, imperial, mixed, missing-essential, contradictory, and unsupported cases. This is contract evidence, not a claim of live model performance.
+### Deterministic compiler, verifier, and exports
 
-## Suites
+| Gate                                | Result                                  | Threshold | Status |
+| ----------------------------------- | --------------------------------------- | --------: | ------ |
+| Independently varied valid controls | 120/120 accepted                        |      ≥98% | Pass   |
+| Hard-invalid adversarial mutations  | 0/560 accepted                          |         0 | Pass   |
+| Correct fail-fast verifier stage    | 560/560                                 |      100% | Pass   |
+| Export source equivalence           | 120/120                                 |      100% | Pass   |
+| Canonical repeatability             | 50 programs × 10 repeats; 0 differences |      100% | Pass   |
+| Compile + verify p95                | 53.318 ms                               | ≤2,000 ms | Pass   |
+| Offline crashes                     | 0                                       |         0 | Pass   |
+| Strict coverage                     | 96.66% statements / 90.12% branches     | 95% / 90% | Pass   |
 
-- Geometry properties: 1,000 fast-check cases with `FC_SEED=20260714`.
-- Compiler: 25 offline contract cases; 25 live cases pending credits.
-- Repair: 11 seeded hard failures spanning rear run, angle, slot bridge, lip, toe, contact, stability, sheet fit, and three correct infeasible outcomes.
-- End-to-end: 15 cases across seven distinct measured failures through generation, repair, ranking, and both exports.
-- Mutation oracle: zeroed folded panels, modified SVG fabrication IDs, and altered FOLD angles are required to be rejected for every request that yields a valid candidate.
-- Ablation: no feedback vs pass/fail only vs complete structured verifier report.
-- Browser: rendered responsive, accessibility, persistence, error, and download states.
+The 560 mutations cover schema, topology, panel geometry, connections, sheet packing, rigid transforms, motion, collision, semantics, and export equivalence with 56 cases per phase.
 
-## Reproduce
+### Intent contract
+
+| Gate                                 | Result  | Threshold | Status |
+| ------------------------------------ | ------- | --------: | ------ |
+| Mocked strict schema validity        | 140/140 |      100% | Pass   |
+| Supported cases                      | 100     |         — | —      |
+| Boundary/refusal/clarification cases | 40      |         — | —      |
+| Explicit constraint recall           | 100%    |      ≥98% | Pass   |
+| Unit normalization                   | 100%    |      ≥99% | Pass   |
+| Correct status/refusal/clarification | 100%    |      ≥95% | Pass   |
+
+These are mocked contract tests. They establish schema and deterministic normalization behavior, not GPT-5.6 Sol accuracy.
+
+### Repair and ablation
+
+| Gate                                       | Result                  |      Threshold | Status |
+| ------------------------------------------ | ----------------------- | -------------: | ------ |
+| Repairable seeded failures within 3 cycles | 40/40; all in one cycle |           ≥85% | Pass   |
+| Correct non-repairable exhaustion          | 20/20                   |           100% | Pass   |
+| Adversarial patches accepted               | 0/120                   |              0 | Pass   |
+| Bounded termination                        | 100%                    |           100% | Pass   |
+| Full-report repair ablation                | 100% vs 0% / 0%         | ≥20-point lift | Pass   |
+
+Repair fixtures cover packing, connector clearance, and motion. Adversarial patches cover schema, base hash, failure reference, grounding, unit, and duplicate-input attacks.
+
+### End-to-end and browser
+
+| Gate                                                   | Result                         | Status |
+| ------------------------------------------------------ | ------------------------------ | ------ |
+| Offline showcase compile → verify → rank → export      | 15/15; 3 topology fingerprints | Pass   |
+| Main access/generate/repair/checkpoint/export journey  | 1/1                            | Pass   |
+| Duplicate topology rejection                           | 1/1                            | Pass   |
+| Honest Sol-off state                                   | 1/1                            | Pass   |
+| Malformed strict API response                          | 1/1                            | Pass   |
+| 390 / 768 / 1280 / 1440 px horizontal overflow         | 0                              | Pass   |
+| Keyboard focus and reduced motion                      | 1/1                            | Pass   |
+| Axe serious or critical violations, before/after forge | 0                              | Pass   |
+
+The browser suite has seven passing Chromium tests. The complete unit/integration suite has 280 passing tests. The rendered in-app review also found no console warnings, clipping, or mobile horizontal scrolling at the required widths.
+
+### Live GPT-5.6 Sol
+
+| Gate                                                       | Current                            |
+| ---------------------------------------------------------- | ---------------------------------- |
+| Strict response or explicit refusal                        | Blocked — user activation required |
+| Supported brief yields valid candidate or grounded failure | Blocked — user activation required |
+| Explicit constraint recall and unit normalization          | Blocked — user activation required |
+| Prompt-injection/contract escape                           | Blocked — user activation required |
+| Prompt, response, or secret content in production logs     | Blocked — user activation required |
+
+No paid live result is claimed. After enabling model access, run:
 
 ```bash
+ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live
+```
+
+The sealed readiness suite runs five bounded supported prompts and requires at least four complete successes. Each success requires three distinct verified candidates, bounded repair when needed, selected-candidate GLB/SVG/DXF/JSON/FOLD handling, source equivalence, and a strict final narrative. The report stores prompt hashes and bounded metrics, not prompt or response content. `eval:compiler` remains the focused intent-contract evaluation and defaults to only five supported plus five boundary calls in live mode.
+
+Do not record or submit a live-generation claim until this report passes on the submission build.
+
+## Reproduction
+
+```bash
+pnpm run check
 pnpm run coverage
 FC_SEED=20260714 FC_NUM_RUNS=1000 pnpm run test:property
 pnpm run eval:offline
-pnpm run eval:compiler -- --cases 25
-pnpm run eval:repair -- --fixtures 11 --max-iterations 5
-pnpm run eval:e2e -- --cases 15
+pnpm run eval:compiler
+pnpm run eval:repair
+pnpm run eval:e2e
 pnpm run eval:ablation
+pnpm run eval:live # zero calls and a blocked report until both live opt-ins are true
 pnpm run test:e2e
+pnpm audit --prod
 ```
+
+Each report records its mode and evidence boundary. The offline E2E report explicitly says its showcase controls are not arbitrary-prompt results.

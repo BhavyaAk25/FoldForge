@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+import type { CandidateV2, ExportFormat } from "@/core/fabrication/types";
+
 interface ApiErrorBody {
   readonly error?: {
     readonly code?: string;
@@ -23,6 +25,28 @@ export class FoldForgeApiError extends Error {
 const errorBody = (value: unknown): ApiErrorBody =>
   typeof value === "object" && value !== null ? (value as ApiErrorBody) : {};
 
+const responseError = async (
+  response: Response,
+): Promise<FoldForgeApiError> => {
+  const raw: unknown = await response.json().catch(() => null);
+  const parsed = errorBody(raw).error;
+  return new FoldForgeApiError(
+    parsed?.code ?? "REQUEST_FAILED",
+    parsed?.message ?? `Request failed with status ${response.status}.`,
+    parsed?.details ?? [],
+  );
+};
+
+export const getJson = async <Schema extends z.ZodType>(
+  url: string,
+  schema: Schema,
+): Promise<z.infer<Schema>> => {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw await responseError(response);
+  const raw: unknown = await response.json();
+  return schema.parse(raw);
+};
+
 export const postJson = async <Schema extends z.ZodType>(
   url: string,
   body: unknown,
@@ -33,46 +57,33 @@ export const postJson = async <Schema extends z.ZodType>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const raw: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const parsed = errorBody(raw).error;
-    throw new FoldForgeApiError(
-      parsed?.code ?? "REQUEST_FAILED",
-      parsed?.message ?? `Request failed with status ${response.status}.`,
-      parsed?.details ?? [],
-    );
-  }
+  if (!response.ok) throw await responseError(response);
+  const raw: unknown = await response.json();
   return schema.parse(raw);
 };
 
-export const downloadExport = async (
-  format: "svg" | "fold",
-  body: unknown,
-  fallbackFilename: string,
-): Promise<void> => {
+export const downloadCandidateExport = async (
+  format: ExportFormat,
+  candidate: CandidateV2,
+): Promise<string> => {
   const response = await fetch(`/api/export/${format}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ candidate }),
   });
-  if (!response.ok) {
-    const raw: unknown = await response.json().catch(() => null);
-    const parsed = errorBody(raw).error;
-    throw new FoldForgeApiError(
-      parsed?.code ?? "EXPORT_FAILED",
-      parsed?.message ?? "The export could not be generated.",
-      parsed?.details ?? [],
-    );
-  }
+  if (!response.ok) throw await responseError(response);
 
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  const matchedFilename = /filename="([^"]+)"/.exec(disposition)?.[1];
-  const url = URL.createObjectURL(await response.blob());
+  const matchedFilename = /filename="([^"]+)"/u.exec(disposition)?.[1];
+  const filename =
+    matchedFilename ?? `foldforge-${candidate.candidateId}.${format}`;
+  const objectUrl = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = matchedFilename ?? fallbackFilename;
+  anchor.href = objectUrl;
+  anchor.download = filename;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(objectUrl);
+  return filename;
 };
