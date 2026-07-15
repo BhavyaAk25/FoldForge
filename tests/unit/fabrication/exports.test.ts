@@ -750,9 +750,9 @@ describe("fabrication exporters", () => {
 
     expect(first.bytes).toEqual(second.bytes);
     expect(first.metadata.sha256).toBe(sha256HexBytes(first.bytes));
-    expect(glbArtifactMatchesSource(first.bytes, mainIr, candidateId)).toBe(
-      true,
-    );
+    expect(
+      glbArtifactMatchesSource(first.bytes, mainIr, candidateId, provenance),
+    ).toBe(true);
     expect(gltf.asset.extras.sourceCandidateId).toBe(candidateId);
     expect(gltf.asset.extras.sourceIrHash).toBe(sourceIrHash(mainIr));
     expect(gltf.asset.extras.binaryPayloadSha256).toBe(
@@ -813,6 +813,20 @@ describe("fabrication exporters", () => {
       "paths.0.pathId",
       "cut-a",
     );
+
+    const corruptedBinary = Uint8Array.from(first.bytes);
+    const corruptedView = new DataView(corruptedBinary.buffer);
+    const jsonLength = corruptedView.getUint32(12, true);
+    const binaryStart = 20 + jsonLength + 8;
+    corruptedBinary[binaryStart] = corruptedBinary[binaryStart]! ^ 1;
+    expect(
+      glbArtifactMatchesSource(
+        corruptedBinary,
+        mainIr,
+        candidateId,
+        provenance,
+      ),
+    ).toBe(false);
   });
 
   it("derives bounded GLB animation from verified IR and rejects unrelated bytes", () => {
@@ -857,7 +871,18 @@ describe("fabrication exporters", () => {
   it("rejects malformed GLB containers and JSON roots", () => {
     const artifact = artifactFrom(exportFabricationGlb(mainSource));
     expect(
-      glbArtifactMatchesSource(new Uint8Array(19), mainIr, candidateId),
+      glbArtifactMatchesSource(
+        new Uint8Array(19),
+        mainIr,
+        candidateId,
+        provenance,
+      ),
+    ).toBe(false);
+    expect(
+      glbArtifactMatchesSource(artifact.bytes, mainIr, candidateId, {
+        ...provenance,
+        irHash: "0".repeat(64),
+      }),
     ).toBe(false);
 
     for (const [offset, value] of [
@@ -868,29 +893,30 @@ describe("fabrication exporters", () => {
     ] as const) {
       const corrupted = Uint8Array.from(artifact.bytes);
       new DataView(corrupted.buffer).setUint32(offset, value, true);
-      expect(glbArtifactMatchesSource(corrupted, mainIr, candidateId)).toBe(
-        false,
-      );
+      expect(
+        glbArtifactMatchesSource(corrupted, mainIr, candidateId, provenance),
+      ).toBe(false);
     }
 
     for (const jsonLength of [0, artifact.bytes.byteLength] as const) {
       const corrupted = Uint8Array.from(artifact.bytes);
       new DataView(corrupted.buffer).setUint32(12, jsonLength, true);
-      expect(glbArtifactMatchesSource(corrupted, mainIr, candidateId)).toBe(
-        false,
-      );
+      expect(
+        glbArtifactMatchesSource(corrupted, mainIr, candidateId, provenance),
+      ).toBe(false);
     }
 
     const invalidJson = Uint8Array.from(artifact.bytes);
     invalidJson.fill(0x78, 20, 24);
-    expect(glbArtifactMatchesSource(invalidJson, mainIr, candidateId)).toBe(
-      false,
-    );
+    expect(
+      glbArtifactMatchesSource(invalidJson, mainIr, candidateId, provenance),
+    ).toBe(false);
     expect(
       glbArtifactMatchesSource(
         rebuildGlbWithJson(artifact.bytes, []),
         mainIr,
         candidateId,
+        provenance,
       ),
     ).toBe(false);
   });
@@ -956,6 +982,54 @@ describe("fabrication exporters", () => {
           primitives: [{ mode: 1 }],
         });
       },
+      (document) => {
+        const meshes = document.meshes as unknown[];
+        const panelMesh = meshes.find(
+          (meshValue) =>
+            typeof record(record(meshValue).extras).sourcePanelId ===
+              "string" &&
+            typeof record(record(meshValue).extras).sourcePathId !== "string",
+        );
+        delete record(panelMesh).extras;
+      },
+      (document) => {
+        const meshes = document.meshes as unknown[];
+        const panelMesh = meshes.find(
+          (meshValue) =>
+            typeof record(record(meshValue).extras).sourcePanelId ===
+              "string" &&
+            typeof record(record(meshValue).extras).sourcePathId !== "string",
+        );
+        const primitive = (record(panelMesh).primitives as unknown[])[0];
+        record(primitive).mode = 1;
+      },
+      (document) => {
+        const meshes = document.meshes as unknown[];
+        const panelMesh = meshes.find(
+          (meshValue) =>
+            typeof record(record(meshValue).extras).sourcePanelId ===
+              "string" &&
+            typeof record(record(meshValue).extras).sourcePathId !== "string",
+        );
+        const primitive = record(
+          (record(panelMesh).primitives as unknown[])[0],
+        );
+        const positionAccessorIndex = record(primitive.attributes).POSITION;
+        const accessors = document.accessors as unknown[];
+        record(accessors[positionAccessorIndex as number]).componentType = 5123;
+      },
+      (document) => {
+        const bufferViews = document.bufferViews as unknown[];
+        record(bufferViews[0]).byteOffset = -1;
+      },
+      (document) => {
+        const nodes = document.nodes as unknown[];
+        const pathNode = nodes.find(
+          (nodeValue) =>
+            typeof record(record(nodeValue).extras).sourcePathId === "string",
+        );
+        record(pathNode).mesh = 0;
+      },
     ];
     for (const mutation of mutations) {
       expect(
@@ -963,6 +1037,7 @@ describe("fabrication exporters", () => {
           mutateGlbJson(artifact.bytes, mutation),
           mainIr,
           candidateId,
+          provenance,
         ),
       ).toBe(false);
     }
@@ -996,6 +1071,16 @@ describe("fabrication exporters", () => {
         for (const animationValue of animations) {
           record(record(animationValue).extras).targetBodyId = first;
         }
+      },
+      (document) => {
+        const animations = document.animations as unknown[];
+        const channels = record(animations[0]).channels as unknown[];
+        record(record(channels[0]).target).node = 9_999;
+      },
+      (document) => {
+        const animations = document.animations as unknown[];
+        const samplers = record(animations[0]).samplers as unknown[];
+        record(samplers[0]).output = 9_999;
       },
     ];
     for (const mutation of mutations) {
@@ -1039,6 +1124,14 @@ describe("fabrication exporters", () => {
           mesh.primitives[0]?.mode === 1,
       ),
     ).toBe(true);
+    const panelMesh = gltf.meshes.find(
+      (mesh) => mesh.name === "panel-mesh:panel-organizer-module",
+    );
+    const panelPrimitive = panelMesh?.primitives[0];
+    expect(
+      gltf.accessors[panelPrimitive?.attributes.POSITION ?? -1]?.count,
+    ).toBe(24);
+    expect(gltf.accessors[panelPrimitive?.indices ?? -1]?.count).toBe(78);
     expect(
       glbArtifactMatchesSource(
         artifact.bytes,

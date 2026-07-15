@@ -27,9 +27,9 @@ Release requires:
 | Correct fail-fast verifier stage    | 560/560                                 |      100% | Pass   |
 | Export source equivalence           | 120/120                                 |      100% | Pass   |
 | Canonical repeatability             | 50 programs × 10 repeats; 0 differences |      100% | Pass   |
-| Compile + verify p95                | 35.265 ms                               | ≤2,000 ms | Pass   |
+| Compile + verify p95                | 53.318 ms                               | ≤2,000 ms | Pass   |
 | Offline crashes                     | 0                                       |         0 | Pass   |
-| Strict coverage                     | 96.68% statements / 90.08% branches     | 95% / 90% | Pass   |
+| Strict coverage                     | 96.66% statements / 90.12% branches     | 95% / 90% | Pass   |
 
 The 560 mutations cover schema, topology, panel geometry, connections, sheet packing, rigid transforms, motion, collision, semantics, and export equivalence with 56 cases per phase.
 
@@ -71,7 +71,7 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 | Keyboard focus and reduced motion                      | 1/1                            | Pass   |
 | Axe serious or critical violations, before/after forge | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. The rendered in-app review also found no console warnings, clipping, or mobile horizontal scrolling at the required widths.
+The browser suite has seven passing Chromium tests. The complete unit/integration suite has 280 passing tests. The rendered in-app review also found no console warnings, clipping, or mobile horizontal scrolling at the required widths.
 
 ### Live GPT-5.6 Sol
 

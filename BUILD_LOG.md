@@ -90,3 +90,14 @@
 - Added a fail-closed 2,000,000-unit verification work budget, one-state static verification, and best-effort process-local rate/concurrency controls on public deterministic compile/export routes.
 - Focused regression validation passed 29 files and 226 tests after the independent geometry and security findings were fixed. The complete release matrix is rerun before the milestone is committed or deployed.
 - Final hardening validation passed 277 tests, 96.68% statement / 90.08% branch coverage, the 1,000-run seeded property suite, all offline eval groups, 7/7 Chromium flows, exact fixture verification, strict formatting/type/lint/build checks, production dependency audit, and secret-ignore checks.
+
+## 2026-07-14 — connector material and binary export closure
+
+- Rejected the final independent geometry mutations: off-panel slots, slots that remove useful panel material, detached tab roots, and cross-paired joint guides.
+- Centralized slot contours and net material so verification, scoring, collision triangles, symmetry, verification work estimates, and GLB meshes use the same geometry.
+- Upgraded GLB source checking to regenerate the complete canonical artifact and compare every byte. Panel/path meshes, node hierarchy, scenes, motion channels/keyframes, metadata, and binary payload now fail closed on any difference.
+- Added reciprocal connector fit checks: slot width clears stock thickness; slot length clears the widest full-tab span along its own root tangent; declared clearance is exact; and both insertion axes and assembled-frame tab/slot spans must align. Cross-frame, flared-tab, sub-clearance, and perpendicular-axis bypasses are covered by regressions.
+- Independent geometry re-review found no remaining high/medium issue and decoded GLB surface areas within floating-point tolerance of the source material areas for the organizer and both flower panels.
+- Independent geometry and security re-reviews reproduced the connector, long-identifier, and GLB attacks, confirmed every fix, and found no remaining high/medium issue in this revision.
+- The complete release matrix passes 280 tests, 96.66% statements / 90.12% branches, 1,000 seeded property runs, 120/120 valid controls, 0/560 accepted hard-invalid mutations, 120/120 export controls, 40/40 repairs, 20/20 infeasible outcomes, 0/120 hostile patches, 15/15 offline end-to-end cases, 7/7 Chromium flows, 13 regenerated artifacts, a production dependency audit with no known vulnerability, and a disabled live suite that made zero model requests.
+- Standalone compile-and-verify p95 is 53.318 ms against the 2,000 ms gate. GPT-5.6 Sol remains the only blocked evidence lane and requires explicit user activation.

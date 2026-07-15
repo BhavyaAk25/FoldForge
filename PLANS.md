@@ -13,7 +13,7 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures                                  |
 | Describe → Forge → Export product experience                        | Complete   | 7/7 Chromium flows at all required widths                          |
 | Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
-| Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB, physical joint binding, bounded CPU work    |
+| Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work |
 | Live GPT-5.6 Sol behavior                                           | User gate  | Enable model access, run sealed live evals, then keep or kill      |
 | Submission script and documentation                                 | Complete   | Concise video script, rubric, README, limitations, eval evidence   |
 | Public video recording                                              | User-owned | Record the implemented build after the live gate passes            |
@@ -35,9 +35,10 @@ No calendar date blocks implementation.
 - The compiler lowers bounded programs into panels, joints, connectors, transforms, motion, provenance, and exact export inputs.
 - The verifier fails fast across schema, topology, geometry, connections, packing, transforms, motion, collision, semantics, and export equivalence.
 - Static designs use one canonical state. Moving designs use 201 fixed driver states plus bounded deterministic adaptive event samples.
-- Panel cutouts must preserve feature size, boundary/inter-hole ligaments, useful net material, and score/cut separation.
-- Joint and coupling connectors are verified against their parent/child bodies and declared axes, not only their identifiers.
-- GLB motion, hierarchy, paths, connectors, and embedded fabrication profile are generated from and checked against the selected IR.
+- Panel and slot cutouts must stay inside their panel, preserve boundary/inter-hole ligaments and useful net material, and remain separate from scores.
+- Tab roots must be real contour edges that leave the tab attached. Joint guides must be complete reciprocal mate pairs spanning the declared parent/child bodies and axes.
+- GLB motion, hierarchy, paths, connectors, embedded profile, and binary payload are generated from the selected IR; equivalence regenerates the canonical artifact and compares every byte. Slot holes are removed from preview and collision meshes.
+- Reciprocal connector pairs are dimensionally checked: slot width clears tab stock thickness, slot length clears the widest full-tab span along its root tangent, declared pair clearance is exact, and insertion/span axes align in the assembled frame.
 - Repair accepts one to three allowlisted operations, cites actual report fields and repairable paths, blocks duplicate canonical input, and stops after five cycles.
 - Only valid candidates are scored, displayed, selected, finalized, or exported.
 - The studio keeps the 3D view, flat pattern, program, motion, report, selection, and downloads on the same candidate IR.

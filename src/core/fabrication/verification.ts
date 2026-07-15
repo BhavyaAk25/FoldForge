@@ -2,7 +2,15 @@ import { canonicalSerialize } from "@/core/canonical";
 import { sha256Hex } from "@/core/sha256";
 
 import { fabricationIrHash } from "./compiler";
-import { connectorReferencePoint2 } from "./connector-geometry";
+import {
+  classifyTabAttachment,
+  connectorInsertionAlignment,
+  connectorInsertionDirectionsCompatible,
+  connectorPairFit,
+  connectorReferencePoint2,
+  panelMaterialHoles,
+  panelNetMaterialAreaMm2,
+} from "./connector-geometry";
 import {
   evaluateMotionState,
   homeMotionState,
@@ -60,10 +68,23 @@ const MINIMUM_FEATURE_MM = FABRICATION_LIMITS.minimumFeatureMm;
 const MINIMUM_CONNECTOR_CLEARANCE_MM = 0.2;
 const CONNECTION_TOLERANCE_MM = 0.1;
 const JOINT_ANCHOR_TOLERANCE_MM = 1;
+const CONNECTOR_ALIGNMENT_COSINE_TOLERANCE = 1e-6;
 const REQUESTED_SIZE_TOLERANCE_MM = 2;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/u;
 const MAXIMUM_REPORT_CHECKS = 512;
 const MAXIMUM_REPORT_FAILURES = 256;
+
+const connectorPairMetricId = (
+  prefix: "axis" | "fit_l" | "fit_w" | "span",
+  firstConnectorId: string,
+  secondConnectorId: string,
+): string =>
+  `${prefix}:${sha256Hex(
+    canonicalSerialize([firstConnectorId, secondConnectorId]),
+  ).slice(0, 16)}`;
+
+const minimumPanelLigamentMm = (panel: PanelV1): number =>
+  Math.max(FABRICATION_LIMITS.minimumInnerCutLigamentMm, panel.thicknessMm * 2);
 
 const STAGES: readonly VerificationStage[] = [
   "schema",
@@ -208,18 +229,16 @@ const hardFailureCount = (state: VerificationState): number =>
 export const estimateFabricationVerificationWork = (
   ir: FabricationIRV1,
 ): number => {
-  const triangleCounts = ir.panels.map((panel) =>
-    Math.max(
+  const triangleCounts = ir.panels.map((panel) => {
+    const holes = panelMaterialHoles(panel, ir.connectors);
+    return Math.max(
       1,
       panel.contour.vertices.length +
-        panel.innerCutContours.reduce(
-          (total, contour) => total + contour.vertices.length,
-          0,
-        ) +
-        panel.innerCutContours.length * 2 -
+        holes.reduce((total, contour) => total + contour.vertices.length, 0) +
+        holes.length * 2 -
         2,
-    ),
-  );
+    );
+  });
   let pairTriangleProducts = 0;
   for (
     let firstIndex = 0;
@@ -1202,16 +1221,9 @@ const validatePanelGeometry = (
   for (const panel of ir.panels) {
     const refs = [geometryRef("panel", panel.panelId)];
     const areaMm2 = Math.abs(signedPolygonAreaMm2(panel.contour.vertices));
-    const innerAreasMm2 = panel.innerCutContours.map((inner) =>
-      Math.abs(signedPolygonAreaMm2(inner.vertices)),
-    );
-    const netAreaMm2 =
-      areaMm2 - innerAreasMm2.reduce((sum, value) => sum + value, 0);
+    const netAreaMm2 = panelNetMaterialAreaMm2(panel, ir.connectors);
     const netMaterialRatio = areaMm2 > 0 ? netAreaMm2 / areaMm2 : 0;
-    const minimumLigamentMm = Math.max(
-      FABRICATION_LIMITS.minimumInnerCutLigamentMm,
-      panel.thicknessMm * 2,
-    );
+    const minimumLigamentMm = minimumPanelLigamentMm(panel);
     const minimumEdgeMm = minimumEdgeLengthMm(panel.contour.vertices);
     if (
       !isSimplePolygon(panel.contour.vertices) ||
@@ -1513,6 +1525,59 @@ const connectorWorldAnchor = (
   return transformPoint3(bodyMatrix, { ...placed, zMm: 0 });
 };
 
+const connectorWorldPoint = (
+  point: Point2Mm,
+  panel: PanelV1,
+  home: EvaluatedMotionState,
+): Point3Mm | null => {
+  const bodyMatrix = home.bodyMatrices[panel.bodyId];
+  if (!bodyMatrix) return null;
+  const placed = transformPoint2(point, panel.flatTransform);
+  return transformPoint3(bodyMatrix, { ...placed, zMm: 0 });
+};
+
+const segmentAlignment3 = (
+  firstStart: Point3Mm,
+  firstEnd: Point3Mm,
+  secondStart: Point3Mm,
+  secondEnd: Point3Mm,
+): number | null => {
+  const first = {
+    x: firstEnd.xMm - firstStart.xMm,
+    y: firstEnd.yMm - firstStart.yMm,
+    z: firstEnd.zMm - firstStart.zMm,
+  };
+  const second = {
+    x: secondEnd.xMm - secondStart.xMm,
+    y: secondEnd.yMm - secondStart.yMm,
+    z: secondEnd.zMm - secondStart.zMm,
+  };
+  const firstLength = Math.hypot(first.x, first.y, first.z);
+  const secondLength = Math.hypot(second.x, second.y, second.z);
+  if (firstLength <= 0 || secondLength <= 0) return null;
+  const dot = first.x * second.x + first.y * second.y + first.z * second.z;
+  return Math.min(1, Math.abs(dot / (firstLength * secondLength)));
+};
+
+const connectorSpanAlignment = (
+  tab: Extract<FabricationIRV1["connectors"][number], { readonly kind: "tab" }>,
+  slot: Extract<
+    FabricationIRV1["connectors"][number],
+    { readonly kind: "slot" }
+  >,
+  tabPanel: PanelV1,
+  slotPanel: PanelV1,
+  home: EvaluatedMotionState,
+): number | null => {
+  const tabStart = connectorWorldPoint(tab.rootEdge.start, tabPanel, home);
+  const tabEnd = connectorWorldPoint(tab.rootEdge.end, tabPanel, home);
+  const slotStart = connectorWorldPoint(slot.centerline.start, slotPanel, home);
+  const slotEnd = connectorWorldPoint(slot.centerline.end, slotPanel, home);
+  return tabStart && tabEnd && slotStart && slotEnd
+    ? segmentAlignment3(tabStart, tabEnd, slotStart, slotEnd)
+    : null;
+};
+
 const distancePointToSegment3Mm = (
   point: Point3Mm,
   start: Point3Mm,
@@ -1582,6 +1647,146 @@ const validateConnections = (
     ir.connectors.map((connector) => [connector.connectorId, connector]),
   );
   const home = homeMotionState(ir);
+
+  for (const tab of ir.connectors) {
+    if (tab.kind !== "tab") continue;
+    const mate = connectorById.get(tab.mateConnectorId);
+    if (mate?.kind !== "slot" || mate.mateConnectorId !== tab.connectorId) {
+      continue;
+    }
+    const tabPanel = panelById.get(tab.panelId);
+    if (!tabPanel) continue;
+    const slotPanel = panelById.get(mate.panelId);
+    const fit = connectorPairFit(tab, mate, tabPanel.thicknessMm);
+    const insertionAlignment = connectorInsertionAlignment(tab, mate);
+    state.metrics.push({
+      metricId: connectorPairMetricId(
+        "fit_w",
+        tab.connectorId,
+        mate.connectorId,
+      ),
+      value: fit.slotWidthMm - fit.requiredSlotWidthMm,
+      unit: "mm",
+      geometryRefs: [
+        geometryRef("connector", tab.connectorId),
+        geometryRef("connector", mate.connectorId),
+      ],
+    });
+    if (insertionAlignment !== null) {
+      state.metrics.push({
+        metricId: connectorPairMetricId(
+          "axis",
+          tab.connectorId,
+          mate.connectorId,
+        ),
+        value: insertionAlignment,
+        unit: "ratio",
+        geometryRefs: [
+          geometryRef("connector", tab.connectorId),
+          geometryRef("connector", mate.connectorId),
+        ],
+      });
+    }
+    state.metrics.push({
+      metricId: connectorPairMetricId(
+        "fit_l",
+        tab.connectorId,
+        mate.connectorId,
+      ),
+      value: fit.slotLengthMm - fit.requiredSlotLengthMm,
+      unit: "mm",
+      geometryRefs: [
+        geometryRef("connector", tab.connectorId),
+        geometryRef("connector", mate.connectorId),
+      ],
+    });
+    if (!fit.fits) {
+      addFailure(state, {
+        failureId: `connections.connector_fit#${tab.connectorId}:${mate.connectorId}`,
+        category: "manufacturability",
+        stage: "connections",
+        severity: "hard",
+        message:
+          "A reciprocal tab and slot must clear both stock thickness and the tab span.",
+        actual: measured(
+          `width ${fit.slotWidthMm.toFixed(3)} mm; length ${fit.slotLengthMm.toFixed(3)} mm`,
+        ),
+        expected: measured(
+          `width >= ${fit.requiredSlotWidthMm.toFixed(3)} mm; length >= ${fit.requiredSlotLengthMm.toFixed(3)} mm`,
+        ),
+        geometryRefs: [
+          geometryRef("connector", tab.connectorId),
+          geometryRef("connector", mate.connectorId),
+          geometryRef("panel", tabPanel.panelId),
+        ],
+        repairableProgramPaths: [],
+      });
+    }
+    if (!connectorInsertionDirectionsCompatible(tab, mate)) {
+      addFailure(state, {
+        failureId: `connections.connector_direction#${tab.connectorId}:${mate.connectorId}`,
+        category: "manufacturability",
+        stage: "connections",
+        severity: "hard",
+        message:
+          "Reciprocal connector insertion axes must be parallel or antiparallel.",
+        actual: measured(insertionAlignment ?? "nonzero finite axes", "ratio"),
+        expected: measured(1, "ratio"),
+        geometryRefs: [
+          geometryRef("connector", tab.connectorId),
+          geometryRef("connector", mate.connectorId),
+        ],
+        repairableProgramPaths: [],
+      });
+    }
+    if (home.ok && slotPanel) {
+      const spanAlignment = connectorSpanAlignment(
+        tab,
+        mate,
+        tabPanel,
+        slotPanel,
+        home.value,
+      );
+      if (spanAlignment !== null) {
+        state.metrics.push({
+          metricId: connectorPairMetricId(
+            "span",
+            tab.connectorId,
+            mate.connectorId,
+          ),
+          value: spanAlignment,
+          unit: "ratio",
+          geometryRefs: [
+            geometryRef("connector", tab.connectorId),
+            geometryRef("connector", mate.connectorId),
+          ],
+        });
+      }
+      if (
+        spanAlignment === null ||
+        1 - spanAlignment > CONNECTOR_ALIGNMENT_COSINE_TOLERANCE
+      ) {
+        addFailure(state, {
+          failureId: `connections.connector_span_alignment#${tab.connectorId}:${mate.connectorId}`,
+          category: "manufacturability",
+          stage: "connections",
+          severity: "hard",
+          message:
+            "The tab span and slot centerline must align in the assembled frame.",
+          actual: measured(spanAlignment ?? "unresolved", "ratio"),
+          expected: measured(1, "ratio"),
+          geometryRefs: [
+            geometryRef("connector", tab.connectorId),
+            geometryRef("connector", mate.connectorId),
+            geometryRef("panel", tabPanel.panelId),
+            geometryRef("panel", slotPanel.panelId),
+          ],
+          repairableProgramPaths: [],
+        });
+      }
+    }
+  }
+
   for (const joint of ir.joints) {
     const refs = [geometryRef("joint", joint.jointId)];
     if (!jointRangeValid(joint)) {
@@ -1669,6 +1874,36 @@ const validateConnections = (
             });
           }
         }
+      }
+      const selectedConnectorIds = new Set(connectorIds);
+      const selectedConnectorsAreMatePairs =
+        resolvedConnectors.length === connectorIds.length &&
+        resolvedConnectors.every((connector) => {
+          const mate = connectorById.get(connector.mateConnectorId);
+          return (
+            mate !== undefined &&
+            mate.mateConnectorId === connector.connectorId &&
+            selectedConnectorIds.has(mate.connectorId)
+          );
+        });
+      if (!selectedConnectorsAreMatePairs) {
+        addFailure(state, {
+          failureId: `connections.joint_connector_mates#${joint.jointId}`,
+          category: "topology",
+          stage: "connections",
+          severity: "hard",
+          message:
+            "Joint connector references must contain complete reciprocal mate pairs.",
+          actual: measured([...selectedConnectorIds].sort().join(",")),
+          expected: measured("complete reciprocal connector pairs"),
+          geometryRefs: [
+            geometryRef("joint", joint.jointId),
+            ...resolvedConnectors.map((connector) =>
+              geometryRef("connector", connector.connectorId),
+            ),
+          ],
+          repairableProgramPaths: [],
+        });
       }
     }
     if (joint.kind === "prismatic") {
@@ -1863,6 +2098,26 @@ const validateConnections = (
       });
     }
     if (connectorPanel) {
+      if (
+        connector.kind === "tab" &&
+        classifyTabAttachment(connector, connectorPanel) === null
+      ) {
+        addFailure(state, {
+          failureId: `connections.tab_attachment#${connector.connectorId}`,
+          category: "manufacturability",
+          stage: "connections",
+          severity: "hard",
+          message:
+            "A tab root must be one contour edge and must leave the tab attached to its panel.",
+          actual: measured(false),
+          expected: measured(true),
+          geometryRefs: [
+            geometryRef("connector", connector.connectorId),
+            geometryRef("panel", connectorPanel.panelId),
+          ],
+          repairableProgramPaths: [],
+        });
+      }
       const boundaryPaths = derivePanelBoundaryCutPaths(
         connectorPanel,
         ir.joints,
@@ -1942,12 +2197,103 @@ const validateConnections = (
       });
     }
   }
+  for (const panel of ir.panels) {
+    const minimumLigamentMm = minimumPanelLigamentMm(panel);
+    const holes = panelMaterialHoles(panel, ir.connectors);
+    const slotHoles = holes.filter(
+      (
+        hole,
+      ): hole is Extract<(typeof holes)[number], { readonly source: "slot" }> =>
+        hole.source === "slot",
+    );
+    for (const slotHole of slotHoles) {
+      const connectorId = slotHole.connectorId;
+      const connectorRefs = [
+        geometryRef("connector", connectorId),
+        geometryRef("panel", panel.panelId),
+      ];
+      const simpleAndContained =
+        isSimplePolygon(slotHole.vertices) &&
+        slotHole.vertices.every((point) =>
+          pointInPolygon(point, panel.contour.vertices, false),
+        );
+      if (!simpleAndContained) {
+        addFailure(state, {
+          failureId: `connections.slot_panel#${connectorId}`,
+          category: "geometry",
+          stage: "connections",
+          severity: "hard",
+          message: "A slot cut must be simple and strictly inside its panel.",
+          actual: measured(false),
+          expected: measured(true),
+          geometryRefs: connectorRefs,
+          repairableProgramPaths: [],
+        });
+        continue;
+      }
+      const boundaryClearanceMm = minimumContourBoundaryClearanceMm(
+        panel.contour.vertices,
+        slotHole.vertices,
+      );
+      if (boundaryClearanceMm < minimumLigamentMm) {
+        addFailure(state, {
+          failureId: `connections.slot_ligament#${connectorId}`,
+          category: "manufacturability",
+          stage: "connections",
+          severity: "hard",
+          message:
+            "A slot cut leaves less than the minimum material ligament at the panel boundary.",
+          actual: measured(boundaryClearanceMm, "mm"),
+          expected: measured(minimumLigamentMm, "mm"),
+          geometryRefs: connectorRefs,
+          repairableProgramPaths: [],
+        });
+      }
+      for (const otherHole of holes) {
+        if (
+          otherHole.holeId === slotHole.holeId ||
+          (otherHole.source === "slot" &&
+            otherHole.holeId.localeCompare(slotHole.holeId) < 0)
+        ) {
+          continue;
+        }
+        const clearanceMm = polygonsInteriorOverlap(
+          slotHole.vertices,
+          otherHole.vertices,
+        )
+          ? 0
+          : minimumContourBoundaryClearanceMm(
+              slotHole.vertices,
+              otherHole.vertices,
+            );
+        if (clearanceMm < minimumLigamentMm) {
+          addFailure(state, {
+            failureId: `connections.slot_clearance#${connectorId}:${otherHole.holeId}`,
+            category: "manufacturability",
+            stage: "connections",
+            severity: "hard",
+            message:
+              "A slot overlaps another cut or leaves less than the minimum material ligament.",
+            actual: measured(clearanceMm, "mm"),
+            expected: measured(minimumLigamentMm, "mm"),
+            geometryRefs: [
+              ...connectorRefs,
+              ...(otherHole.connectorId
+                ? [geometryRef("connector", otherHole.connectorId)]
+                : []),
+            ],
+            repairableProgramPaths: [],
+          });
+        }
+      }
+    }
+  }
   addCheck(
     state,
     "connections.features",
     "connections",
     hardFailureCount(state) === 0 ? "pass" : "fail",
-    "Joint axes, ranges, crease edges, guides, and connector clearances were checked.",
+    "Joint axes, reciprocal mates, tab roots, slot material, paths, and connector clearances were checked.",
     measured(ir.joints.length + ir.connectors.length, "count"),
     measured(`<= ${FABRICATION_LIMITS.maximumJointAndConnectorCount}`, "count"),
   );
@@ -2784,6 +3130,7 @@ const cyclicContourErrorMm = (
 const panelSurfaceGeometry = (
   home: EvaluatedMotionState,
   panel: PanelV1,
+  connectors: FabricationIRV1["connectors"],
 ): PanelSurfaceGeometry | null => {
   const bodyMatrix = home.bodyMatrices[panel.bodyId];
   if (!bodyMatrix) return null;
@@ -2802,8 +3149,8 @@ const panelSurfaceGeometry = (
   return {
     panelId: panel.panelId,
     outer: transformContour3(panel.contour.vertices),
-    holes: panel.innerCutContours.map((contour) =>
-      transformContour3(contour.vertices),
+    holes: panelMaterialHoles(panel, connectors).map((hole) =>
+      transformContour3(hole.vertices),
     ),
     normal:
       unnormalized && normalLength > 1e-12
@@ -2882,7 +3229,7 @@ const mirroredBodyGeometryError = (
   const surfacesForBody = (bodyId: string): readonly PanelSurfaceGeometry[] =>
     ir.panels
       .filter((panel) => panel.bodyId === bodyId)
-      .map((panel) => panelSurfaceGeometry(home, panel))
+      .map((panel) => panelSurfaceGeometry(home, panel, ir.connectors))
       .filter((surface): surface is PanelSurfaceGeometry => surface !== null)
       .sort((left, right) => left.panelId.localeCompare(right.panelId));
   const firstSurfaces = surfacesForBody(firstBodyId);
@@ -3327,7 +3674,7 @@ const exportChecks = (
     ir.panels.every((panel) => {
       const triangulation = triangulatePolygonWithHoles(
         panel.contour.vertices,
-        panel.innerCutContours.map((contour) => contour.vertices),
+        panelMaterialHoles(panel, ir.connectors).map((hole) => hole.vertices),
       );
       return (
         triangulation.triangles.length > 0 &&

@@ -1,3 +1,4 @@
+import { slotConnectorContour } from "./connector-geometry";
 import { segmentsEquivalent, transformPoint2 } from "./polygon";
 import type {
   ConnectorV1,
@@ -5,7 +6,6 @@ import type {
   JointV1,
   PanelV1,
   Point2Mm,
-  SlotConnectorV1,
 } from "./types";
 
 /** Source geometry may be normalized within the same tolerance as joint closure. */
@@ -88,33 +88,6 @@ export const derivePanelBoundaryCutPaths = (
   );
 };
 
-const slotContour = (slot: SlotConnectorV1): readonly Point2Mm[] => {
-  const deltaXmm = slot.centerline.end.xMm - slot.centerline.start.xMm;
-  const deltaYmm = slot.centerline.end.yMm - slot.centerline.start.yMm;
-  const lengthMm = Math.hypot(deltaXmm, deltaYmm);
-  const normalX = lengthMm > 0 ? -deltaYmm / lengthMm : 0;
-  const normalY = lengthMm > 0 ? deltaXmm / lengthMm : 0;
-  const halfWidthMm = slot.widthMm / 2;
-  return [
-    {
-      xMm: slot.centerline.start.xMm + normalX * halfWidthMm,
-      yMm: slot.centerline.start.yMm + normalY * halfWidthMm,
-    },
-    {
-      xMm: slot.centerline.end.xMm + normalX * halfWidthMm,
-      yMm: slot.centerline.end.yMm + normalY * halfWidthMm,
-    },
-    {
-      xMm: slot.centerline.end.xMm - normalX * halfWidthMm,
-      yMm: slot.centerline.end.yMm - normalY * halfWidthMm,
-    },
-    {
-      xMm: slot.centerline.start.xMm - normalX * halfWidthMm,
-      yMm: slot.centerline.start.yMm - normalY * halfWidthMm,
-    },
-  ];
-};
-
 /**
  * Slot contours are closed cuts. Tab roots remain attached, and tab edges that
  * are already represented by the panel perimeter are not emitted twice.
@@ -129,7 +102,7 @@ export const deriveConnectorCutPaths = (
       {
         pathId: `${connector.connectorId}.cut`,
         panelId: panel.panelId,
-        points: slotContour(connector).map((point) =>
+        points: slotConnectorContour(connector).map((point) =>
           transformPoint2(point, panel.flatTransform),
         ),
         closed: true,

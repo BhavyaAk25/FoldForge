@@ -100,7 +100,7 @@ pnpm run fixture -- --fixture fabrication-showcase-pack --seed 20260714 --output
 pnpm run verify:artifact -- artifacts/fabrication-showcase-pack/manifest.json
 ```
 
-Current offline evidence includes 120 valid controls, 560 adversarial verifier mutations, 50 programs repeated ten times, 40 repairable failures, 20 non-repairable cases, 120 adversarial patches, 140 strict intent-contract cases, 15 end-to-end showcase runs, and seven browser flows. Exact results and evidence boundaries are in [EVALS.md](./EVALS.md).
+Current offline evidence includes 280 passing tests, 120 valid controls, 560 adversarial verifier mutations, 50 programs repeated ten times, 40 repairable failures, 20 non-repairable cases, 120 adversarial patches, 140 strict intent-contract cases, 15 end-to-end showcase runs, and seven browser flows. Exact results and evidence boundaries are in [EVALS.md](./EVALS.md).
 
 To run the sealed live readiness suite after enabling Sol:
 

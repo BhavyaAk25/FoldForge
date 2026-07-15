@@ -1,6 +1,9 @@
 import { err, ok, type Result } from "@/core/result";
 
-import { connectorReferencePoint2 } from "./connector-geometry";
+import {
+  connectorReferencePoint2,
+  panelMaterialHoles,
+} from "./connector-geometry";
 import {
   IDENTITY_MATRIX_4,
   matrixIsFinite,
@@ -393,7 +396,7 @@ export const evaluateMotionState = (
     panelVertices[panel.panelId] = vertices;
     const triangulation = triangulatePolygonWithHoles(
       panel.contour.vertices,
-      panel.innerCutContours.map((contour) => contour.vertices),
+      panelMaterialHoles(panel, ir.connectors).map((hole) => hole.vertices),
     );
     const meshVertices = triangulation.vertices.map((point) =>
       transformPoint3(bodyMatrix, {

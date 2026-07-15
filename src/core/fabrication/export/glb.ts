@@ -1,6 +1,7 @@
 import { canonicalSerialize } from "@/core/canonical";
 import { sha256Hex, sha256HexBytes } from "@/core/sha256";
 
+import { panelMaterialHoles } from "../connector-geometry";
 import { evaluateMotionState } from "../kinematics";
 import {
   decomposeRigidMatrix4,
@@ -9,7 +10,12 @@ import {
 } from "../matrix";
 import { transformPoint2, triangulatePolygonWithHoles } from "../polygon";
 import { buildDirectedBodyTopology } from "../topology";
-import type { FabricationIRV1, Point3Mm, Quaternion } from "../types";
+import type {
+  CandidateProvenanceV2,
+  FabricationIRV1,
+  Point3Mm,
+  Quaternion,
+} from "../types";
 import {
   createBinaryArtifact,
   fabricationExportError,
@@ -336,7 +342,9 @@ export const exportFabricationGlb = (
   for (const panel of panelOrder) {
     const triangulation = triangulatePolygonWithHoles(
       panel.contour.vertices,
-      panel.innerCutContours.map((contour) => contour.vertices),
+      panelMaterialHoles(panel, prepared.ir.connectors).map(
+        (hole) => hole.vertices,
+      ),
     );
     if (
       triangulation.triangles.length === 0 ||
@@ -578,7 +586,8 @@ export const exportFabricationGlb = (
   const motionSampleCount =
     prepared.ir.driver && prepared.ir.behavior !== "static" ? 11 : 0;
   const motionStates = Array.from({ length: motionSampleCount }, (_, index) => {
-    const ratio = motionSampleCount <= 1 ? 0 : index / (motionSampleCount - 1);
+    // A populated motion sequence always has the fixed eleven-sample profile.
+    const ratio = index / (motionSampleCount - 1);
     const driver = prepared.ir.driver!;
     return {
       ratio,
@@ -821,106 +830,34 @@ export const exportFabricationGlb = (
   );
 };
 
-const recordValue = (
-  value: unknown,
-): Readonly<Record<string, unknown>> | null =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : null;
-
-const glbJsonDocument = (
-  bytes: Uint8Array,
-): Readonly<Record<string, unknown>> | null => {
-  if (bytes.byteLength < 20) return null;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (
-    view.getUint32(0, true) !== 0x46546c67 ||
-    view.getUint32(4, true) !== 2 ||
-    view.getUint32(8, true) !== bytes.byteLength ||
-    view.getUint32(16, true) !== 0x4e4f534a
-  ) {
-    return null;
-  }
-  const jsonLength = view.getUint32(12, true);
-  if (jsonLength <= 0 || 20 + jsonLength > bytes.byteLength) return null;
-  try {
-    const parsed: unknown = JSON.parse(
-      new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)).trim(),
-    );
-    return recordValue(parsed);
-  } catch {
-    return null;
-  }
-};
-
-/** Parses the binary artifact and proves its embedded profile matches the IR. */
+/**
+ * Regenerates the complete canonical GLB and compares every byte. This binds
+ * panel and path geometry, scene nodes, animation accessors/channels, metadata,
+ * and the binary payload to the exact verified source instead of trusting
+ * mutable self-declared hashes inside the artifact.
+ */
 export const glbArtifactMatchesSource = (
   bytes: Uint8Array,
   ir: FabricationIRV1,
   sourceCandidateId: string,
+  provenance?: CandidateProvenanceV2,
 ): boolean => {
-  const document = glbJsonDocument(bytes);
-  const asset = recordValue(document?.asset);
-  const assetExtras = recordValue(asset?.extras);
-  const documentExtras = recordValue(document?.extras);
-  const profile = documentExtras?.fabricationProfile;
-  const expectedProfile = glbFabricationProfile(ir);
-  if (
-    !document ||
-    !assetExtras ||
-    assetExtras.sourceCandidateId !== sourceCandidateId ||
-    assetExtras.sourceIrHash !== sha256Hex(canonicalSerialize(ir)) ||
-    assetExtras.fabricationProfileSha256 !==
-      sha256Hex(canonicalSerialize(expectedProfile)) ||
-    assetExtras.fabricationPathCount !== ir.paths.length ||
-    assetExtras.connectorFeatureCount !== ir.connectors.length ||
-    canonicalSerialize(profile) !== canonicalSerialize(expectedProfile)
-  ) {
+  const source: VerifiedFabricationExportSource = {
+    ir,
+    sourceCandidateId,
+    selectionStatus: "selected",
+    verification: {
+      candidateId: sourceCandidateId,
+      irHash: sha256Hex(canonicalSerialize(ir)),
+      irId: ir.irId,
+      programId: ir.programId,
+      valid: true,
+    },
+    ...(provenance ? { provenance } : {}),
+  };
+  const expected = exportFabricationGlb(source);
+  if (!expected.ok || expected.value.bytes.byteLength !== bytes.byteLength) {
     return false;
   }
-
-  const meshes = Array.isArray(document.meshes) ? document.meshes : [];
-  const representedPathIds = new Set<string>();
-  for (const meshValue of meshes) {
-    const mesh = recordValue(meshValue);
-    const extras = recordValue(mesh?.extras);
-    const sourcePathId = extras?.sourcePathId;
-    const primitives = Array.isArray(mesh?.primitives) ? mesh.primitives : [];
-    if (
-      typeof sourcePathId === "string" &&
-      primitives.some((primitiveValue) => {
-        const primitive = recordValue(primitiveValue);
-        return primitive?.mode === 1;
-      })
-    ) {
-      representedPathIds.add(sourcePathId);
-    }
-  }
-  if (
-    ir.paths.some((path) => !representedPathIds.has(path.pathId)) ||
-    representedPathIds.size !== ir.paths.length
-  ) {
-    return false;
-  }
-
-  const animations = Array.isArray(document.animations)
-    ? document.animations
-    : [];
-  const expectedMotionSampleCount =
-    ir.driver && ir.behavior !== "static" ? 11 : 0;
-  if (assetExtras.motionSampleCount !== expectedMotionSampleCount) return false;
-  if (expectedMotionSampleCount === 0) return animations.length === 0;
-  const animatedBodyIds = new Set(
-    animations.flatMap((animationValue) => {
-      const animation = recordValue(animationValue);
-      const extras = recordValue(animation?.extras);
-      return typeof extras?.targetBodyId === "string"
-        ? [extras.targetBodyId]
-        : [];
-    }),
-  );
-  return (
-    animatedBodyIds.size === ir.bodies.length &&
-    ir.bodies.every((body) => animatedBodyIds.has(body.bodyId))
-  );
+  return expected.value.bytes.every((byte, index) => byte === bytes[index]);
 };

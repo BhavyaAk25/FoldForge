@@ -436,6 +436,7 @@ const artifactIsSourceEquivalent = (
       artifact.bytes,
       candidate.ir,
       candidate.candidateId,
+      candidate.provenance,
     ));
 
 const equivalenceCheck = (

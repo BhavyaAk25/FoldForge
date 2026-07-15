@@ -127,7 +127,7 @@ Release requires at least 92/100 overall, no category below 22/25, no hard-inval
 
 ## Git and delivery
 
-Work on `codex/foldforge-fabrication-compiler`. Commit small passing milestones and push each one. Maintain a draft PR, never force-push, and never merge to `main`. Production may be deployed with live AI disabled; the only final enablement action should be turning on Sol after credentials and billing permit it.
+Work on `codex/foldforge-fabrication-compiler`. Commit small passing milestones and push each one. Never force-push. Keep the PR in draft until every release gate passes; merge to `main` only after explicit user authorization and a final hosted-build check. Production may be deployed with live AI disabled; the only final enablement action should be turning on Sol after credentials and billing permit it.
 
 ## Definition of done
 

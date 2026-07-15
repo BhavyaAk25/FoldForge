@@ -1,11 +1,8 @@
 import { canonicalSerialize } from "@/core/canonical";
 
 import { fabricationIrHash } from "./compiler";
-import {
-  polygonBounds,
-  signedPolygonAreaMm2,
-  transformPoint2,
-} from "./polygon";
+import { panelNetMaterialAreaMm2 } from "./connector-geometry";
+import { polygonBounds, transformPoint2 } from "./polygon";
 import type {
   CandidateScoreV2,
   FabricationIntentV1,
@@ -38,16 +35,13 @@ export interface RankedFabricationCandidate {
 const clampScore = (value: number): number =>
   Math.max(0, Math.min(100, Number(value.toFixed(6))));
 
-const netAreaForPanelMm2 = (panel: FabricationIRV1["panels"][number]): number =>
-  Math.abs(signedPolygonAreaMm2(panel.contour.vertices)) -
-  panel.innerCutContours.reduce(
-    (innerTotal, contour) =>
-      innerTotal + Math.abs(signedPolygonAreaMm2(contour.vertices)),
-    0,
-  );
+const netAreaForPanelMm2 = (
+  ir: FabricationIRV1,
+  panel: FabricationIRV1["panels"][number],
+): number => panelNetMaterialAreaMm2(panel, ir.connectors);
 
 const panelNetAreaMm2 = (ir: FabricationIRV1): number =>
-  ir.panels.reduce((total, panel) => total + netAreaForPanelMm2(panel), 0);
+  ir.panels.reduce((total, panel) => total + netAreaForPanelMm2(ir, panel), 0);
 
 const printableAreaMm2 = (ir: FabricationIRV1): number =>
   ir.sheets.reduce(
@@ -116,7 +110,7 @@ const stability = (ir: FabricationIRV1): number => {
   if (totalAreaMm2 <= 0) return 0;
   const groundedAreaMm2 = ir.panels
     .filter((panel) => groundedBodyIds.has(panel.bodyId))
-    .reduce((total, panel) => total + netAreaForPanelMm2(panel), 0);
+    .reduce((total, panel) => total + netAreaForPanelMm2(ir, panel), 0);
   return clampScore((groundedAreaMm2 / totalAreaMm2) * 100);
 };
 

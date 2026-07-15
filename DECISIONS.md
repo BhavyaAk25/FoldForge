@@ -66,7 +66,7 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-15 — Fabrication topology must be source-equivalent
 
-**Accepted.** Fold edges cannot also be cut, tab roots remain attached, holes need a safe ligament and useful net material, and joint/coupling connectors must physically span the bodies and axes they claim to constrain. GLB embeds the exact canonical fabrication profile, paths, connectors, hierarchy, and code-derived motion; caller-authored animation is not accepted.
+**Accepted.** Fold edges cannot also be cut, tab roots remain attached, slots stay inside their source panel, holes need a safe ligament and useful net material, and joint/coupling connectors must be complete reciprocal pairs that physically span the bodies and axes they claim to constrain. Slot width clears tab stock thickness; slot length clears the widest full-tab span along its root tangent; declared pair clearance is exact; insertion axes and assembled-frame tab/slot spans must align. Slot material is removed consistently in verification, scoring, collision meshes, and GLB. GLB embeds the exact canonical fabrication profile, paths, connectors, hierarchy, and code-derived motion; source equivalence regenerates the complete canonical artifact and compares every byte, so caller-authored or mutated geometry and animation are rejected.
 
 ## Rejected alternatives
 

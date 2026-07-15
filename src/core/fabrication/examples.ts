@@ -595,8 +595,8 @@ export const createModularCableOrganizerShowcase =
             panelId: "panel-organizer-module",
             mateConnectorId: "connector-organizer-tab",
             centerline: {
-              start: { xMm: 8, yMm: 28 },
-              end: { xMm: 8, yMm: 52 },
+              start: { xMm: 8, yMm: 27.5 },
+              end: { xMm: 8, yMm: 52.5 },
             },
             widthMm: 3,
             insertionDirection: { x: 1, y: 0, z: 0 },
@@ -951,8 +951,8 @@ export const createPullTabPopUpFlowerShowcase =
             panelId: "panel-flower-base",
             mateConnectorId: "connector-flower-guide-tab",
             centerline: {
-              start: { xMm: 45, yMm: 28 },
-              end: { xMm: 45, yMm: 62 },
+              start: { xMm: 28, yMm: 45 },
+              end: { xMm: 62, yMm: 45 },
             },
             widthMm: 3,
             insertionDirection: { x: 0, y: 0, z: 1 },

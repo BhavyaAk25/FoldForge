@@ -5,10 +5,17 @@ import {
   fabricationIrHash,
 } from "@/core/fabrication/compiler";
 import {
+  classifyTabAttachment,
+  connectorInsertionAlignment,
+  connectorInsertionDirectionsCompatible,
+  connectorPairFit,
+} from "@/core/fabrication/connector-geometry";
+import {
   createFacetedDuckGiftBoxShowcase,
   createModularCableOrganizerShowcase,
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
+import { FABRICATION_LIMITS } from "@/core/fabrication/limits";
 import {
   cutPathFromShape,
   derivePanelBoundaryCutPaths,
@@ -102,6 +109,138 @@ const expectStageFailure = (
 };
 
 describe("fabrication verifier geometry and connection stages", () => {
+  it("classifies only fully attached internal and perimeter tabs", () => {
+    const organizer = organizerIr();
+    const panel = organizer.panels[0]!;
+    const tab = organizer.connectors.find(
+      (connector) => connector.kind === "tab",
+    );
+    if (!tab || tab.kind !== "tab") {
+      throw new Error("Organizer tab fixture missing.");
+    }
+    expect(classifyTabAttachment(tab, panel)).toBe("perimeter_tab");
+
+    const outsideTab = {
+      ...tab,
+      contour: {
+        vertices: tab.contour.vertices.map((point) => ({
+          xMm: point.xMm + 100,
+          yMm: point.yMm,
+        })),
+      },
+      rootEdge: {
+        start: {
+          xMm: tab.rootEdge.start.xMm + 100,
+          yMm: tab.rootEdge.start.yMm,
+        },
+        end: { xMm: tab.rootEdge.end.xMm + 100, yMm: tab.rootEdge.end.yMm },
+      },
+    };
+    expect(classifyTabAttachment(outsideTab, panel)).toBeNull();
+
+    const ambiguousBoundaryTab = {
+      ...tab,
+      contour: {
+        vertices: [
+          { xMm: 0, yMm: 10 },
+          { xMm: 10, yMm: 10 },
+          { xMm: 10, yMm: 20 },
+          { xMm: 0, yMm: 20 },
+        ],
+      },
+      rootEdge: {
+        start: { xMm: 0, yMm: 10 },
+        end: { xMm: 10, yMm: 10 },
+      },
+    };
+    expect(classifyTabAttachment(ambiguousBoundaryTab, panel)).toBeNull();
+  });
+
+  it("fails connector fit closed for degenerate or non-finite inputs", () => {
+    const organizer = organizerIr();
+    const tab = organizer.connectors.find(
+      (connector) => connector.kind === "tab",
+    );
+    const slot = organizer.connectors.find(
+      (connector) => connector.kind === "slot",
+    );
+    if (!tab || tab.kind !== "tab" || !slot || slot.kind !== "slot") {
+      throw new Error("Organizer connector fixture missing.");
+    }
+    const fit = connectorPairFit(
+      {
+        ...tab,
+        rootEdge: {
+          start: tab.rootEdge.start,
+          end: tab.rootEdge.start,
+        },
+      },
+      {
+        ...slot,
+        centerline: {
+          start: slot.centerline.start,
+          end: slot.centerline.start,
+        },
+      },
+      2,
+    );
+    expect(fit.fits).toBe(false);
+    expect(fit.slotLengthMm).toBe(0);
+    expect(fit.requiredSlotWidthMm).toBeCloseTo(2.4, 10);
+    expect(fit.requiredSlotLengthMm).toBe(Number.POSITIVE_INFINITY);
+
+    const rotatedFrameFit = connectorPairFit(
+      {
+        ...tab,
+        contour: {
+          vertices: [
+            { xMm: 25, yMm: 30 },
+            { xMm: 45, yMm: 30 },
+            { xMm: 45, yMm: 40 },
+            { xMm: 25, yMm: 40 },
+          ],
+        },
+        rootEdge: {
+          start: { xMm: 25, yMm: 30 },
+          end: { xMm: 45, yMm: 30 },
+        },
+      },
+      {
+        ...slot,
+        centerline: {
+          start: { xMm: 45, yMm: 37.5 },
+          end: { xMm: 45, yMm: 52.5 },
+        },
+      },
+      2,
+    );
+    expect(rotatedFrameFit.fits).toBe(false);
+    expect(rotatedFrameFit.requiredSlotLengthMm).toBeCloseTo(20.4, 10);
+
+    const underClearanceFit = connectorPairFit(
+      tab,
+      { ...slot, widthMm: 2.31 },
+      2,
+    );
+    expect(underClearanceFit.requiredSlotWidthMm).toBeCloseTo(2.4, 10);
+    expect(underClearanceFit.fits).toBe(false);
+
+    expect(
+      connectorInsertionDirectionsCompatible(tab, {
+        ...slot,
+        insertionDirection: { x: -1, y: 0, z: 0 },
+      }),
+    ).toBe(true);
+    const perpendicularSlot = {
+      ...slot,
+      insertionDirection: { x: 0, y: 1, z: 0 },
+    };
+    expect(connectorInsertionAlignment(tab, perpendicularSlot)).toBe(0);
+    expect(connectorInsertionDirectionsCompatible(tab, perpendicularSlot)).toBe(
+      false,
+    );
+  });
+
   it("rejects small-area, sub-feature, invalid-inner-cut, and missing source contours", () => {
     const ir = compile();
     const base = ir.panels[0]!;
@@ -470,6 +609,333 @@ describe("fabrication verifier geometry and connection stages", () => {
     expect(
       zeroLengthReport.failures.map((failure) => failure.failureId),
     ).toContain(`connections.connector_feature#${slot.connectorId}`);
+  });
+
+  it("rejects off-panel slots, hollow slot cuts, detached tab roots, and cross-paired joint guides", () => {
+    const organizer = organizerIr();
+    const slot = organizer.connectors.find(
+      (connector) => connector.kind === "slot",
+    );
+    const tab = organizer.connectors.find(
+      (connector) => connector.kind === "tab",
+    );
+    if (!slot || slot.kind !== "slot" || !tab || tab.kind !== "tab") {
+      throw new Error("Organizer connector pair missing.");
+    }
+
+    const offPanelSlot = {
+      ...slot,
+      centerline: {
+        start: { xMm: 1, yMm: 40 },
+        end: { xMm: 116, yMm: 40 },
+      },
+      widthMm: 150,
+    };
+    const offPanelReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.connectorId === slot.connectorId ? offPanelSlot : connector,
+        ),
+      },
+      "candidate-off-panel-slot",
+    );
+    expect(offPanelReport.failedAtStage).toBe("connections");
+    expect(
+      offPanelReport.failures.map((failure) => failure.failureId),
+    ).toContain(`connections.slot_panel#${slot.connectorId}`);
+
+    const hollowingSlot = {
+      ...slot,
+      centerline: {
+        start: { xMm: 1, yMm: 40 },
+        end: { xMm: 116, yMm: 40 },
+      },
+      widthMm: 78,
+    };
+    const hollowReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.connectorId === slot.connectorId
+            ? hollowingSlot
+            : connector,
+        ),
+      },
+      "candidate-hollow-slot",
+    );
+    expect(hollowReport.failedAtStage).toBe("panel_geometry");
+    expect(hollowReport.failures.map((failure) => failure.failureId)).toContain(
+      `geometry.net_material#${organizer.panels[0]!.panelId}`,
+    );
+    expect(
+      hollowReport.metrics.find((metric) =>
+        metric.metricId.startsWith("panel_net_material_ratio:"),
+      )?.value,
+    ).toBeLessThan(FABRICATION_LIMITS.minimumNetMaterialRatio);
+
+    const detachedTab = {
+      ...tab,
+      rootEdge: {
+        start: { xMm: 50, yMm: 30 },
+        end: { xMm: 60, yMm: 30 },
+      },
+    };
+    const detachedReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.connectorId === tab.connectorId ? detachedTab : connector,
+        ),
+      },
+      "candidate-detached-tab",
+    );
+    expect(detachedReport.failedAtStage).toBe("connections");
+    expect(
+      detachedReport.failures.map((failure) => failure.failureId),
+    ).toContain(`connections.tab_attachment#${tab.connectorId}`);
+
+    const tabPanel = organizer.panels.find(
+      (panel) => panel.panelId === tab.panelId,
+    );
+    if (!tabPanel) throw new Error("Organizer tab panel missing.");
+    const narrowSlotReport = verifyFabricationIr(
+      {
+        ...organizer,
+        panels: organizer.panels.map((panel) =>
+          panel.panelId === tabPanel.panelId
+            ? { ...panel, thicknessMm: slot.widthMm }
+            : panel,
+        ),
+      },
+      "candidate-narrow-slot",
+    );
+    expect(narrowSlotReport.failedAtStage).toBe("connections");
+    expect(
+      narrowSlotReport.failures.map((failure) => failure.failureId),
+    ).toContain(
+      `connections.connector_fit#${tab.connectorId}:${slot.connectorId}`,
+    );
+
+    const shortSlotReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.connectorId === slot.connectorId &&
+          connector.kind === "slot"
+            ? {
+                ...connector,
+                centerline: {
+                  start: { xMm: 8, yMm: 28 },
+                  end: { xMm: 8, yMm: 52 },
+                },
+              }
+            : connector,
+        ),
+      },
+      "candidate-short-slot",
+    );
+    expect(shortSlotReport.failedAtStage).toBe("connections");
+    expect(
+      shortSlotReport.failures.map((failure) => failure.failureId),
+    ).toContain(
+      `connections.connector_fit#${tab.connectorId}:${slot.connectorId}`,
+    );
+
+    const perpendicularDirectionReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.connectorId === slot.connectorId &&
+          connector.kind === "slot"
+            ? {
+                ...connector,
+                insertionDirection: { x: 0, y: 1, z: 0 },
+              }
+            : connector,
+        ),
+      },
+      "candidate-perpendicular-connector-directions",
+    );
+    expect(perpendicularDirectionReport.failedAtStage).toBe("connections");
+    expect(
+      perpendicularDirectionReport.failures.map((failure) => failure.failureId),
+    ).toContain(
+      `connections.connector_direction#${tab.connectorId}:${slot.connectorId}`,
+    );
+
+    const longTabId = `connector-tab-${"a".repeat(48)}`;
+    const longSlotId = `connector-slot-${"b".repeat(47)}`;
+    const longIdentifierReport = verifyFabricationIr(
+      {
+        ...organizer,
+        connectors: organizer.connectors.map((connector) =>
+          connector.kind === "tab"
+            ? {
+                ...connector,
+                connectorId: longTabId,
+                mateConnectorId: longSlotId,
+              }
+            : {
+                ...connector,
+                connectorId: longSlotId,
+                mateConnectorId: longTabId,
+              },
+        ),
+        paths: organizer.paths.map((path) =>
+          path.pathId === `${slot.connectorId}.cut`
+            ? { ...path, pathId: `${longSlotId}.cut` }
+            : path,
+        ),
+        semanticParts: organizer.semanticParts.map((part) => ({
+          ...part,
+          geometryRefs: part.geometryRefs.map((ref) =>
+            ref.kind !== "connector"
+              ? ref
+              : {
+                  ...ref,
+                  id: ref.id === tab.connectorId ? longTabId : longSlotId,
+                },
+          ),
+        })),
+        assemblyOperations: organizer.assemblyOperations.map((operation) => ({
+          ...operation,
+          targetRefs: operation.targetRefs.map((ref) =>
+            ref.kind !== "connector"
+              ? ref
+              : {
+                  ...ref,
+                  id: ref.id === tab.connectorId ? longTabId : longSlotId,
+                },
+          ),
+        })),
+      },
+      "candidate-long-connector-identifiers",
+    );
+    expect(longIdentifierReport.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metricId: expect.stringMatching(/^fit_w:/u),
+        }),
+        expect.objectContaining({
+          metricId: expect.stringMatching(/^fit_l:/u),
+        }),
+        expect.objectContaining({ metricId: expect.stringMatching(/^axis:/u) }),
+        expect.objectContaining({ metricId: expect.stringMatching(/^span:/u) }),
+      ]),
+    );
+    expect(
+      longIdentifierReport.metrics.every(
+        (metric) => metric.metricId.length <= 80,
+      ),
+    ).toBe(true);
+
+    const flower = flowerIr();
+    const guideTab = flower.connectors.find(
+      (connector) => connector.kind === "tab",
+    );
+    const guideSlot = flower.connectors.find(
+      (connector) => connector.kind === "slot",
+    );
+    const prismatic = flower.joints.find((joint) => joint.kind === "prismatic");
+    if (!guideTab || !guideSlot || !prismatic) {
+      throw new Error("Flower guide fixture missing.");
+    }
+    const flaredTabReport = verifyFabricationIr(
+      {
+        ...flower,
+        connectors: flower.connectors.map((connector) => {
+          if (connector.connectorId === guideTab.connectorId) {
+            return {
+              ...guideTab,
+              contour: {
+                vertices: [
+                  { xMm: 30, yMm: 30 },
+                  { xMm: 40, yMm: 30 },
+                  { xMm: 45, yMm: 40 },
+                  { xMm: 25, yMm: 40 },
+                ],
+              },
+            };
+          }
+          if (connector.connectorId === guideSlot.connectorId) {
+            return {
+              ...guideSlot,
+              centerline: {
+                start: { xMm: 37.5, yMm: 45 },
+                end: { xMm: 52.5, yMm: 45 },
+              },
+            };
+          }
+          return connector;
+        }),
+      },
+      "candidate-flared-tab-short-slot",
+    );
+    expect(flaredTabReport.failedAtStage).toBe("connections");
+    expect(
+      flaredTabReport.failures.map((failure) => failure.failureId),
+    ).toContain(
+      `connections.connector_fit#${guideTab.connectorId}:${guideSlot.connectorId}`,
+    );
+
+    const perpendicularSpanReport = verifyFabricationIr(
+      {
+        ...flower,
+        connectors: flower.connectors.map((connector) =>
+          connector.connectorId === guideSlot.connectorId &&
+          connector.kind === "slot"
+            ? {
+                ...connector,
+                centerline: {
+                  start: { xMm: 45, yMm: 32.5 },
+                  end: { xMm: 45, yMm: 57.5 },
+                },
+              }
+            : connector,
+        ),
+      },
+      "candidate-perpendicular-connector-span",
+    );
+    expect(perpendicularSpanReport.failedAtStage).toBe("connections");
+    expect(
+      perpendicularSpanReport.failures.map((failure) => failure.failureId),
+    ).toContain(
+      `connections.connector_span_alignment#${guideTab.connectorId}:${guideSlot.connectorId}`,
+    );
+
+    const secondTab = {
+      ...guideTab,
+      connectorId: "connector-flower-guide-tab-2",
+      mateConnectorId: "connector-flower-guide-slot-2",
+    };
+    const secondSlot = {
+      ...guideSlot,
+      connectorId: "connector-flower-guide-slot-2",
+      mateConnectorId: "connector-flower-guide-tab-2",
+    };
+    const crossPairReport = verifyFabricationIr(
+      {
+        ...flower,
+        joints: flower.joints.map((joint) =>
+          joint.kind === "prismatic"
+            ? {
+                ...joint,
+                guideConnectorIds: [
+                  guideTab.connectorId,
+                  secondSlot.connectorId,
+                ],
+              }
+            : joint,
+        ),
+        connectors: [...flower.connectors, secondTab, secondSlot],
+      },
+      "candidate-cross-paired-guides",
+    );
+    expect(crossPairReport.failedAtStage).toBe("connections");
+    expect(
+      crossPairReport.failures.map((failure) => failure.failureId),
+    ).toContain(`connections.joint_connector_mates#${prismatic.jointId}`);
   });
 });
 
