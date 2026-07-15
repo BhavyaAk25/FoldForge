@@ -302,7 +302,7 @@ export function FoldForgeResults({
                 <span>
                   Compiled the geometry, ran{" "}
                   {selected.verification.checks.length}
-                  checks, applied any allowed patch, and ranked only valid
+                  {" checks"}, applied any allowed patch, and ranked only valid
                   candidates.
                 </span>
               </li>
