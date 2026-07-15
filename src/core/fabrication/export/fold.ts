@@ -293,9 +293,7 @@ export const exportFabricationFold = (
     // FOLD treats a zero angle as an unfolded edge, which conflicts with an
     // M/V assignment in common validators. A crease-pattern frame can omit
     // this optional array when the source only declares fold direction.
-    ...(hasDeclaredFoldAngle
-      ? { edges_foldAngle: accumulator.angles }
-      : {}),
+    ...(hasDeclaredFoldAngle ? { edges_foldAngle: accumulator.angles } : {}),
     edges_foldforgePathId: accumulator.pathIds,
   };
   const document = {

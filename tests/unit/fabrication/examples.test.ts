@@ -167,11 +167,11 @@ describe("offline fabrication showcases", () => {
       }),
     ).toMatchObject({ status: "available" });
     const duckFold = exportFabricationFold({
-        ir: duckIr,
-        sourceCandidateId: duckCandidateId,
-        selectionStatus: "selected",
-        verification: duckReport,
-      });
+      ir: duckIr,
+      sourceCandidateId: duckCandidateId,
+      selectionStatus: "selected",
+      verification: duckReport,
+    });
     expect(duckFold).toMatchObject({ status: "generated" });
     if (duckFold.status !== "generated") {
       throw new Error("The fold-only duck should produce a FOLD artifact.");
