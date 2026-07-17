@@ -233,4 +233,59 @@ describe("live intent constraint evidence", () => {
       expect.arrayContaining([expect.objectContaining({ passed: false })]),
     );
   });
+
+  it("accepts fold-flat recall only as a hard user semantic constraint", () => {
+    const base = fixtureIntent();
+    const sourceSheet = base.stockOptions[0];
+    if (!sourceSheet) throw new Error("Fixture stock is unavailable.");
+    const foldFlatConstraint = {
+      constraintId: "fold-flat-display",
+      kind: "fold_flat" as const,
+      hard: true,
+      source: "user" as const,
+      bodyIds: ["body-display"],
+      maximumStackThicknessMm:
+        sourceSheet.material.thicknessMm * base.fabricationBudget.maximumPanels,
+    };
+    const expected = {
+      widthMm: base.requestedSize.widthMm,
+      heightMm: base.requestedSize.heightMm,
+      depthMm: base.requestedSize.depthMm ?? 1,
+      materialThicknessMm: sourceSheet.material.thicknessMm,
+      requiredMaterialTerms: [],
+      sheetSizeMm: null,
+      maximumSheets: base.fabricationBudget.maximumSheets,
+      behavior: base.behavior,
+      cutsAllowed: base.fabricationBudget.cutsAllowed,
+      glueAllowed: base.fabricationBudget.glueAllowed,
+      motion: null,
+      requiredSemanticKinds: ["fold_flat" as const],
+      requiredDimensionTargetsMm: [],
+      requiredDescriptionTerms: [],
+    };
+
+    const variants = [
+      { semanticConstraints: [], passed: false },
+      {
+        semanticConstraints: [{ ...foldFlatConstraint, hard: false }],
+        passed: false,
+      },
+      {
+        semanticConstraints: [
+          { ...foldFlatConstraint, source: "inferred" as const },
+        ],
+        passed: false,
+      },
+      { semanticConstraints: [foldFlatConstraint], passed: true },
+    ] as const;
+
+    for (const variant of variants) {
+      expect(
+        evaluateLiveIntentConstraints(
+          { ...base, semanticConstraints: variant.semanticConstraints },
+          expected,
+        ).passed,
+      ).toBe(variant.passed);
+    }
+  });
 });

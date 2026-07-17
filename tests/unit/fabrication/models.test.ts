@@ -84,6 +84,20 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(parseResponse.mock.calls[0]?.[0]).not.toHaveProperty(
       "previous_response_id",
     );
+    expect(parseResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "flat-storage requirements such as folding, collapsing, or returning flat require a fold_flat constraint",
+        ),
+      }),
+    );
+    expect(parseResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "maximumStackThicknessMm to the selected stock thickness multiplied by fabricationBudget.maximumPanels",
+        ),
+      }),
+    );
     expect(getClient).toHaveBeenCalledWith({ paidEvaluation: false });
   });
 
