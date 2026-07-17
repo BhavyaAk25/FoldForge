@@ -104,10 +104,13 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Published a sanitized live-evidence packet with build/report/ledger hashes and no prompts, model bodies, response IDs, or credentials.
 - After the authorized immutable continuation, the paid compiler contract passed all three supported, refusal, and injection cases on commit `859bccd`. The first guarded readiness retry then preserved 17 of 18 explicit requirements but omitted the user's hard fold-flat semantic, so the runner stopped before program generation after charging only the completed intent request. This exposed a real compiler-prompt coverage weakness rather than being relabelled as a success.
 - Strengthened the general intent contract with a final explicit-requirement coverage pass and direct mappings for storage state, symmetry, motion range, and named-part dimensions. This remains prompt-level normalization rather than keyword templates or post-hoc mutation of model output.
+- Re-ran the three-case paid compiler contract on clean commit `20b60cd`; all supported, refusal, and injection cases passed. The corrected guarded intent then passed 18/18 explicit checks, including the hard user fold-flat constraint.
+- The first program proposal still did not settle inside the 180-second synchronous boundary. The budget guard charged its conservative $0.6869125 reservation and sealed the authorized continuation at $1.888625. No program, repair, live artifact, or end-to-end success is claimed, and no second continuation was created.
+- Replaced synchronous program generation with the official Responses background pattern: one `background:true` generation, bounded polling to a terminal state, retrieval-only retries, `store:false`, and cancellation at 210 seconds inside the 240-second route. This remedy is offline-tested but not yet paid-verified.
 - Corrected FOLD boundary versus internal-cut assignments and namespaced extension keys, made static-duck motion and GLB copy honest, and unified multi-sheet preview/SVG/DXF placement through one deterministic layout.
 
 ## Remaining external gate
 
-- Start another cumulative paid run only with explicit authorization; do not delete or relabel the sealed $0.8307225 ledger. The five-case release gate still requires at least four complete runs plus the paid evidence packet.
+- Start another cumulative paid run only with new explicit authorization; do not delete, reset, or relabel either sealed ledger or the `$1.888625` cumulative charge. The five-case release gate still requires at least four complete runs plus the paid evidence packet.
 - Validate the exact live-selected artifacts in real consumer tools and verify the identical hosted build before recording.
 - Record and submit the public narrated demo only after that evidence exists. The paid intent contract is the only live-model success currently claimed; no live program, repair, artifact, or end-to-end success is claimed.

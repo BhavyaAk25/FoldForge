@@ -1,13 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "evidenceStatus": "partial_live_failure",
   "model": "gpt-5.6-sol",
-  "paidBuildSha": "66eb9b16e0e65d10fb36daa854b3455152903b34",
+  "paidBuildSha": "20b60cdd69373db428c543fb00452ec39f387d5f",
   "workingTreeWasClean": true,
   "sourceReportHashes": {
-    "compilerSha256": "a4356ff0aac401fb16d83c692f541177ac627885aba79104bb21b8f8a1d20395",
-    "readinessSha256": "231d4f76fb37359389444ec478787d79a3c64c2b0185e0d8b82ab759c115df95",
-    "sealedLedgerSha256": "7992cf2258b3b67501a7019d11d44d6fa7eb2b6af502f4f2f951605f1564bfa7"
+    "compilerSha256": "e73e58cd1b39d9b9693119676c4d800c99172e497ed5e7f634433b9e5a73445b",
+    "readinessSha256": "1059d679901f8ed4f354e5f1ee780aa765bea683eaa48ed8721d262365ab6770",
+    "originalSealedLedgerSha256": "7992cf2258b3b67501a7019d11d44d6fa7eb2b6af502f4f2f951605f1564bfa7",
+    "continuationLedgerSha256": "fd463647ee8e49028b7c18fdf443dadb329f45e4fcb7bbe30397296d026b6d4f",
+    "continuationClaimSha256": "1dcf54e6b58bc301aff8397390148c34bff8046d67be82e7dca57cbdd5e90682"
   },
   "compilerContract": {
     "passed": true,
@@ -20,17 +22,19 @@
     "unitNormalizationAccuracyRate": 1,
     "correctStatusRate": 1,
     "correctRefusalOrClarificationRate": 1,
-    "chargedCostUsd": 0.102145
+    "chargedCostUsd": 0.11069875
   },
   "readinessAttempt": {
-    "startedAtIso": "2026-07-17T21:32:01.060Z",
+    "startedAtIso": "2026-07-17T23:12:42.139Z",
     "selectedCaseCount": 1,
     "passedCount": 0,
     "releaseGatePassed": false,
     "failedCaseId": "live-hinged-counter-display",
     "failureStage": "first_program_proposal",
-    "failureCode": "budget_provider_failure",
-    "durationMs": 85463.998,
+    "failureCode": "budget_unsettled_request_failure",
+    "durationMs": 235989.833,
+    "explicitConstraintChecksPassed": 18,
+    "explicitConstraintCheckCount": 18,
     "generatedCandidateCount": 0,
     "verifiedCandidateCount": 0,
     "repairedCandidateCount": 0,
@@ -39,12 +43,14 @@
   "sealedBudget": {
     "authorizedMaximumUsd": 4,
     "enforcedMaximumUsd": 3.7,
-    "conservativeChargedCostUsd": 0.8307225,
-    "remainingUnderEnforcedMaximumUsd": 2.8692775,
-    "requestCount": 5,
-    "successfulIntentRequestCount": 4,
-    "unsettledProgramRequestCount": 1,
-    "haltedReason": "provider_failure"
+    "originalCarriedCostUsd": 0.8307225,
+    "conservativeChargedCostUsd": 1.888625,
+    "remainingUnderEnforcedMaximumUsd": 1.811375,
+    "requestCount": 14,
+    "successfulIntentRequestCount": 12,
+    "unsettledProgramRequestCount": 2,
+    "continuationCount": 1,
+    "haltedReason": "unsettled_request_failure"
   },
   "privacy": {
     "containsPrompts": false,

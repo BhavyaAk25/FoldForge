@@ -12,7 +12,7 @@ Do not record the final live-prompt version until all of these are true on the e
 - the deployed build SHA equals the repository commit, the eval report records that same build SHA, and the video visibly shows it; and
 - the final ledger remains below the builder's $4.00 authorization.
 
-Current evidence does **not** meet that gate: the paid intent contract passed 3/3, the first complex program proposal failed at the provider boundary, the ledger sealed at $0.8307225, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
+Current evidence does **not** meet that gate: the paid intent contract passed 3/3 and the guarded complex intent passed 18/18 explicit checks, but the first program proposal did not settle. The authorized continuation sealed at $1.888625, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
 
 ## Set up the recording
 
@@ -69,7 +69,7 @@ Use an unseen supported prompt, not a starter or saved example:
 
 **Screen:** Show the four judging criteria mapped to evidence in `README.md`, the current `EVALS.md` results, then the sanitized ledger summary. Never show prompts, model bodies, response IDs, environment files, or credentials.
 
-**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Offline, code rejected all 560 hard-invalid mutations, repaired 40 measured failures, repeated 50 programs byte-for-byte, and passed 327 tests plus seven browser flows. Paid testing has a $4 outer ceiling and a $3.70 executable cap. Code reserves worst-case cost before each call; uncertain usage seals an immutable ledger instead of silently retrying.”
+**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Offline, code rejected all 560 hard-invalid mutations, repaired 40 measured failures, repeated 50 programs byte-for-byte, and passed 337 tests plus seven browser flows. Paid testing has a $4 outer ceiling and a $3.70 executable cap. Code reserves worst-case cost before each call; uncertain usage seals an immutable ledger instead of silently retrying.”
 
 ### 2:33–2:53 — Codex, human decisions, and close
 

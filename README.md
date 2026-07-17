@@ -8,7 +8,7 @@
 
 ## What you can try now
 
-The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. The paid Sol intent contract passed 3/3 cases; the first complex program proposal then failed at the provider boundary, so there is no claim of a live prompt-to-artifact success yet.
+The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On the latest paid build, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. Its first program proposal then failed to settle inside the synchronous request window, so there is still no claim of a live prompt-to-artifact success.
 
 To understand the product in under a minute:
 
@@ -53,7 +53,7 @@ This is not text-to-image and it is not unrestricted text-to-CAD. Its deliberate
 | **GPT-5.6 Sol**        | Normalized intent, bounded programs, semantic critique, report-grounded diagnosis, typed parameter patches, concise instructions | Declaring validity, editing trusted coordinates, selecting a winner, exporting bytes |
 | **Deterministic code** | Units, geometry, kinematics, verification, patch application, ranking, canonical serialization, hashes, previews, and exports    | Inventing missing essential measurements                                             |
 
-Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, no SDK retries, and a 180-second timeout. A failed candidate cannot be ranked, finalized, or exported as valid.
+Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, and no model-generation retries. Large program synthesis now uses OpenAI background mode with a bounded 210-second poll inside a 240-second route; only retrievals may retry. This correction has passed offline tests but has not been paid-verified. A failed candidate cannot be ranked, finalized, or exported as valid.
 
 ### Verification is ordered and fail-fast
 
@@ -97,7 +97,7 @@ The eval plan was derived from the four official judging criteria: **Technologic
 
 Current deterministic evidence:
 
-- **327/327 tests** passing across 49 files;
+- **337/337 tests** passing across 49 files;
 - **96.72% statements, 90.17% branches, 97.72% functions, 97.65% lines** covered;
 - **120/120** varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;
@@ -119,12 +119,13 @@ Current paid evidence:
 - supported intent: strict pass;
 - unsupported request: strict refusal;
 - prompt-injection attempt: remained inside the strict contract;
-- first complex program proposal: provider failure after the intent succeeded; and
-- sealed cumulative charge: **$0.8307225**.
+- latest guarded complex intent: **18/18** explicit constraints recalled;
+- first program proposal: no settled response inside the synchronous request window; and
+- one immutable continuation used and sealed at a conservative cumulative **$1.888625**, leaving **$1.811375** under the executable cap.
 
 That failure is evidence that the budget control worked, not evidence that live generation works. Production therefore remains live-disabled. The sanitized packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 
-After explicit authorization, one non-branching continuation may carry the complete charged history forward. A final live claim requires at least four complete successes from a five-case sealed suite on the exact submission build, including strict programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes.
+The one explicitly authorized non-branching continuation has been used and remains immutable. Any further paid run requires new explicit authorization and must carry the complete `$1.888625` history forward under the same cumulative cap. A final live claim still requires at least four complete successes from a five-case sealed suite on the exact submission build, including strict programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes.
 
 ## How Codex and GPT-5.6 contributed
 

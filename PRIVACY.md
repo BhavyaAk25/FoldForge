@@ -19,7 +19,7 @@ Offline mode makes no OpenAI request. It must identify disclosed fixtures or det
 
 The minimum live payload may include the user’s design brief, normalized constraints, bounded grammar/schema, and—during repair—the relevant structured verifier failures. FoldForge must not send browser cookies, access codes, API keys, raw IP addresses, raw user-agent strings, unrelated project history, exported file bytes, or local-storage contents.
 
-Responses use `store:false`. According to the official [Responses API reference](https://developers.openai.com/api/reference/resources/responses/methods/create), that disables storing the response for later retrieval. It does **not** mean zero provider retention. OpenAI’s [API data controls](https://developers.openai.com/api/docs/guides/your-data) state that API data is not used for training by default and that abuse-monitoring logs may be retained for up to 30 days, subject to account controls and legal requirements. Users should not submit confidential, personal, regulated, or proprietary content they are not authorized to send.
+Responses use `store:false`. It does **not** mean zero provider retention. OpenAI’s [API data controls](https://developers.openai.com/api/docs/guides/your-data) state that API data is not used for training by default and that abuse-monitoring logs may be retained for up to 30 days, subject to account controls and legal requirements. Program synthesis also uses documented [background mode](https://developers.openai.com/api/docs/guides/background), which temporarily retains response state for roughly 10 minutes so it can be polled even when `store:false`. FoldForge polls for at most 210 seconds and does not persist that response content itself. Users should not submit confidential, personal, regulated, or proprietary content they are not authorized to send.
 
 ## Identity and safety subject
 
@@ -64,8 +64,9 @@ Exact live limits per random session subject:
 - model input: **50,000 tokens per hour**;
 - model output: **20,000 tokens per hour**;
 - simultaneous live requests: **2 per session** and **8 process-wide**;
-- OpenAI SDK retries: **0**; and
-- model request timeout: **180 seconds**, inside a declared **240-second** live-route duration.
+- model-generation retries: **0**;
+- synchronous SDK request timeout: **180 seconds**; and
+- program background polling: **210 seconds maximum**, inside a declared **240-second** live-route duration. Retrieval-only retries do not start another model generation.
 
 Public deterministic compile and export routes are separately limited to 30 requests per 10-minute process-local subject bucket, one concurrent request per subject, and four concurrent requests process-wide. The verifier also rejects estimated motion/collision work above 2,000,000 sampled triangle-pair units before expensive traversal. These are best-effort instance-local controls suitable for the bounded demo; a horizontally scaled public service requires an upstream/shared atomic limiter.
 
@@ -100,13 +101,13 @@ As of 2026-07-17:
 
 - Live AI remains disabled with `ENABLE_LIVE_OPENAI=false`. A paid three-case intent contract passed, but no paid program, repair, artifact, or end-to-end success is claimed. The sanitized public record is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 - Every live route uses the signed two-hour session subject, same-origin/Fetch Metadata guard, route body cap, request/token quota, concurrency lease, strict schema, safety identifier, and fail-closed live state.
-- OpenAI calls set `store:false`, bind budget reservations to the exact request output ceiling, disable SDK retries, use a 180-second timeout, and never log production prompt or response bodies.
+- OpenAI calls set `store:false`, bind budget reservations to the exact request output ceiling, disable model-generation retries, and never log production prompt or response bodies. Program synthesis uses one background response with bounded retrieval-only retries and a 210-second poll limit.
 - Export routes rebuild and verify the submitted selected candidate instead of trusting client export bytes.
 - Public deterministic compile/export routes enforce request, concurrency, and geometric work budgets before returning artifacts.
 - Health exposes only bounded public state and build provenance.
 - Automated route tests cover origin, access, caps, quotas, concurrency, kill-switch state, strict malformed data, and exact selected-candidate export behavior.
 
-The remaining live gate is operational and evidentiary: a new paid run needs explicit builder authorization, an immutable continuation of the sealed ledger, a passing program-generation stage, and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
+The remaining live gate is operational and evidentiary: a new paid run needs fresh builder authorization, an immutable chained continuation of the sealed `$1.888625` ledger, a passing background program-generation stage, and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
 
 ## Reporting a concern
 

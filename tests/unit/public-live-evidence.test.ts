@@ -7,7 +7,7 @@ const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 
 const PublicLiveEvidenceSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     evidenceStatus: z.literal("partial_live_failure"),
     model: z.literal("gpt-5.6-sol"),
     paidBuildSha: z.string().regex(/^[a-f0-9]{40}$/),
@@ -16,7 +16,9 @@ const PublicLiveEvidenceSchema = z
       .object({
         compilerSha256: Sha256Schema,
         readinessSha256: Sha256Schema,
-        sealedLedgerSha256: Sha256Schema,
+        originalSealedLedgerSha256: Sha256Schema,
+        continuationLedgerSha256: Sha256Schema,
+        continuationClaimSha256: Sha256Schema,
       })
       .strict(),
     compilerContract: z
@@ -44,6 +46,8 @@ const PublicLiveEvidenceSchema = z
         failureStage: z.literal("first_program_proposal"),
         failureCode: z.string().min(1),
         durationMs: z.number().positive(),
+        explicitConstraintChecksPassed: z.literal(18),
+        explicitConstraintCheckCount: z.literal(18),
         generatedCandidateCount: z.literal(0),
         verifiedCandidateCount: z.literal(0),
         repairedCandidateCount: z.literal(0),
@@ -54,12 +58,14 @@ const PublicLiveEvidenceSchema = z
       .object({
         authorizedMaximumUsd: z.literal(4),
         enforcedMaximumUsd: z.literal(3.7),
+        originalCarriedCostUsd: z.literal(0.8307225),
         conservativeChargedCostUsd: z.number().positive().max(3.7),
         remainingUnderEnforcedMaximumUsd: z.number().nonnegative(),
-        requestCount: z.literal(5),
-        successfulIntentRequestCount: z.literal(4),
-        unsettledProgramRequestCount: z.literal(1),
-        haltedReason: z.literal("provider_failure"),
+        requestCount: z.literal(14),
+        successfulIntentRequestCount: z.literal(12),
+        unsettledProgramRequestCount: z.literal(2),
+        continuationCount: z.literal(1),
+        haltedReason: z.literal("unsettled_request_failure"),
       })
       .strict(),
     privacy: z
@@ -85,8 +91,21 @@ describe("public Sol evidence packet", () => {
     expect(source).not.toMatch(/resp_[a-zA-Z0-9]+/);
     expect(source).not.toMatch(/sk-[a-zA-Z0-9_-]+/);
     expect(evidence.readinessAttempt.releaseGatePassed).toBe(false);
+    expect(
+      evidence.sealedBudget.conservativeChargedCostUsd +
+        evidence.sealedBudget.remainingUnderEnforcedMaximumUsd,
+    ).toBe(evidence.sealedBudget.enforcedMaximumUsd);
     expect(evidence.claimsNotEstablished).toContain(
       "live end-to-end prompt-to-fabrication success",
+    );
+    expect(new Set(evidence.claimsNotEstablished)).toEqual(
+      new Set([
+        "live program generation",
+        "live verifier-grounded repair",
+        "live selected artifact export",
+        "live end-to-end prompt-to-fabrication success",
+        "sealed release readiness",
+      ]),
     );
   });
 });

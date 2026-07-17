@@ -15,9 +15,18 @@ import {
 } from "@/server/fabrication-ai/models";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
-const { getClient, parseResponse } = vi.hoisted(() => ({
+const {
+  cancelResponse,
+  createResponse,
+  getClient,
+  parseResponse,
+  retrieveResponse,
+} = vi.hoisted(() => ({
+  cancelResponse: vi.fn(),
+  createResponse: vi.fn(),
   getClient: vi.fn(),
   parseResponse: vi.fn(),
+  retrieveResponse: vi.fn(),
 }));
 
 const usage: ResponseUsage = {
@@ -39,12 +48,23 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
   let temporaryDirectories: string[] = [];
 
   beforeEach(() => {
+    cancelResponse.mockReset();
+    createResponse.mockReset();
     parseResponse.mockReset();
+    retrieveResponse.mockReset();
     getClient.mockReset();
-    getClient.mockReturnValue({ responses: { parse: parseResponse } });
+    getClient.mockReturnValue({
+      responses: {
+        cancel: cancelResponse,
+        create: createResponse,
+        parse: parseResponse,
+        retrieve: retrieveResponse,
+      },
+    });
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     await Promise.all(
       temporaryDirectories.map((directory) =>
@@ -102,11 +122,13 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
   });
 
   it("generates a complete program through a strict response schema", async () => {
-    parseResponse.mockResolvedValue({
-      output_parsed: {
+    createResponse.mockResolvedValue({
+      id: "resp-program",
+      status: "completed",
+      output_text: JSON.stringify({
         diversityClaim: "Use one direct fold with a grounded base.",
         program: fixtureProgram(),
-      },
+      }),
     });
     const result = await new OpenAIFabricationProgramModel().generateProgram(
       fixtureIntent(),
@@ -116,16 +138,195 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
 
     expect(result.program.programId).toBe("program-winged-display");
-    expect(parseResponse).toHaveBeenCalledWith(
+    expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
         reasoning: { effort: "high" },
         max_output_tokens: 8_000,
+        background: true,
         store: false,
         safety_identifier: "ff_subject",
         service_tier: "default",
       }),
+      { maxRetries: 0, timeout: 15_000 },
     );
+  });
+
+  it("polls a background program without retrying model generation", async () => {
+    vi.useFakeTimers();
+    createResponse.mockResolvedValue({
+      id: "resp-background-program",
+      status: "queued",
+      output_text: "",
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-background-program",
+      status: "completed",
+      output_text: JSON.stringify({
+        diversityClaim: "Use a polled background response.",
+        program: fixtureProgram(),
+      }),
+    });
+
+    const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
+      fixtureIntent(),
+      1,
+      [],
+      "ff_subject",
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).resolves.toMatchObject({
+      program: { programId: "program-winged-display" },
+    });
+    expect(createResponse).toHaveBeenCalledTimes(1);
+    expect(retrieveResponse).toHaveBeenCalledTimes(1);
+    expect(retrieveResponse).toHaveBeenCalledWith(
+      "resp-background-program",
+      undefined,
+      { maxRetries: 0, timeout: 10_000 },
+    );
+  });
+
+  it("retries only background retrieval after a transient connection error", async () => {
+    vi.useFakeTimers();
+    createResponse.mockResolvedValue({
+      id: "resp-background-retry",
+      status: "in_progress",
+      output_text: "",
+    });
+    retrieveResponse
+      .mockRejectedValueOnce(new Error("temporary retrieval failure"))
+      .mockResolvedValue({
+        id: "resp-background-retry",
+        status: "completed",
+        output_text: JSON.stringify({
+          diversityClaim: "Retrieve the existing generation again.",
+          program: fixtureProgram(),
+        }),
+      });
+
+    const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
+      fixtureIntent(),
+      1,
+      [],
+      "ff_subject",
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).resolves.toMatchObject({
+      program: { programId: "program-winged-display" },
+    });
+    expect(createResponse).toHaveBeenCalledTimes(1);
+    expect(retrieveResponse).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a terminal background response without a complete program", async () => {
+    createResponse.mockResolvedValue({
+      id: "resp-background-failed",
+      status: "failed",
+      output_text: "",
+    });
+
+    await expect(
+      new OpenAIFabricationProgramModel().generateProgram(
+        fixtureIntent(),
+        1,
+        [],
+        "ff_subject",
+      ),
+    ).rejects.toThrow("no parsed fabrication program");
+    expect(createResponse).toHaveBeenCalledTimes(1);
+    expect(retrieveResponse).not.toHaveBeenCalled();
+  });
+
+  it("cancels program polling at the route-safe deadline", async () => {
+    vi.useFakeTimers();
+    createResponse.mockResolvedValue({
+      id: "resp-background-timeout",
+      status: "queued",
+      output_text: "",
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-background-timeout",
+      status: "in_progress",
+      output_text: "",
+    });
+    cancelResponse.mockResolvedValue({
+      id: "resp-background-timeout",
+      status: "cancelled",
+      output_text: "",
+    });
+
+    const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
+      fixtureIntent(),
+      1,
+      [],
+      "ff_subject",
+    );
+    const assertion = expect(resultPromise).rejects.toThrow(
+      "no parsed fabrication program",
+    );
+    await vi.runAllTimersAsync();
+
+    await assertion;
+    expect(createResponse).toHaveBeenCalledTimes(1);
+    expect(cancelResponse).toHaveBeenCalledTimes(1);
+    expect(cancelResponse.mock.calls[0]?.[0]).toBe("resp-background-timeout");
+    expect(cancelResponse.mock.calls[0]?.[1]).toEqual({
+      maxRetries: 0,
+      timeout: 5_000,
+    });
+  });
+
+  it("joins split program output returned by a cancellation race", async () => {
+    vi.useFakeTimers();
+    const outputText = JSON.stringify({
+      diversityClaim: "Completion won the cancellation race.",
+      program: fixtureProgram(),
+    });
+    const splitIndex = Math.floor(outputText.length / 2);
+    createResponse.mockResolvedValue({
+      id: "resp-background-race",
+      status: "queued",
+      output_text: "",
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-background-race",
+      status: "in_progress",
+      output_text: "",
+    });
+    cancelResponse.mockResolvedValue({
+      id: "resp-background-race",
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: outputText.slice(0, splitIndex),
+            },
+            {
+              type: "output_text",
+              text: outputText.slice(splitIndex),
+            },
+          ],
+        },
+      ],
+    });
+
+    const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
+      fixtureIntent(),
+      1,
+      [],
+      "ff_subject",
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).resolves.toMatchObject({
+      program: { programId: "program-winged-display" },
+    });
   });
 
   it("accepts only a strict function patch and never treats it as success", async () => {
@@ -267,6 +468,148 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     await budget.close();
   });
 
+  it("keeps one reservation open until a background program settles", async () => {
+    const budget = await openBudget("3.70");
+    createResponse.mockResolvedValue({
+      id: "resp-metered-background",
+      status: "queued",
+      output_text: "",
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-metered-background",
+      status: "completed",
+      output_text: JSON.stringify({
+        diversityClaim: "Settle after background polling.",
+        program: fixtureProgram(),
+      }),
+      usage,
+    });
+
+    const resultPromise = new OpenAIFabricationProgramModel(
+      budget,
+    ).generateProgram(fixtureIntent(), 1, [], "ff_subject");
+
+    await expect(resultPromise).resolves.toMatchObject({
+      program: { programId: "program-winged-display" },
+    });
+    expect(budget.snapshot()).toMatchObject({
+      requestCount: 1,
+      haltedReason: null,
+      pendingReservation: null,
+      entries: [
+        {
+          operation: "generate_program",
+          responseId: "resp-metered-background",
+          outcome: "succeeded",
+        },
+      ],
+    });
+    await budget.close();
+  });
+
+  it("charges and halts when a metered cancellation has no usage", async () => {
+    const budget = await openBudget("3.70");
+    vi.useFakeTimers();
+    let markCreateStarted: (() => void) | null = null;
+    const createStarted = new Promise<void>((resolve) => {
+      markCreateStarted = resolve;
+    });
+    createResponse.mockImplementation(async () => {
+      markCreateStarted?.();
+      return {
+        id: "resp-metered-cancelled",
+        status: "queued",
+        output_text: "",
+      };
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-metered-cancelled",
+      status: "in_progress",
+      output_text: "",
+    });
+    cancelResponse.mockResolvedValue({
+      id: "resp-metered-cancelled",
+      status: "cancelled",
+      output_text: "",
+    });
+
+    const resultPromise = new OpenAIFabricationProgramModel(
+      budget,
+    ).generateProgram(fixtureIntent(), 1, [], "ff_subject");
+    const assertion = expect(resultPromise).rejects.toMatchObject({
+      code: "missing_usage",
+    });
+    await createStarted;
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    const snapshot = budget.snapshot();
+    expect(snapshot).toMatchObject({
+      requestCount: 1,
+      haltedReason: "missing_usage",
+      pendingReservation: null,
+      entries: [
+        {
+          operation: "generate_program",
+          responseId: "resp-metered-cancelled",
+          outcome: "missing_usage",
+        },
+      ],
+    });
+    expect(snapshot.chargedCostUsd).toBe(snapshot.entries[0]?.maximumCostUsd);
+    await budget.close();
+  });
+
+  it("charges and halts when background cancellation does not settle", async () => {
+    const budget = await openBudget("3.70");
+    vi.useFakeTimers();
+    let markCreateStarted: (() => void) | null = null;
+    const createStarted = new Promise<void>((resolve) => {
+      markCreateStarted = resolve;
+    });
+    createResponse.mockImplementation(async () => {
+      markCreateStarted?.();
+      return {
+        id: "resp-metered-cancel-error",
+        status: "queued",
+        output_text: "",
+      };
+    });
+    retrieveResponse.mockResolvedValue({
+      id: "resp-metered-cancel-error",
+      status: "in_progress",
+      output_text: "",
+    });
+    cancelResponse.mockRejectedValue(new Error("cancel transport failed"));
+
+    const resultPromise = new OpenAIFabricationProgramModel(
+      budget,
+    ).generateProgram(fixtureIntent(), 1, [], "ff_subject");
+    const assertion = expect(resultPromise).rejects.toMatchObject({
+      code: "unsettled_request_failure",
+    });
+    await createStarted;
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    const snapshot = budget.snapshot();
+    expect(snapshot).toMatchObject({
+      requestCount: 1,
+      haltedReason: "unsettled_request_failure",
+      pendingReservation: null,
+      entries: [
+        {
+          operation: "generate_program",
+          responseId: null,
+          outcome: "unsettled_request_failure",
+          providerFailureCategory: "Error",
+        },
+      ],
+    });
+    expect(snapshot.chargedCostUsd).toBe(snapshot.entries[0]?.maximumCostUsd);
+    await budget.close();
+  });
+
   it("blocks an unaffordable model call before invoking Responses", async () => {
     const budget = await openBudget("0.01");
 
@@ -279,6 +622,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       ),
     ).rejects.toMatchObject({ code: "budget_exhausted" });
     expect(parseResponse).not.toHaveBeenCalled();
+    expect(createResponse).not.toHaveBeenCalled();
     await budget.close();
   });
 });

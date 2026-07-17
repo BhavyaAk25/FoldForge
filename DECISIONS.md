@@ -46,11 +46,11 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-10 — Live AI is opt-in and fail-closed
 
-**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no SDK retries, a 180-second SDK timeout, and a statically declared 240-second route duration. The guarded readiness run failed at the provider boundary during a complex program response after about 85 seconds. Because the original ledger did not retain the exception class, timeout is a likely cause rather than a proven one; the wider bound is a fail-closed mitigation. Secrets remain server-only. Exact values and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
+**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no model-generation retries, and a statically declared 240-second route duration. Intent and repair remain synchronous. Large program synthesis starts one `background:true` Response and polls it for at most 210 seconds; only retrieval calls may retry. This follows OpenAI's documented long-running Responses pattern without creating duplicate generations. Secrets remain server-only. Exact values and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
 
 ## D-11 — Privacy claims include provider retention limits
 
-**Accepted.** Responses use `store:false` and a random server-issued privacy-preserving safety subject. FoldForge does not persist prompt or response content server-side or place secrets in browser storage. Documentation must still disclose that OpenAI may retain abuse-monitoring data according to its API data controls; `store:false` is not described as zero retention.
+**Accepted.** Responses use `store:false` and a random server-issued privacy-preserving safety subject. FoldForge does not persist prompt or response content server-side or place secrets in browser storage. Documentation must still disclose that OpenAI may retain abuse-monitoring data according to its API data controls and temporarily retains background response state for polling; `store:false` is not described as zero retention.
 
 ## D-12 — Release is evidence-gated under the official criteria
 
