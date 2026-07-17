@@ -15,7 +15,8 @@ import {
 } from "@/server/fabrication-ai/models";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
-const { parseResponse } = vi.hoisted(() => ({
+const { getClient, parseResponse } = vi.hoisted(() => ({
+  getClient: vi.fn(),
   parseResponse: vi.fn(),
 }));
 
@@ -31,7 +32,7 @@ const usage: ResponseUsage = {
 };
 
 vi.mock("@/server/ai/client", () => ({
-  getOpenAIClient: () => ({ responses: { parse: parseResponse } }),
+  getOpenAIClient: getClient,
 }));
 
 describe("GPT-5.6 Sol fabrication model boundary", () => {
@@ -39,6 +40,8 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
 
   beforeEach(() => {
     parseResponse.mockReset();
+    getClient.mockReset();
+    getClient.mockReturnValue({ responses: { parse: parseResponse } });
   });
 
   afterEach(async () => {
@@ -81,6 +84,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(parseResponse.mock.calls[0]?.[0]).not.toHaveProperty(
       "previous_response_id",
     );
+    expect(getClient).toHaveBeenCalledWith({ paidEvaluation: false });
   });
 
   it("generates a complete program through a strict response schema", async () => {
@@ -233,6 +237,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
 
     expect(result.intentId).toBe("intent-winged-display");
+    expect(getClient).toHaveBeenCalledWith({ paidEvaluation: true });
     expect(budget.snapshot()).toMatchObject({
       chargedCostUsd: 0.007225,
       requestCount: 1,

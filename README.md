@@ -125,7 +125,7 @@ Core geometry has no React, browser, or OpenAI dependency. OpenAI code is server
 
 The current offline release matrix records:
 
-- **316 passing tests** across 45 files;
+- **317 passing tests** across 45 files;
 - **96.72% statements, 90.19% branches, 97.96% functions, 97.69% lines**;
 - **120/120** independently varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;

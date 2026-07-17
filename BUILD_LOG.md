@@ -57,7 +57,7 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Made FOLD compatibility explicit before download. Fold-only designs export it; revolute/prismatic designs omit it with the exact loss reason.
 - Corrected zero-angle fold-only output by omitting the optional parallel fold-angle array rather than pairing mountain/valley assignments with misleading zero angles.
 - Changed the flower crown from a generic star to a broad eight-petal silhouette and kept the selected candidate as the single source for pattern, mesh, motion, and bytes.
-- Added export route/unit regressions and browser control assertions. The suite now passes 316 tests and 7/7 Chromium flows.
+- Added export route/unit regressions and browser control assertions. The suite now passes 317 tests and 7/7 Chromium flows.
 - Independently validated all showcase GLBs with the Khronos glTF Validator, parsed all showcase DXFs with `dxf-parser`, and parsed/populated the fold-only duck with the official FOLD JavaScript library.
 - Deployed the repaired branch to production and visually exercised closed/open, orbit, pattern pan/zoom, and conditional export availability in the rendered app.
 
@@ -80,6 +80,7 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Corrected the harsh score target so Technological Implementation, Design, Potential Impact, and Quality of the Idea must each reach at least 22/25 while the total remains at least 92/100.
 - Required downstream proof for the exact live winner rather than prepared fixtures alone: LibreCAD for DXF, Khronos validation and animation playback for GLB, print-scale/calibration checks for SVG, canonical hash checks for JSON, and FOLD tools only when the topology is losslessly representable.
 - Preserved the honesty boundary: neither a partial smoke, prepared example, parser-only check, nor geometry verification supports claims of universal generation, adoption, quantified time savings, strength, durability, or manufacturing performance.
+- The first guarded launch was blocked locally before any reservation or provider request because the CLI inherited the public access-code preflight. No credit was used. Paid evaluation now has a separate fail-closed enablement check while production routes still require the complete access-cookie configuration.
 - No paid GPT-5.6 success is recorded by this milestone; the first request remains gated on free checks and the persistent budget ledger.
 
 ## Remaining external gate

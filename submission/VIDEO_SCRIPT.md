@@ -50,7 +50,7 @@ Use an unseen supported brief, not an example button:
 
 **Screen:** Briefly show `EVALS.md` numbers, then return to the moving result.
 
-**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 316 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
+**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 317 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
 
 ### 2:27–2:43 — Codex and close
 

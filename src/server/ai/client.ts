@@ -1,11 +1,17 @@
 import OpenAI from "openai";
 
-import { assertLiveModelEnabled } from "@/server/live-model";
+import {
+  assertLiveEvaluationModelEnabled,
+  assertLiveModelEnabled,
+} from "@/server/live-model";
 
 let client: OpenAI | null = null;
 
-export const getOpenAIClient = (): OpenAI => {
-  assertLiveModelEnabled();
+export const getOpenAIClient = (
+  options: { readonly paidEvaluation?: boolean } = {},
+): OpenAI => {
+  if (options.paidEvaluation) assertLiveEvaluationModelEnabled();
+  else assertLiveModelEnabled();
 
   client ??= new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,

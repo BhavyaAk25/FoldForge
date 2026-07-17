@@ -7,7 +7,12 @@ import {
 } from "@/server/access";
 import { auditSubjectId, type AuditEvent } from "@/server/audit";
 import { readBuildSha } from "@/server/build-info";
-import { assertLiveModelEnabled, liveModelState } from "@/server/live-model";
+import {
+  assertLiveEvaluationModelEnabled,
+  assertLiveModelEnabled,
+  liveEvaluationModelState,
+  liveModelState,
+} from "@/server/live-model";
 import {
   BestEffortConcurrencyGate,
   BestEffortSessionQuota,
@@ -154,6 +159,28 @@ describe("metadata-only security helpers", () => {
         LIVE_MODEL_KILL_SWITCH: "true",
       }),
     ).toThrow("kill_switch");
+  });
+
+  it("separates paid evaluation from public access configuration", () => {
+    const evaluation = {
+      ENABLE_LIVE_OPENAI: "true",
+      ENABLE_LIVE_OPENAI_EVALS: "true",
+      LIVE_MODEL_KILL_SWITCH: "false",
+      OPENAI_API_KEY: "configured",
+    };
+
+    expect(liveModelState(evaluation)).toEqual({
+      enabled: false,
+      reason: "access_configuration",
+    });
+    expect(liveEvaluationModelState(evaluation)).toEqual({ enabled: true });
+    expect(() => assertLiveEvaluationModelEnabled(evaluation)).not.toThrow();
+    expect(
+      liveEvaluationModelState({
+        ...evaluation,
+        ENABLE_LIVE_OPENAI_EVALS: "false",
+      }),
+    ).toEqual({ enabled: false, reason: "evaluation_disabled" });
   });
 
   it("reads only validated build SHA values in deployment priority order", () => {

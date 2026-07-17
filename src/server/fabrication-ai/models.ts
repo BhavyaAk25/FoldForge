@@ -132,7 +132,9 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
       store: false,
       service_tier: "default",
     } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient();
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "compile_intent",
@@ -185,7 +187,9 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
       store: false,
       service_tier: "default",
     } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient();
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "generate_program",
@@ -237,7 +241,9 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
       store: false,
       service_tier: "default",
     } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient();
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "diagnose_repair",
@@ -281,7 +287,9 @@ export class OpenAIFabricationNarrativeModel implements FabricationNarrativeMode
       store: false,
       service_tier: "default",
     } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient();
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "generate_narrative",
