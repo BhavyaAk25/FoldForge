@@ -30,9 +30,9 @@ Use an unseen supported brief, not an example button:
 
 ### 1:00–1:22 — measured repair
 
-**Screen:** Select the repaired candidate. Open **Repair evidence** and show the failure ID, measurement, patch path, and passing report.
+**Screen:** Open the live-readiness report's explicitly labelled `deliberate_evaluation_probe`. Show the failure ID, measured limit violation, Sol response ID, typed patch path, before/after hashes, and passing revalidation. Do not present this evaluation-only probe as an app interaction or a naturally failed candidate.
 
-**Say:** “This proposal failed a measured clearance check. Sol diagnosed that report and proposed a typed local patch. Code rejected intent changes, applied only allowlisted parameters, regenerated the design, and reran every check. Repair stops after three operations per cycle and five cycles.”
+**Say:** “To prove repair instead of waiting for a lucky failure, I deliberately push this verified design’s motion range beyond its joint limit. Code measures the failure. Sol cites that exact report field and proposes a typed local patch. Code rejects intent changes, applies only allowlisted parameters, regenerates the design, and reruns every check. Repair stops after three operations per cycle and five cycles.”
 
 ### 1:22–1:47 — product design
 
@@ -50,7 +50,7 @@ Use an unseen supported brief, not an example button:
 
 **Screen:** Briefly show `EVALS.md` numbers, then return to the moving result.
 
-**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 284 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
+**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 316 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
 
 ### 2:27–2:43 — Codex and close
 

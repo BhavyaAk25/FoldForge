@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. GPT-5.6 Sol live behavior is the only unrun gate and is explicitly blocked on user activation.
+The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. The user has activated API credit and authorized at most **$4.00** for live testing. FoldForge enforces a lower **$3.70** paid-evaluation ceiling so an unexpected provider charge cannot consume the final $0.30 reserve. No paid live result is claimed until a usage-backed report exists.
 
 All generated reports are written under ignored `artifacts/evals/`. Offline evidence never counts as live model evidence.
 
@@ -14,7 +14,9 @@ Release requires:
 - exact selected-candidate source equivalence across every export;
 - no serious security, accessibility, privacy, or licensing issue;
 - at least 92/100 in the internal harsh review, with no official criterion below 22/25; and
-- a passing sealed live suite before claiming arbitrary GPT-5.6 Sol generation.
+- a passing five-case sealed live suite, with at least four complete successes, before claiming release-ready GPT-5.6 Sol generation.
+
+A one-case or budget-truncated run is a **live smoke**, not the sealed release suite. It may prove that the model path works for the cases actually executed, but it cannot satisfy the 4/5 release gate or support a general live-quality claim.
 
 ## Current results
 
@@ -71,7 +73,7 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 | Keyboard focus and reduced motion                       | 1/1                            | Pass   |
 | Axe serious or critical violations, before/after result | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, working 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 284 passing tests across 37 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
+The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, working 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 316 passing tests across 45 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
 
 ### External export-consumer checks
 
@@ -87,23 +89,71 @@ The committed `validate:consumers` command regenerates the three canonical showc
 
 ### Live GPT-5.6 Sol
 
-| Gate                                                       | Current                            |
-| ---------------------------------------------------------- | ---------------------------------- |
-| Strict response or explicit refusal                        | Blocked — user activation required |
-| Supported brief yields valid candidate or grounded failure | Blocked — user activation required |
-| Explicit constraint recall and unit normalization          | Blocked — user activation required |
-| Prompt-injection/contract escape                           | Blocked — user activation required |
-| Prompt, response, or secret content in production logs     | Blocked — user activation required |
+| Gate                                                                  | Current                          |
+| --------------------------------------------------------------------- | -------------------------------- |
+| Supported brief produces a strict intent or a grounded failure        | Not run — no paid result claimed |
+| Explicit constraint recall and unit normalization                     | Not run — no paid result claimed |
+| Unsupported request is refused or clarified without schema escape     | Not run — no paid result claimed |
+| Prompt-injection attempt cannot escape the strict contract            | Not run — no paid result claimed |
+| Three generated programs are structurally distinct and all verified   | Not run — no paid result claimed |
+| Real measured failure receives a grounded patch and full revalidation | Not run — no paid result claimed |
+| Exact live SVG/DXF/GLB/JSON and conditional FOLD pass consumer checks | Not run — no paid result claimed |
+| Usage ledger proves model, response IDs, tokens, and cost             | Not run — no paid result claimed |
+| Production logs contain no prompt, response, or secret content        | Not run — no paid result claimed |
 
-No paid live result is claimed. After enabling model access, run:
+#### Paid-run budget contract
+
+The user authorization is a hard external maximum of **$4.00**. The executable evaluation limit is deliberately lower:
 
 ```bash
-ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live
+LIVE_EVAL_BUDGET_USD=3.70 \
+ENABLE_LIVE_OPENAI=true \
+ENABLE_LIVE_OPENAI_EVALS=true \
+LIVE_MODEL_KILL_SWITCH=false \
+pnpm run eval:live
 ```
 
-The sealed readiness suite runs five bounded supported prompts and requires at least four complete successes. Each success requires three distinct verified candidates, bounded repair when needed, selected-candidate GLB/SVG/DXF/JSON/FOLD handling, source equivalence, and a strict final narrative. The report stores prompt hashes and bounded metrics, not prompt or response content. `eval:compiler` remains the focused intent-contract evaluation and defaults to only five supported plus five boundary calls in live mode.
+Paid requests run sequentially with SDK retries disabled. Before each request, the budget guard reserves a conservative maximum derived from the serialized request and the operation's output-token ceiling. After a response, it charges the provider-reported input, cached-input, cache-write, output, and reasoning usage. Missing or invalid usage and provider failures seal the budget and prevent another request. Both paid evaluation commands share the ignored persistent ledger at `artifacts/evals/live-cost-ledger.json`; `artifacts/evals/live-cost-ledger.lock` prevents concurrent paid runs. The ledger retains only response identifiers, token counts, calculated cost, operation names, and bounded evidence metadata; it does not retain prompt or response bodies. A crash with a pending reservation is charged at that reservation's conservative maximum and seals subsequent paid calls.
 
-Do not record or submit a live-generation claim until this report passes on the submission build.
+The five-case sealed readiness suite requires at least four complete successes. Each success requires three structurally distinct verified candidates, deterministic compile and verification, bounded repair when needed, exact selected-candidate exports, source equivalence, and a strict final narrative. The full report must also include:
+
+- expected-versus-observed checks for every explicit dimension, unit, material, sheet, motion, cut, glue, and semantic-landmark constraint;
+- at least one real failed report with its stable failure ID, measured value, limit, repairable path, typed Sol patch, before/after program hashes, and passing full revalidation;
+- model and response provenance plus per-operation and cumulative token/cost totals;
+- the selected IR hash attached to SVG, DXF, GLB, JSON, and FOLD compatibility status; and
+- independent consumer results for the exact live-selected artifact bytes, not only the prepared showcase fixtures.
+
+Prompt hashes and bounded metrics may be stored, but production reports and logs must not retain prompt or model-response content. `eval:compiler` remains the focused intent-contract evaluation for supported, refusal/clarification, and prompt-injection behavior.
+
+Run the focused paid intent contract against the same ledger before or alongside the readiness suite:
+
+```bash
+LIVE_EVAL_BUDGET_USD=3.70 \
+ENABLE_LIVE_OPENAI=true \
+ENABLE_LIVE_OPENAI_EVALS=true \
+LIVE_MODEL_KILL_SWITCH=false \
+pnpm run eval:compiler
+```
+
+#### Smoke versus sealed evidence
+
+- **Budgeted live smoke:** one or more completed paid cases under the ledger. Report only the exact cases and operations observed. This can establish API access, schema validity, and limited model behavior.
+- **Sealed release suite:** all five cases were attempted under one auditable budget ledger, at least four completed the entire pipeline, every paid-evidence requirement above passed, and the exact submission build was used.
+- **Budget exhaustion:** a safe and expected stop. It is not a model failure, but it leaves the sealed release gate incomplete. Do not relabel a truncated smoke as a 4/5 pass.
+
+Do not record or submit a release-ready live-generation claim until the five-case report passes on the submission build. A successful smoke may be described only as a successful smoke.
+
+#### Exact-artifact consumer proof
+
+Prepared showcase validation remains useful regression evidence, but it does not prove that a newly generated winner works in downstream tools. Before release, the exact live-selected bytes must be checked as follows:
+
+- SVG: millimetre scale, fabrication layers, printable bounds, and the 50 mm calibration line;
+- DXF: parse successfully with millimetre units and CUT/SCORE/PERFORATION/ENGRAVE layer semantics, then open the same file in LibreCAD;
+- GLB: pass the Khronos glTF Validator with zero errors and warnings, then play `FoldForge Open Close` in an animation-capable viewer when motion exists;
+- JSON: contain the selected intent, program, IR, report, score, provenance, export hashes, and the same selected IR hash; and
+- FOLD: parse with the official FOLD library and open in compatible software only when the topology is losslessly representable; otherwise preserve and show the exact omission reason.
+
+Parser acceptance is not evidence of manufacturing performance. No live result may be described as strength-tested, durability-tested, production-ready, universally fabricable, or compatible with every downstream machine.
 
 ## Reproduction
 
@@ -116,7 +166,7 @@ pnpm run eval:compiler
 pnpm run eval:repair
 pnpm run eval:e2e
 pnpm run eval:ablation
-pnpm run eval:live # zero calls and a blocked report until both live opt-ins are true
+LIVE_EVAL_BUDGET_USD=3.70 ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true LIVE_MODEL_KILL_SWITCH=false pnpm run eval:live
 pnpm run test:e2e
 pnpm run validate:consumers
 pnpm audit --prod

@@ -125,7 +125,7 @@ Core geometry has no React, browser, or OpenAI dependency. OpenAI code is server
 
 The current offline release matrix records:
 
-- **284 passing tests** across 37 files;
+- **316 passing tests** across 45 files;
 - **96.72% statements, 90.19% branches, 97.96% functions, 97.69% lines**;
 - **120/120** independently varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;
@@ -138,18 +138,20 @@ These results prove deterministic and mocked-contract behavior. They do **not** 
 
 ## GPT-5.6 activation status
 
-The software path is complete and fail-closed. The remaining product gate is to activate GPT-5.6 Sol and run the sealed live suite:
+API credit is active, but no paid result is claimed yet. The software path is complete and fail-closed. Paid evaluation uses a persistent cumulative ledger capped at **$3.70**, below the builder's **$4.00** authorization:
 
 ```dotenv
 ENABLE_LIVE_OPENAI=true
+ENABLE_LIVE_OPENAI_EVALS=true
 LIVE_MODEL_KILL_SWITCH=false
+LIVE_EVAL_BUDGET_USD=3.70
 ```
 
 ```bash
-ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live
+LIVE_EVAL_BUDGET_USD=3.70 ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true LIVE_MODEL_KILL_SWITCH=false pnpm run eval:live
 ```
 
-The capped suite uses five unseen prompts and requires at least four complete prompt → strict programs → verify/repair → rank → export → narrative runs. Until it passes, the site says **Live generation off**, and no prepared fixture is counted as a live result.
+The sealed suite uses five unseen prompts and requires at least four complete prompt → strict programs → verify/repair → rank → export → narrative runs. A successful one-case or budget-truncated run is labelled a smoke, never a sealed pass. Until the sealed gate passes, no prepared fixture or partial paid run is counted as release-ready live generation.
 
 ## How Codex was used
 

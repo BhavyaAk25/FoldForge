@@ -1,4 +1,6 @@
 import { zodResponsesFunction, zodTextFormat } from "openai/helpers/zod";
+import type { ResponseCreateParamsWithTools } from "openai/lib/ResponsesParser";
+import type { ResponseUsage } from "openai/resources/responses/responses";
 
 import { canonicalSerialize } from "@/core/canonical";
 import {
@@ -13,6 +15,10 @@ import type {
   VerificationReportV2,
 } from "@/core/fabrication/types";
 import { getOpenAIClient } from "@/server/ai/client";
+import type {
+  PaidEvalBudget,
+  PaidEvalOperation,
+} from "@/server/ai/paid-eval-budget";
 
 import {
   FabricationNarrativeV1Schema,
@@ -28,6 +34,44 @@ import {
 } from "./prompts";
 
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
+
+const runMeteredRequest = async <
+  Response extends {
+    readonly id: string;
+    readonly usage?: ResponseUsage | null;
+  },
+>(input: {
+  readonly budget: PaidEvalBudget | null;
+  readonly operation: PaidEvalOperation;
+  readonly maxOutputTokens: number;
+  readonly request: unknown;
+  readonly execute: () => Promise<Response>;
+}): Promise<Response> => {
+  if (!input.budget) return input.execute();
+  return input.budget.run({
+    operation: input.operation,
+    maxOutputTokens: input.maxOutputTokens,
+    request: input.request,
+    execute: input.execute,
+  });
+};
+
+class LiveEvaluationBudgetRequiredError extends Error {
+  readonly code = "budget_required";
+
+  constructor() {
+    super(
+      "Live OpenAI evaluations require the persistent paid-evaluation budget.",
+    );
+    this.name = "LiveEvaluationBudgetRequiredError";
+  }
+}
+
+const assertEvaluationBudget = (budget: PaidEvalBudget | null): void => {
+  if (process.env.ENABLE_LIVE_OPENAI_EVALS === "true" && !budget) {
+    throw new LiveEvaluationBudgetRequiredError();
+  }
+};
 
 export interface FabricationIntentModel {
   compileIntent(
@@ -62,11 +106,16 @@ export interface FabricationNarrativeModel {
 }
 
 export class OpenAIFabricationIntentModel implements FabricationIntentModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async compileIntent(
     prompt: string,
     safetyIdentifier: string,
   ): Promise<FabricationIntentV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 3_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_INTENT_PROMPT,
       input: [{ role: "user", content: prompt }],
@@ -77,10 +126,19 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
           "fabrication_intent_v1",
         ),
       },
-      max_output_tokens: 3_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient();
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "compile_intent",
+      maxOutputTokens,
+      request,
+      execute: () => openAI.responses.parse(request),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication intent.");
@@ -90,13 +148,18 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
 }
 
 export class OpenAIFabricationProgramModel implements FabricationProgramModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async generateProgram(
     intent: FabricationIntentV1,
     candidateOrdinal: number,
     usedTopologyIds: readonly string[],
     safetyIdentifier: string,
   ): Promise<ProgramProposalV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 8_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_PROGRAM_PROMPT,
       input: [
@@ -116,10 +179,19 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
           "fabrication_program_proposal_v1",
         ),
       },
-      max_output_tokens: 8_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient();
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "generate_program",
+      maxOutputTokens,
+      request,
+      execute: () => openAI.responses.parse(request),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication program.");
@@ -129,13 +201,18 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
 }
 
 export class OpenAIFabricationRepairModel implements FabricationRepairModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async diagnoseRepair(
     program: FabricationProgramV1,
     report: VerificationReportV2,
     repairCycle: number,
     safetyIdentifier: string,
   ): Promise<ProgramPatchV1 | null> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 2_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_REPAIR_PROMPT,
       input: [
@@ -154,10 +231,19 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
         }),
       ],
       tool_choice: { type: "function", name: "apply_parameter_patch" },
-      max_output_tokens: 2_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient();
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "diagnose_repair",
+      maxOutputTokens,
+      request,
+      execute: () => openAI.responses.parse(request),
     });
     const toolCall = response.output.find(
       (item) =>
@@ -169,11 +255,16 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
 }
 
 export class OpenAIFabricationNarrativeModel implements FabricationNarrativeModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async generateNarrative(
     candidate: CandidateV2,
     safetyIdentifier: string,
   ): Promise<FabricationNarrativeV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 2_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_NARRATIVE_PROMPT,
       input: [{ role: "user", content: canonicalSerialize(candidate) }],
@@ -184,10 +275,19 @@ export class OpenAIFabricationNarrativeModel implements FabricationNarrativeMode
           "fabrication_narrative_v1",
         ),
       },
-      max_output_tokens: 2_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient();
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "generate_narrative",
+      maxOutputTokens,
+      request,
+      execute: () => openAI.responses.parse(request),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication narrative.");

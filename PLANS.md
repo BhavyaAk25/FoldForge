@@ -2,7 +2,7 @@
 
 ## Current state
 
-The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. GPT-5.6 Sol remains deliberately disabled until the user enables live access and authorizes API use.
+The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. The user has activated API credit and authorized at most **$4.00** for live testing. No paid request has been counted as evidence yet. The live runner must enforce `LIVE_EVAL_BUDGET_USD=3.70`, keep a persistent metadata-only ledger, and leave a $0.30 reserve.
 
 | Milestone                                                           | Status     | Evidence                                                           |
 | ------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
@@ -16,20 +16,24 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | Saved examples and understandable prompt gallery                    | Complete   | Prepared flower and fold-only duck plus three editable prompts     |
 | Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
 | Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work |
-| Live GPT-5.6 Sol behavior                                           | User gate  | Enable model access, run sealed live evals, then keep or kill      |
+| Live GPT-5.6 Sol behavior                                           | Ready      | Run under the $3.70 ledger; distinguish smoke from sealed release  |
 | Submission script and documentation                                 | Complete   | Devpost-ready README, concise video script, rubric, eval evidence  |
 | Public video and `/feedback` session ID                             | User-owned | Record/upload after the live gate, then enter the primary task ID  |
 
 ## What remains
 
-One software activation sequence remains:
+The remaining activation and evidence sequence is:
 
-1. Confirm GPT-5.6 Sol credits/model access.
-2. Set `ENABLE_LIVE_OPENAI=true` while leaving `LIVE_MODEL_KILL_SWITCH=false`.
-3. Run `ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live`; the suite is capped at five prompts and requires four complete end-to-end passes.
-4. If it passes, deploy the same configuration. If it fails, return the kill switch to a blocked state and use the report to repair the live path.
+1. Run the complete free suite before spending API credit. Any free failure blocks paid testing.
+2. Enable local Sol evaluation with `ENABLE_LIVE_OPENAI=true`, `ENABLE_LIVE_OPENAI_EVALS=true`, `LIVE_MODEL_KILL_SWITCH=false`, and `LIVE_EVAL_BUDGET_USD=3.70`.
+3. Run sequential paid contract checks for a supported brief, an unsupported brief, and a prompt-injection attempt. Record strict status, explicit-constraint recall, units, response identifiers, token usage, and cumulative cost without retaining prompt or response bodies. `eval:compiler` and `eval:live` must share `artifacts/evals/live-cost-ledger.json`; `artifacts/evals/live-cost-ledger.lock` prevents concurrent paid runs.
+4. Run the sealed five-case readiness suite only while the conservative budget reservation allows it. The release gate remains at least four complete end-to-end passes. Fewer attempted cases or an early budget stop is a live smoke, not a sealed pass.
+5. Require at least one real measured failure with a stable failure ID, measured value, limit, repairable path, grounded Sol patch, before/after hashes, and a deterministically passing full recheck. A successful run with no repair does not satisfy the demo's repair claim.
+6. Preserve the exact selected live artifact pack and run consumer checks against those bytes: SVG scale/layers/calibration, DXF units/layers plus LibreCAD, Khronos-valid GLB plus animation playback when applicable, canonical JSON/hash binding, and official-parser/GUI FOLD only when lossless.
+7. If the sealed suite passes, deploy the identical commit with Sol enabled. Verify `Sol ready`, access, an unseen production prompt, three candidates, repair evidence, controls, downloads, build SHA, console, and metadata-only logs. If it fails, engage the kill switch and report the exact blocked state.
+8. Record and upload the public narrated video only after the deployed evidence exists. Include the private judge access code in Devpost testing instructions, the public repository and video, and the primary Codex task's `/feedback` session ID.
 
-After the software passes, the user must record/upload the required public narrated video and enter the primary Codex task's `/feedback` session ID in Devpost. Those are submission actions, not missing product code.
+No partial run is promoted to release evidence. The $4 authorization is a ceiling, not a spending target; testing stops at the $3.70 internal cap even if the five-case gate remains incomplete.
 
 No calendar date blocks implementation.
 
@@ -49,6 +53,7 @@ No calendar date blocks implementation.
 - The first screen explains the outcome in plain language, shows the three-step journey, and uses named examples that describe an understandable object, purpose, material, size, and motion.
 - When live generation is disabled, the studio offers prepared flower and fold-only duck candidates that are explicitly labelled as saved and can be inspected and exported without misrepresenting them as prompt results.
 - The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.
+- Paid evaluations reserve the conservative maximum cost before each sequential request, charge provider-reported usage afterward, and keep response/token/cost metadata in the ignored persistent `artifacts/evals/live-cost-ledger.json`. The companion `.lock` prevents concurrent runs. Missing usage, uncertain provider failure, or a crash with a pending reservation charges the conservative maximum and seals the ledger.
 
 ## Deliberate scope
 
@@ -59,3 +64,5 @@ FoldForge verifies geometry, motion, clearances, and source equivalence. It make
 ## Release discipline
 
 Every code milestone ends with formatting, zero-warning lint, strict TypeScript, unit/integration/property/browser tests, coverage, offline evals, production build, dependency audit, and diff review. Live evidence is always labelled live; mocked and deterministic evidence are never presented as model performance.
+
+The harsh release score must be at least 92/100 with Technological Implementation, Design, Potential Impact, and Quality of the Idea each at least 22/25. The live suite can strengthen technical, design, and idea evidence. Potential Impact also requires a demonstrated exact-file handoff into a real downstream tool; no adoption, time-saving, strength, durability, or manufacturing-performance claim is made without separate evidence.

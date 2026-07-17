@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import type { ResponseUsage } from "openai/resources/responses/responses";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
 import {
   FOLDFORGE_MODEL,
   OpenAIFabricationIntentModel,
@@ -13,14 +19,46 @@ const { parseResponse } = vi.hoisted(() => ({
   parseResponse: vi.fn(),
 }));
 
+const usage: ResponseUsage = {
+  input_tokens: 1_000,
+  input_tokens_details: {
+    cached_tokens: 200,
+    cache_write_tokens: 100,
+  },
+  output_tokens: 100,
+  output_tokens_details: { reasoning_tokens: 60 },
+  total_tokens: 1_100,
+};
+
 vi.mock("@/server/ai/client", () => ({
   getOpenAIClient: () => ({ responses: { parse: parseResponse } }),
 }));
 
 describe("GPT-5.6 Sol fabrication model boundary", () => {
+  let temporaryDirectories: string[] = [];
+
   beforeEach(() => {
     parseResponse.mockReset();
   });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(
+      temporaryDirectories.map((directory) =>
+        rm(directory, { recursive: true, force: true }),
+      ),
+    );
+    temporaryDirectories = [];
+  });
+
+  const openBudget = async (budgetUsd: string): Promise<PaidEvalBudget> => {
+    const directory = await mkdtemp(path.join(tmpdir(), "foldforge-model-"));
+    temporaryDirectories.push(directory);
+    return PaidEvalBudget.open({
+      ledgerPath: path.join(directory, "live-cost-ledger.json"),
+      environment: { LIVE_EVAL_BUDGET_USD: budgetUsd },
+    });
+  };
 
   it("compiles intent with strict structured output and privacy controls", async () => {
     parseResponse.mockResolvedValue({ output_parsed: fixtureIntent() });
@@ -37,6 +75,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         store: false,
         parallel_tool_calls: false,
         safety_identifier: "ff_subject",
+        service_tier: "default",
       }),
     );
     expect(parseResponse.mock.calls[0]?.[0]).not.toHaveProperty(
@@ -66,6 +105,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         max_output_tokens: 8_000,
         store: false,
         safety_identifier: "ff_subject",
+        service_tier: "default",
       }),
     );
   });
@@ -138,6 +178,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         },
         parallel_tool_calls: false,
         store: false,
+        service_tier: "default",
       }),
     );
   });
@@ -169,5 +210,56 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         "ff_subject",
       ),
     ).resolves.toBeNull();
+  });
+
+  it("requires a persistent budget whenever live evaluations are enabled", () => {
+    vi.stubEnv("ENABLE_LIVE_OPENAI_EVALS", "true");
+    expect(() => new OpenAIFabricationIntentModel()).toThrowError(
+      expect.objectContaining({ code: "budget_required" }),
+    );
+  });
+
+  it("settles response usage before returning a parsed model value", async () => {
+    const budget = await openBudget("3.70");
+    parseResponse.mockResolvedValue({
+      id: "resp-metered-intent",
+      usage,
+      output_parsed: fixtureIntent(),
+    });
+
+    const result = await new OpenAIFabricationIntentModel(budget).compileIntent(
+      "Make a winged display.",
+      "ff_subject",
+    );
+
+    expect(result.intentId).toBe("intent-winged-display");
+    expect(budget.snapshot()).toMatchObject({
+      chargedCostUsd: 0.007225,
+      requestCount: 1,
+      haltedReason: null,
+      entries: [
+        {
+          operation: "compile_intent",
+          responseId: "resp-metered-intent",
+          outcome: "succeeded",
+        },
+      ],
+    });
+    await budget.close();
+  });
+
+  it("blocks an unaffordable model call before invoking Responses", async () => {
+    const budget = await openBudget("0.01");
+
+    await expect(
+      new OpenAIFabricationProgramModel(budget).generateProgram(
+        fixtureIntent(),
+        1,
+        [],
+        "ff_subject",
+      ),
+    ).rejects.toMatchObject({ code: "budget_exhausted" });
+    expect(parseResponse).not.toHaveBeenCalled();
+    await budget.close();
   });
 });
