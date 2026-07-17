@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "evidenceStatus": "partial_live_failure",
+  "model": "gpt-5.6-sol",
+  "paidBuildSha": "66eb9b16e0e65d10fb36daa854b3455152903b34",
+  "workingTreeWasClean": true,
+  "sourceReportHashes": {
+    "compilerSha256": "a4356ff0aac401fb16d83c692f541177ac627885aba79104bb21b8f8a1d20395",
+    "readinessSha256": "231d4f76fb37359389444ec478787d79a3c64c2b0185e0d8b82ab759c115df95",
+    "sealedLedgerSha256": "7992cf2258b3b67501a7019d11d44d6fa7eb2b6af502f4f2f951605f1564bfa7"
+  },
+  "compilerContract": {
+    "passed": true,
+    "caseCount": 3,
+    "completedCaseCount": 3,
+    "supportedCaseCount": 1,
+    "boundaryCaseCount": 2,
+    "schemaValidityRate": 1,
+    "explicitConstraintRecallRate": 1,
+    "unitNormalizationAccuracyRate": 1,
+    "correctStatusRate": 1,
+    "correctRefusalOrClarificationRate": 1,
+    "chargedCostUsd": 0.102145
+  },
+  "readinessAttempt": {
+    "startedAtIso": "2026-07-17T21:32:01.060Z",
+    "selectedCaseCount": 1,
+    "passedCount": 0,
+    "releaseGatePassed": false,
+    "failedCaseId": "live-hinged-counter-display",
+    "failureStage": "first_program_proposal",
+    "failureCode": "budget_provider_failure",
+    "durationMs": 85463.998,
+    "generatedCandidateCount": 0,
+    "verifiedCandidateCount": 0,
+    "repairedCandidateCount": 0,
+    "exportFormats": []
+  },
+  "sealedBudget": {
+    "authorizedMaximumUsd": 4,
+    "enforcedMaximumUsd": 3.7,
+    "conservativeChargedCostUsd": 0.8307225,
+    "remainingUnderEnforcedMaximumUsd": 2.8692775,
+    "requestCount": 5,
+    "successfulIntentRequestCount": 4,
+    "unsettledProgramRequestCount": 1,
+    "haltedReason": "provider_failure"
+  },
+  "privacy": {
+    "containsPrompts": false,
+    "containsModelBodies": false,
+    "containsResponseIds": false,
+    "containsCredentials": false
+  },
+  "claimsNotEstablished": [
+    "live program generation",
+    "live verifier-grounded repair",
+    "live selected artifact export",
+    "live end-to-end prompt-to-fabrication success",
+    "sealed release readiness"
+  ]
+}

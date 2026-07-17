@@ -46,7 +46,7 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-10 — Live AI is opt-in and fail-closed
 
-**Accepted.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no SDK retries, and a 60-second timeout. Secrets remain server-only. Exact values and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
+**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no SDK retries, a 180-second SDK timeout, and a statically declared 240-second route duration. The guarded readiness run failed at the provider boundary during a complex program response after about 85 seconds. Because the original ledger did not retain the exception class, timeout is a likely cause rather than a proven one; the wider bound is a fail-closed mitigation. Secrets remain server-only. Exact values and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
 
 ## D-11 — Privacy claims include provider retention limits
 

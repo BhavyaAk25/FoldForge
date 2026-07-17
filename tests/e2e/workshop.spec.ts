@@ -625,14 +625,23 @@ test("keeps prompt examples honest and provides a saved result when live generat
   expect(savedDownload.suggestedFilename()).toMatch(/\.svg$/u);
 
   const duckExample = page.locator("article").filter({
-    hasText: "Duck-shaped gift box",
+    hasText: "Static duck crease pattern",
   });
   await duckExample
     .getByRole("button", { name: "Open finished design" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Explore the duck-shaped gift box." }),
+    page.getByRole("heading", {
+      name: "Explore the static duck crease pattern.",
+    }),
   ).toBeFocused();
+  await expect(
+    page.getByText("no open-and-close motion is modeled", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Download GLB" }),
+  ).toContainText("This static model has no animation clip.");
   const foldDownload = page.getByRole("button", { name: "Download FOLD" });
   await expect(foldDownload).toBeEnabled();
   const foldDownloadPromise = page.waitForEvent("download");
@@ -705,7 +714,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
     await prompt.evaluate((element) => getComputedStyle(element).outlineWidth),
   ).not.toBe("0px");
   const duckExample = page.locator("article").filter({
-    hasText: "Duck-shaped gift box",
+    hasText: "Static duck crease pattern",
   });
   const duckPromptButton = duckExample.getByRole("button", {
     name: "Use this prompt",
@@ -713,7 +722,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
   await duckPromptButton.focus();
   await page.keyboard.press("Enter");
   await expect(prompt).toHaveValue(
-    "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
+    "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only, avoid glue, and show me three different layouts.",
   );
 
   const styles = await page.evaluate(() => {

@@ -16,6 +16,9 @@ export interface ExamplePrompt {
   readonly title: string;
 }
 
+export const DUCK_CREASE_PATTERN_PROMPT =
+  "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only, avoid glue, and show me three different layouts.";
+
 const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   {
     id: "playing-card-box",
@@ -38,12 +41,11 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   },
   {
     id: "duck-shaped-gift-box",
-    title: "Duck-shaped gift box",
-    description: "A small paper duck that opens to hold a gift.",
+    title: "Static duck crease pattern",
+    description: "A fold-only duck study with no open-and-close motion.",
     imageSrc: "/examples/duck-shaped-gift-box.jpg",
-    imageAlt: "A faceted yellow paper duck-shaped gift box",
-    prompt:
-      "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
+    imageAlt: "A faceted yellow paper duck crease-pattern study",
+    prompt: DUCK_CREASE_PATTERN_PROMPT,
     savedExampleId: "duck",
   },
 ] as const;

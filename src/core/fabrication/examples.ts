@@ -353,7 +353,7 @@ export const createFacetedDuckGiftBoxShowcase =
             ],
             dependsOnOperationIds: ["assembly-duck-score"],
             instruction:
-              "Hand-fold the lid and beak; reopen the lid to place a flat gift.",
+              "Treat the lid and beak scores as crease annotations; this saved static study does not model articulated opening or closing.",
           },
           {
             operationId: "assembly-duck-verify",
@@ -362,7 +362,7 @@ export const createFacetedDuckGiftBoxShowcase =
             targetRefs: [{ kind: "semantic_part", id: "part-duck-lid" }],
             dependsOnOperationIds: ["assembly-duck-fold"],
             instruction:
-              "Verify that the scored lid moves freely; material durability is not simulated.",
+              "Confirm the cut and score lines match the shown pattern; lid travel and material durability are not verified.",
           },
         ],
       },

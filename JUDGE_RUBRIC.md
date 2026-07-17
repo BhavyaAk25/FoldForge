@@ -6,7 +6,7 @@ This internal rubric maps reproducible FoldForge evidence to the four equally we
 
 The project must run, use Codex and GPT-5.6, fit **Work & Productivity**, include the required repository and README, and have a public narrated demo under three minutes. An offline fixture cannot satisfy the GPT-5.6 requirement.
 
-Current state: the product, offline evidence, and video script are ready. Live GPT-5.6 Sol is disabled pending user activation, so a final submission claim is not yet allowed.
+Current state: deterministic and offline evidence is strong, and the paid GPT-5.6 Sol intent contract passed. The first live program proposal failed, production remains live-disabled, and the headline prompt-to-fabrication journey is therefore not yet submission-ready.
 
 ## Scoring method
 

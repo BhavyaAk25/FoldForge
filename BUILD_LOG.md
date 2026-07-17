@@ -20,7 +20,7 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 
 - Added GPT-5.6 Sol Responses API adapters with strict Zod outputs, `store:false`, bounded tokens, hashed random safety identifiers, high-reasoning intent/repair defaults, and a strict `apply_parameter_patch` function tool.
 - Implemented the five-cycle repair loop with at most three operations per cycle, real report references, allowlisted paths, duplicate-input blocking, regeneration, full revalidation, and explicit exhaustion.
-- Added signed two-hour access sessions, production `__Host-` HttpOnly cookies, same-origin/Fetch Metadata checks, streaming route body limits, per-session request/token quotas, bounded concurrency, no SDK retries, a 60-second timeout, metadata-only audits, and an independent kill switch.
+- Added signed two-hour access sessions, production `__Host-` HttpOnly cookies, same-origin/Fetch Metadata checks, streaming route body limits, per-session request/token quotas, bounded concurrency, no SDK retries, a bounded model timeout, metadata-only audits, and an independent kill switch.
 - Kept live behavior fail-closed. No offline response or prepared example is presented as an arbitrary GPT-5.6 result.
 
 ## 2026-07-14 — adversarial geometry and export hardening
@@ -57,7 +57,7 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Made FOLD compatibility explicit before download. Fold-only designs export it; revolute/prismatic designs omit it with the exact loss reason.
 - Corrected zero-angle fold-only output by omitting the optional parallel fold-angle array rather than pairing mountain/valley assignments with misleading zero angles.
 - Changed the flower crown from a generic star to a broad eight-petal silhouette and kept the selected candidate as the single source for pattern, mesh, motion, and bytes.
-- Added export route/unit regressions and browser control assertions. The suite now passes 317 tests and 7/7 Chromium flows.
+- Added export route/unit regressions and browser control assertions. The suite now passes 327 tests and 7/7 Chromium flows.
 - Independently validated all showcase GLBs with the Khronos glTF Validator, parsed all showcase DXFs with `dxf-parser`, and parsed/populated the fold-only duck with the official FOLD JavaScript library.
 - Deployed the repaired branch to production and visually exercised closed/open, orbit, pattern pan/zoom, and conditional export availability in the rendered app.
 
@@ -81,10 +81,15 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Required downstream proof for the exact live winner rather than prepared fixtures alone: LibreCAD for DXF, Khronos validation and animation playback for GLB, print-scale/calibration checks for SVG, canonical hash checks for JSON, and FOLD tools only when the topology is losslessly representable.
 - Preserved the honesty boundary: neither a partial smoke, prepared example, parser-only check, nor geometry verification supports claims of universal generation, adoption, quantified time savings, strength, durability, or manufacturing performance.
 - The first guarded launch was blocked locally before any reservation or provider request because the CLI inherited the public access-code preflight. No credit was used. Paid evaluation now has a separate fail-closed enablement check while production routes still require the complete access-cookie configuration.
-- No paid GPT-5.6 success is recorded by this milestone; the first request remains gated on free checks and the persistent budget ledger.
+- The usage-backed intent contract passed 3/3 paid cases on one clean commit: a supported brief, an unsupported brief, and a prompt-injection attempt all stayed inside the strict schema with full explicit-constraint and unit recall. Those calls cost $0.102145.
+- The first readiness intent request returned successfully, but the first complex program proposal failed at the provider boundary after about 85 seconds. The runner charged the full $0.6802 reservation, sealed the cumulative ledger at $0.8307225, and made no further request. No generated program, repair, live artifact, or end-to-end success is claimed.
+- Raised the no-retry client timeout from 60 to 180 seconds for complex strict program output, retained partial stage evidence on downstream failure, and added a metadata-only provider failure category. These fixes pass offline tests but remain unverified by another paid run because the original ledger is intentionally sealed.
+- Bound each paid reservation to the exact request object sent to the provider, distinguished unsettled paid requests from confirmed provider failures for future runs, and added an explicit immutable continuation workflow that carries the complete prior charge and sealed-ledger hash into a new path.
+- Published a sanitized live-evidence packet with build/report/ledger hashes and no prompts, model bodies, response IDs, or credentials.
+- Corrected FOLD boundary versus internal-cut assignments and namespaced extension keys, made static-duck motion and GLB copy honest, and unified multi-sheet preview/SVG/DXF placement through one deterministic layout.
 
 ## Remaining external gate
 
-- Run GPT-5.6 Sol under the $3.70 cap and keep the feature enabled only if the five-case sealed report records at least four complete runs plus the paid evidence packet.
+- Start another cumulative paid run only with explicit authorization; do not delete or relabel the sealed $0.8307225 ledger. The five-case release gate still requires at least four complete runs plus the paid evidence packet.
 - Validate the exact live-selected artifacts in real consumer tools and verify the identical hosted build before recording.
-- Record and submit the public narrated demo only after that evidence exists. No paid or live-model success is claimed before then.
+- Record and submit the public narrated demo only after that evidence exists. The paid intent contract is the only live-model success currently claimed; no live program, repair, artifact, or end-to-end success is claimed.

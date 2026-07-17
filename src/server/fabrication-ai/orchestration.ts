@@ -213,6 +213,7 @@ export const generateDistinctFabricationPrograms = async (
   safetyIdentifier: string,
   model: FabricationProgramModel,
   count = 3,
+  onOutcome?: (outcome: ProgramGenerationOutcome, ordinal: number) => void,
 ): Promise<readonly ProgramGenerationOutcome[]> => {
   const intent = FabricationIntentV1Schema.parse(intentInput);
   if (intent.scopeStatus !== "supported") return [];
@@ -234,7 +235,7 @@ export const generateDistinctFabricationPrograms = async (
       proposal.program.topologyId,
     );
     const repeatedStructure = fingerprints.has(fingerprint);
-    outcomes.push(
+    const outcome: ProgramGenerationOutcome =
       repeatedTopology || repeatedStructure
         ? {
             status: "rejected",
@@ -248,8 +249,9 @@ export const generateDistinctFabricationPrograms = async (
             status: "generated",
             proposal,
             structureFingerprint: fingerprint,
-          },
-    );
+          };
+    outcomes.push(outcome);
+    onOutcome?.(outcome, ordinal);
     usedTopologyIds.push(proposal.program.topologyId);
     fingerprints.add(fingerprint);
   }

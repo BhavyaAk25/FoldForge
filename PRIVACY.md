@@ -1,6 +1,6 @@
 # FoldForge privacy and security contract
 
-Status: **implemented for the bounded submission service; live model disabled pending user activation**.
+Status: **implemented for the bounded submission service; live model disabled after a failed program-generation readiness stage**.
 
 ## Data flow
 
@@ -65,7 +65,7 @@ Exact live limits per random session subject:
 - model output: **20,000 tokens per hour**;
 - simultaneous live requests: **2 per session** and **8 process-wide**;
 - OpenAI SDK retries: **0**; and
-- model request timeout: **60 seconds**.
+- model request timeout: **180 seconds**, inside a declared **240-second** live-route duration.
 
 Public deterministic compile and export routes are separately limited to 30 requests per 10-minute process-local subject bucket, one concurrent request per subject, and four concurrent requests process-wide. The verifier also rejects estimated motion/collision work above 2,000,000 sampled triangle-pair units before expensive traversal. These are best-effort instance-local controls suitable for the bounded demo; a horizontally scaled public service requires an upstream/shared atomic limiter.
 
@@ -96,17 +96,17 @@ No analytics, advertising tracker, account profile, or cross-device sync is requ
 
 ## Current status and remaining live gate
 
-As of 2026-07-14:
+As of 2026-07-17:
 
-- Live AI is disabled with `ENABLE_LIVE_OPENAI=false`; no paid generalized compiler call is claimed.
+- Live AI remains disabled with `ENABLE_LIVE_OPENAI=false`. A paid three-case intent contract passed, but no paid program, repair, artifact, or end-to-end success is claimed. The sanitized public record is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 - Every live route uses the signed two-hour session subject, same-origin/Fetch Metadata guard, route body cap, request/token quota, concurrency lease, strict schema, safety identifier, and fail-closed live state.
-- OpenAI calls set `store:false`, bound output, disable SDK retries, use a 60-second timeout, and never log production prompt or response bodies.
+- OpenAI calls set `store:false`, bind budget reservations to the exact request output ceiling, disable SDK retries, use a 180-second timeout, and never log production prompt or response bodies.
 - Export routes rebuild and verify the submitted selected candidate instead of trusting client export bytes.
 - Public deterministic compile/export routes enforce request, concurrency, and geometric work budgets before returning artifacts.
 - Health exposes only bounded public state and build provenance.
 - Automated route tests cover origin, access, caps, quotas, concurrency, kill-switch state, strict malformed data, and exact selected-candidate export behavior.
 
-The remaining live gate is operational: the user must enable GPT-5.6 Sol and run the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
+The remaining live gate is operational and evidentiary: a new paid run needs explicit builder authorization, an immutable continuation of the sealed ledger, a passing program-generation stage, and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
 
 ## Reporting a concern
 

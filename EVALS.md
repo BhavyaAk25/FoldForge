@@ -2,9 +2,9 @@
 
 ## Evidence status
 
-The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. The user has activated API credit and authorized at most **$4.00** for live testing. FoldForge enforces a lower **$3.70** paid-evaluation ceiling so an unexpected provider charge cannot consume the final $0.30 reserve. No paid live result is claimed until a usage-backed report exists.
+The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. The usage-backed GPT-5.6 Sol intent contract passed 3/3 cases. The first full readiness case stopped at its first program proposal after a provider failure, so no live program, repair, artifact, or end-to-end success is claimed. The sealed cumulative ledger records **$0.8307225** against the **$3.70** internal ceiling and the builder's **$4.00** authorization.
 
-All generated reports are written under ignored `artifacts/evals/`. Offline evidence never counts as live model evidence.
+Detailed generated reports are written under ignored `artifacts/evals/`. A sanitized, response-ID-free summary with source-report hashes is committed at [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json). Offline evidence never counts as live model evidence.
 
 ## Release rule
 
@@ -29,9 +29,9 @@ A one-case or budget-truncated run is a **live smoke**, not the sealed release s
 | Correct fail-fast verifier stage    | 560/560                                 |      100% | Pass   |
 | Export source equivalence           | 120/120                                 |      100% | Pass   |
 | Canonical repeatability             | 50 programs × 10 repeats; 0 differences |      100% | Pass   |
-| Compile + verify p95                | 75.521 ms                               | ≤2,000 ms | Pass   |
+| Compile + verify p95                | 200.439 ms                              | ≤2,000 ms | Pass   |
 | Offline crashes                     | 0                                       |         0 | Pass   |
-| Strict coverage                     | 96.72% statements / 90.19% branches     | 95% / 90% | Pass   |
+| Strict coverage                     | 96.72% statements / 90.17% branches     | 95% / 90% | Pass   |
 
 The 560 mutations cover schema, topology, panel geometry, connections, sheet packing, rigid transforms, motion, collision, semantics, and export equivalence with 56 cases per phase.
 
@@ -73,7 +73,7 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 | Keyboard focus and reduced motion                       | 1/1                            | Pass   |
 | Axe serious or critical violations, before/after result | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, working 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 317 passing tests across 45 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
+The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, conditional 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 327 passing tests across 49 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
 
 ### External export-consumer checks
 
@@ -89,17 +89,17 @@ The committed `validate:consumers` command regenerates the three canonical showc
 
 ### Live GPT-5.6 Sol
 
-| Gate                                                                  | Current                          |
-| --------------------------------------------------------------------- | -------------------------------- |
-| Supported brief produces a strict intent or a grounded failure        | Not run — no paid result claimed |
-| Explicit constraint recall and unit normalization                     | Not run — no paid result claimed |
-| Unsupported request is refused or clarified without schema escape     | Not run — no paid result claimed |
-| Prompt-injection attempt cannot escape the strict contract            | Not run — no paid result claimed |
-| Three generated programs are structurally distinct and all verified   | Not run — no paid result claimed |
-| Real measured failure receives a grounded patch and full revalidation | Not run — no paid result claimed |
-| Exact live SVG/DXF/GLB/JSON and conditional FOLD pass consumer checks | Not run — no paid result claimed |
-| Usage ledger proves model, response IDs, tokens, and cost             | Not run — no paid result claimed |
-| Production logs contain no prompt, response, or secret content        | Not run — no paid result claimed |
+| Gate                                                                  | Current                                            |
+| --------------------------------------------------------------------- | -------------------------------------------------- |
+| Supported brief produces a strict intent or a grounded failure        | Pass — 1/1 strict supported intent                 |
+| Explicit constraint recall and unit normalization                     | Pass — 100% on the paid contract case              |
+| Unsupported request is refused or clarified without schema escape     | Pass — 1/1 unsupported request refused             |
+| Prompt-injection attempt cannot escape the strict contract            | Pass — 1/1 remained an unsupported strict response |
+| Three generated programs are structurally distinct and all verified   | Blocked — first proposal provider failure          |
+| Real measured failure receives a grounded patch and full revalidation | Not reached                                        |
+| Exact live SVG/DXF/GLB/JSON and conditional FOLD pass consumer checks | Not reached                                        |
+| Usage ledger proves model, response IDs, tokens, and cost             | Pass — 5 entries, $0.8307225, sealed               |
+| Production logs contain no prompt, response, or secret content        | Not run in production                              |
 
 #### Paid-run budget contract
 
@@ -113,7 +113,19 @@ LIVE_MODEL_KILL_SWITCH=false \
 pnpm run eval:live
 ```
 
-Paid requests run sequentially with SDK retries disabled. Before each request, the budget guard reserves a conservative maximum derived from the serialized request and the operation's output-token ceiling. After a response, it charges the provider-reported input, cached-input, cache-write, output, and reasoning usage. Missing or invalid usage and provider failures seal the budget and prevent another request. Both paid evaluation commands share the ignored persistent ledger at `artifacts/evals/live-cost-ledger.json`; `artifacts/evals/live-cost-ledger.lock` prevents concurrent paid runs. The ledger retains only response identifiers, token counts, calculated cost, operation names, and bounded evidence metadata; it does not retain prompt or response bodies. A crash with a pending reservation is charged at that reservation's conservative maximum and seals subsequent paid calls.
+Paid requests run sequentially with SDK retries disabled. Before each request, the budget guard reserves a conservative maximum derived from the serialized request and that exact request object's `max_output_tokens`; the same object is then passed to the provider callback. After a response, it charges the provider-reported input, cached-input, cache-write, output, and reasoning usage. Missing or invalid usage and unsettled request failures seal the budget and prevent another request. Both paid evaluation commands share the ignored persistent ledger selected by `LIVE_EVAL_LEDGER_PATH`, defaulting to `artifacts/evals/live-cost-ledger.json`; the companion `.lock` prevents concurrent paid runs. The ledger retains only response identifiers, token counts, calculated cost, operation names, and bounded evidence metadata; it does not retain prompt or response bodies. A crash with a pending reservation is charged at that reservation's conservative maximum and seals subsequent paid calls.
+
+A sealed ledger is never edited or reset. After explicit authorization, `eval:continue-ledger` creates a new ledger that copies the complete charged history, records the SHA-256 of the sealed source, atomically claims that source against branching, clears only the new ledger's run halt, and keeps the original cumulative cap:
+
+```bash
+ACKNOWLEDGE_SEALED_LEDGER_CONTINUATION=true \
+LIVE_EVAL_BUDGET_USD=3.70 \
+pnpm run eval:continue-ledger -- \
+  --source artifacts/evals/live-cost-ledger.json \
+  --target artifacts/evals/live-cost-ledger-continuation-1.json
+```
+
+Subsequent commands must set `LIVE_EVAL_LEDGER_PATH=artifacts/evals/live-cost-ledger-continuation-1.json`. A second continuation from the same sealed source is rejected. Creating the single continuation does not itself make a provider request.
 
 The five-case sealed readiness suite requires at least four complete successes. Each success requires three structurally distinct verified candidates, deterministic compile and verification, bounded repair when needed, exact selected-candidate exports, source equivalence, and a strict final narrative. The full report must also include:
 

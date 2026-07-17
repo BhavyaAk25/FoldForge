@@ -44,6 +44,7 @@ describe("paid evaluation build evidence", () => {
       cacheWriteTokens: 0,
       outputTokens: 100,
       reasoningTokens: 50,
+      providerFailureCategory: null,
       chargedCostUsd: 0.01 + index / 1_000,
       maximumCostUsd: 0.25,
     }));

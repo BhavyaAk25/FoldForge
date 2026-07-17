@@ -2,7 +2,7 @@
 
 ## Current state
 
-The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. The user has activated API credit and authorized at most **$4.00** for live testing. No paid request has been counted as evidence yet. The live runner must enforce `LIVE_EVAL_BUDGET_USD=3.70`, keep a persistent metadata-only ledger, and leave a $0.30 reserve.
+The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. The paid Sol intent contract passed 3/3 cases. The first readiness case stopped on a provider failure during the first program proposal; the cumulative ledger is sealed at **$0.8307225**. No live program, repair, artifact, or end-to-end success is claimed.
 
 | Milestone                                                           | Status     | Evidence                                                           |
 | ------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
@@ -16,7 +16,7 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | Saved examples and understandable prompt gallery                    | Complete   | Prepared flower and fold-only duck plus three editable prompts     |
 | Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, timeout, kill switch |
 | Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work |
-| Live GPT-5.6 Sol behavior                                           | Ready      | Run under the $3.70 ledger; distinguish smoke from sealed release  |
+| Live GPT-5.6 Sol behavior                                           | Partial    | Intent 3/3; program proposal blocked; sealed ledger $0.8307225     |
 | Submission script and documentation                                 | Complete   | Devpost-ready README, concise video script, rubric, eval evidence  |
 | Public video and `/feedback` session ID                             | User-owned | Record/upload after the live gate, then enter the primary task ID  |
 
@@ -24,14 +24,15 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 
 The remaining activation and evidence sequence is:
 
-1. Run the complete free suite before spending API credit. Any free failure blocks paid testing.
-2. Enable local Sol evaluation with `ENABLE_LIVE_OPENAI=true`, `ENABLE_LIVE_OPENAI_EVALS=true`, `LIVE_MODEL_KILL_SWITCH=false`, and `LIVE_EVAL_BUDGET_USD=3.70`.
-3. Run sequential paid contract checks for a supported brief, an unsupported brief, and a prompt-injection attempt. Record strict status, explicit-constraint recall, units, response identifiers, token usage, and cumulative cost without retaining prompt or response bodies. `eval:compiler` and `eval:live` must share `artifacts/evals/live-cost-ledger.json`; `artifacts/evals/live-cost-ledger.lock` prevents concurrent paid runs.
-4. Run the sealed five-case readiness suite only while the conservative budget reservation allows it. The release gate remains at least four complete end-to-end passes. Fewer attempted cases or an early budget stop is a live smoke, not a sealed pass.
-5. Require at least one real measured failure with a stable failure ID, measured value, limit, repairable path, grounded Sol patch, before/after hashes, and a deterministically passing full recheck. A successful run with no repair does not satisfy the demo's repair claim.
-6. Preserve the exact selected live artifact pack and run consumer checks against those bytes: SVG scale/layers/calibration, DXF units/layers plus LibreCAD, Khronos-valid GLB plus animation playback when applicable, canonical JSON/hash binding, and official-parser/GUI FOLD only when lossless.
-7. If the sealed suite passes, deploy the identical commit with Sol enabled. Verify `Sol ready`, access, an unseen production prompt, three candidates, repair evidence, controls, downloads, build SHA, console, and metadata-only logs. If it fails, engage the kill switch and report the exact blocked state.
-8. Record and upload the public narrated video only after the deployed evidence exists. Include the private judge access code in Devpost testing instructions, the public repository and video, and the primary Codex task's `/feedback` session ID.
+1. Preserve the original metadata-only ledger and its failed-run report. Do not delete, reset, or relabel the conservative $0.8307225 charge.
+2. Obtain explicit authorization before starting another cumulative paid run. The 180-second timeout and partial-evidence fixes pass offline tests but have not been re-exercised against Sol.
+3. Create a new immutable continuation ledger with `eval:continue-ledger`. It must carry every prior entry and charge, record the sealed source hash, atomically reject a second branch from that source, and retain the $3.70 internal cap. Point both paid runners at it with `LIVE_EVAL_LEDGER_PATH`; never edit the sealed source or its continuation claim.
+4. On the authorized continuation, rerun the three-case compiler contract on the exact clean build, then attempt one readiness case. Stop immediately if program generation fails again.
+5. Run the sealed five-case readiness suite only while the conservative budget reservation allows it. The release gate remains at least four complete end-to-end passes. Fewer attempted cases or an early budget stop is not a sealed pass.
+6. Require at least one real measured failure with a stable failure ID, measured value, limit, repairable path, grounded Sol patch, before/after hashes, and a deterministically passing full recheck. A successful run with no repair does not satisfy the demo's repair claim.
+7. Preserve the exact selected live artifact pack and run consumer checks against those bytes: SVG scale/layers/calibration, DXF units/layers plus LibreCAD, Khronos-valid GLB plus animation playback when applicable, canonical JSON/hash binding, and official-parser/GUI FOLD only when lossless.
+8. If the sealed suite passes, deploy the identical commit with Sol enabled. Verify `Sol ready`, access, an unseen production prompt, three candidates, repair evidence, controls, downloads, build SHA, console, and metadata-only logs. If it fails, engage the kill switch and report the exact blocked state.
+9. Record and upload the public narrated video only after the deployed evidence exists. Include the private judge access code in Devpost testing instructions, the public repository and video, and the primary Codex task's `/feedback` session ID.
 
 No partial run is promoted to release evidence. The $4 authorization is a ceiling, not a spending target; testing stops at the $3.70 internal cap even if the five-case gate remains incomplete.
 

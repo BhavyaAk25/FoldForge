@@ -36,6 +36,7 @@ import {
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
 
 const runMeteredRequest = async <
+  Request extends { readonly max_output_tokens: number },
   Response extends {
     readonly id: string;
     readonly usage?: ResponseUsage | null;
@@ -43,14 +44,12 @@ const runMeteredRequest = async <
 >(input: {
   readonly budget: PaidEvalBudget | null;
   readonly operation: PaidEvalOperation;
-  readonly maxOutputTokens: number;
-  readonly request: unknown;
-  readonly execute: () => Promise<Response>;
+  readonly request: Request;
+  readonly execute: (request: Request) => Promise<Response>;
 }): Promise<Response> => {
-  if (!input.budget) return input.execute();
+  if (!input.budget) return input.execute(input.request);
   return input.budget.run({
     operation: input.operation,
-    maxOutputTokens: input.maxOutputTokens,
     request: input.request,
     execute: input.execute,
   });
@@ -138,9 +137,8 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "compile_intent",
-      maxOutputTokens,
       request,
-      execute: () => openAI.responses.parse(request),
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication intent.");
@@ -193,9 +191,8 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "generate_program",
-      maxOutputTokens,
       request,
-      execute: () => openAI.responses.parse(request),
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication program.");
@@ -247,9 +244,8 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "diagnose_repair",
-      maxOutputTokens,
       request,
-      execute: () => openAI.responses.parse(request),
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     const toolCall = response.output.find(
       (item) =>
@@ -293,9 +289,8 @@ export class OpenAIFabricationNarrativeModel implements FabricationNarrativeMode
     const response = await runMeteredRequest({
       budget: this.usageBudget,
       operation: "generate_narrative",
-      maxOutputTokens,
       request,
-      execute: () => openAI.responses.parse(request),
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication narrative.");

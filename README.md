@@ -1,29 +1,29 @@
 # FoldForge
 
-> Describe a paper object. Get checked designs, a working 3D preview, and fabrication files.
+> Inspect checked flat-sheet designs, synchronized previews, and fabrication files. Live arbitrary-prompt generation is still gated.
 
 **Live app:** [foldforge.vercel.app](https://foldforge.vercel.app)
 
-FoldForge turns a plain-language brief into a small, bounded flat-sheet design program. GPT-5.6 Sol explores possible programs; deterministic TypeScript compiles the geometry, rejects invalid candidates, applies only bounded repairs, ranks the survivors, and exports the exact selected design.
+FoldForge is a bounded prompt-to-fabrication compiler. GPT-5.6 Sol is intended to explore typed programs; deterministic TypeScript compiles the geometry, rejects invalid candidates, applies only bounded repairs, ranks the survivors, and exports the exact selected design. The deterministic pipeline and prepared examples work today; live Sol program generation has not passed its release gate.
 
 **The rule:** let AI explore; make code prove.
 
 ## Try it in 30 seconds
 
-Live GPT-5.6 generation is deliberately off until model access is activated. The deployed app is still testable:
+Live GPT-5.6 generation is deliberately off because the first paid program-generation readiness stage failed. The deployed deterministic app is still testable:
 
 1. Open the [live app](https://foldforge.vercel.app).
 2. Select **Explore a finished example**.
 3. Press **Closed** and **Open**, rotate the 3D view, and switch to **Cut-and-fold pattern**.
 4. Download SVG, DXF, GLB, or JSON. FOLD appears only when the mechanism can be represented without losing information.
-5. On the **Duck-shaped gift box** card, choose **Open finished design** to inspect and download a fold-only FOLD file.
+5. On the **Static duck crease pattern** card, choose **Open finished design** to inspect and download a fold-only FOLD file.
 
 The saved example is labelled as prepared in advance. It is never presented as a response to the text box.
 
-| Playing-card box                                                                       | Pop-up flower card                                                                             | Duck-shaped gift box                                                         |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| ![A paper playing-card box with its tray open](./public/examples/playing-card-box.jpg) | ![A paper card with a flower rising from the center](./public/examples/pop-up-flower-card.jpg) | ![A faceted paper duck gift box](./public/examples/duck-shaped-gift-box.jpg) |
-| Slide-out packaging                                                                    | Motion-rich prepared demo                                                                      | Fold-only FOLD demo                                                          |
+| Playing-card box                                                                       | Pop-up flower card                                                                             | Static duck crease pattern                                                               |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| ![A paper playing-card box with its tray open](./public/examples/playing-card-box.jpg) | ![A paper card with a flower rising from the center](./public/examples/pop-up-flower-card.jpg) | ![A faceted duck paper crease-pattern study](./public/examples/duck-shaped-gift-box.jpg) |
+| Slide-out packaging                                                                    | Motion-rich prepared demo                                                                      | Static fold-only FOLD demo                                                               |
 
 ## The problem
 
@@ -55,7 +55,7 @@ flowchart LR
 | **GPT-5.6 Sol**        | Interpret intent, propose bounded programs, diagnose a real verifier report, suggest a typed local patch, write concise instructions | Declare validity, edit trusted geometry, choose a winner, or write export bytes |
 | **Deterministic code** | Normalize units, compile panels and joints, verify, apply patches, rank, serialize, hash, preview, and export                        | Invent unstated essential measurements                                          |
 
-All model output is untrusted until it passes a strict Zod contract. The Responses API calls use `store:false`, bounded output, a hashed random safety identifier, no SDK retries, and a 60-second timeout. Repair uses a strict `apply_parameter_patch` function tool.
+All model output is untrusted until it passes a strict Zod contract. The Responses API calls use `store:false`, bounded output, a hashed random safety identifier, no SDK retries, and a 180-second timeout. Repair uses a strict `apply_parameter_patch` function tool.
 
 ## What FoldForge can make
 
@@ -93,13 +93,13 @@ The repair loop permits at most five cycles and three allowlisted operations per
 
 The selected candidate IR drives every view and file. The UI does not maintain a second, decorative copy of the design.
 
-| Format   | Use                                           | Validation                                                                                                     |
-| -------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **SVG**  | Browser, print at 100%, or cutter import      | Physical millimetre dimensions, layer/source equivalence, 50 mm calibration line                               |
-| **DXF**  | CAD or CAM; use Zoom Extents and millimetres  | Parsed entities, units, CUT/SCORE/PERFORATION/ENGRAVE layers, source equivalence                               |
-| **GLB**  | 3D handoff; play `FoldForge Open Close`       | Khronos-valid binary, selected panels/paths/connectors, hierarchy, 11 motion samples, byte-stable regeneration |
-| **JSON** | Full technical record                         | Canonical intent, program, IR, report, score, provenance, and hashes                                           |
-| **FOLD** | Origami software when the design is fold-only | Offered only when joints can be represented losslessly; source/profile equivalence                             |
+| Format   | Use                                                  | Validation                                                                                                              |
+| -------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **SVG**  | Browser, print at 100%, or cutter import             | Physical millimetre dimensions, layer/source equivalence, 50 mm calibration line                                        |
+| **DXF**  | CAD or CAM; use Zoom Extents and millimetres         | Parsed entities, units, CUT/SCORE/PERFORATION/ENGRAVE layers, source equivalence                                        |
+| **GLB**  | 3D handoff; moving designs include an animation clip | Khronos-valid binary, selected panels/paths/connectors, hierarchy, conditional motion samples, byte-stable regeneration |
+| **JSON** | Full technical record                                | Canonical intent, program, IR, report, score, provenance, and hashes                                                    |
+| **FOLD** | Origami software when the design is fold-only        | Offered only when joints can be represented losslessly; source/profile equivalence                                      |
 
 Independent consumer checks parse the showcase DXFs with `dxf-parser`, validate all showcase GLBs with the Khronos glTF Validator with zero errors and warnings, and parse/populate the fold-only duck with the official FOLD JavaScript library. Motion-rich slider/revolute designs intentionally explain why FOLD is unavailable instead of producing a misleading file.
 
@@ -125,8 +125,8 @@ Core geometry has no React, browser, or OpenAI dependency. OpenAI code is server
 
 The current offline release matrix records:
 
-- **317 passing tests** across 45 files;
-- **96.72% statements, 90.19% branches, 97.96% functions, 97.69% lines**;
+- **327 passing tests** across 49 files;
+- **96.72% statements, 90.17% branches, 97.72% functions, 97.65% lines**;
 - **120/120** independently varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;
 - **50 programs × 10 runs** with zero canonical differences;
@@ -138,20 +138,36 @@ These results prove deterministic and mocked-contract behavior. They do **not** 
 
 ## GPT-5.6 activation status
 
-API credit is active, but no paid result is claimed yet. The software path is complete and fail-closed. Paid evaluation uses a persistent cumulative ledger capped at **$3.70**, below the builder's **$4.00** authorization:
+The usage-backed paid intent contract passed a supported brief, an unsupported brief, and a prompt-injection attempt on one clean commit. The first full readiness case then stopped safely when its first complex program proposal hit a provider failure. The sealed cumulative ledger records **$0.8307225**; no live program, repair, artifact, or end-to-end success is claimed. The client now allows 180 seconds for complex strict output, but that fix has not received another paid run.
+
+The public, sanitized evidence packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json). It includes the paid build SHA, strict contract rates, cost totals, failure stage, and hashes of the private detailed reports without publishing prompts, model bodies, response IDs, or credentials.
 
 ```dotenv
 ENABLE_LIVE_OPENAI=true
 ENABLE_LIVE_OPENAI_EVALS=true
 LIVE_MODEL_KILL_SWITCH=false
 LIVE_EVAL_BUDGET_USD=3.70
+LIVE_EVAL_LEDGER_PATH=artifacts/evals/live-cost-ledger-continuation-1.json
 ```
+
+After explicit authorization for a new paid run, first create one non-branching continuation of the sealed ledger:
 
 ```bash
-LIVE_EVAL_BUDGET_USD=3.70 ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true LIVE_MODEL_KILL_SWITCH=false pnpm run eval:live
+ACKNOWLEDGE_SEALED_LEDGER_CONTINUATION=true \
+LIVE_EVAL_BUDGET_USD=3.70 \
+pnpm run eval:continue-ledger -- \
+  --source artifacts/evals/live-cost-ledger.json \
+  --target artifacts/evals/live-cost-ledger-continuation-1.json
+
+LIVE_EVAL_LEDGER_PATH=artifacts/evals/live-cost-ledger-continuation-1.json \
+LIVE_EVAL_BUDGET_USD=3.70 \
+ENABLE_LIVE_OPENAI=true \
+ENABLE_LIVE_OPENAI_EVALS=true \
+LIVE_MODEL_KILL_SWITCH=false \
+pnpm run eval:compiler
 ```
 
-The sealed suite uses five unseen prompts and requires at least four complete prompt → strict programs → verify/repair → rank → export → narrative runs. A successful one-case or budget-truncated run is labelled a smoke, never a sealed pass. Until the sealed gate passes, no prepared fixture or partial paid run is counted as release-ready live generation.
+Only after that compiler contract passes on the exact clean build should `pnpm run eval:live` use the same continuation ledger. The sealed suite uses five unseen prompts and requires at least four complete prompt → strict programs → verify/repair → rank → export → narrative runs. The current intent-only evidence does not meet that bar. Until the sealed gate passes, no prepared fixture or partial paid run is counted as release-ready live generation.
 
 ## How Codex was used
 

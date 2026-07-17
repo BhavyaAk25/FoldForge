@@ -1,21 +1,21 @@
 # FoldForge skeptical scorecard
 
-Snapshot: 2026-07-17, repaired production build, API credit active, GPT-5.6 Sol paid evaluation not yet run.
+Snapshot: 2026-07-17, paid Sol intent contract passed, first program proposal blocked by provider failure.
 
 This is not a prediction of the judges. It applies the four equally weighted criteria on the [OpenAI Build Week page](https://openai.devpost.com/) and awards points only for reproducible evidence. The official requirements also ask the README and video to distinguish Codex acceleration, human decisions, and GPT-5.6 use.
 
-## Current evidence score: 84/100
+## Current evidence score: 76/100
 
-| Criterion                    | Score | Evidence earned                                                                                                                         | Evidence missing                                                                        |
-| ---------------------------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Technological Implementation | 20/25 | Non-trivial typed compiler, ordered verifier, bounded repair, source-bound exports, adversarial tests, clear Codex workflow             | No unseen live GPT-5.6 run; intent quality and model repair causality remain unproven   |
-| Design                       | 23/25 | Concise flow; real 3D motion/orbit; separate pattern controls; conditional exports; responsive, keyboard, reduced-motion, and Axe gates | Full three-candidate journey is browser-tested with mocks rather than demonstrated live |
-| Potential Impact             | 18/25 | Specific flat-sheet handoff problem; inspectable geometry and standard files replace model prose                                        | No external user, fabrication-team trial, time comparison, or live task evidence        |
-| Quality of the Idea          | 23/25 | Clear prompt → typed program → proof thesis; bounded breadth; topology-aware exploration; honest refusal                                | The demo must prove that breadth memorably rather than relying on prepared examples     |
+| Criterion                    | Score | Evidence earned                                                                                                                            | Evidence missing                                                                        |
+| ---------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Technological Implementation | 20/25 | Typed compiler, ordered verifier, bounded repair, source-bound exports, adversarial tests, plus paid strict intent/refusal/injection proof | No live program, model repair, selected artifact, or end-to-end Sol success             |
+| Design                       | 18/25 | Concise and accessible saved-example flow, synchronized controls, honest conditional motion and exports                                    | The primary prompt-to-three-candidates journey is unavailable in production             |
+| Potential Impact             | 16/25 | Specific flat-sheet handoff problem; inspectable geometry and standard files replace model prose                                           | No live task, exact live artifact in a downstream GUI, user trial, or workflow evidence |
+| Quality of the Idea          | 22/25 | Clear prompt → typed program → proof thesis; bounded breadth; topology-aware exploration; honest refusal                                   | Claimed breadth still relies mainly on prepared examples and mocked/offline programs    |
 
-The repaired previews, reproducible consumer checks, and two prepared examples improve the evidence, but **84 is still not winning-ready**. The live-model gap weakens both technical implementation and the credibility of the complete product story.
+The paid intent contract is meaningful technical evidence, but **76 is not winning-ready**. The program-generation failure leaves the product's central live prompt-to-artifact claim unproven, and the deployed product cannot currently perform its headline action.
 
-There is a harsher eligibility interpretation: if the submission video never shows GPT-5.6 operating, the project may fail the working-project requirement regardless of offline engineering. Therefore the current build should not be submitted as complete.
+The current report proves GPT-5.6 intent handling, but not the working prompt-to-fabrication journey judges expect. Therefore the current build should not be submitted as complete.
 
 ## Conditional release score: 92/100
 

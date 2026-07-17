@@ -10,6 +10,7 @@ import {
   exportFabricationFold,
   exportFabricationGlb,
   exportFabricationSvg,
+  FOLD_EXTENSION_KEYS,
   type FabricationExportArtifact,
   type FoldOmissionReason,
   type VerifiedFabricationExportSource,
@@ -94,9 +95,10 @@ const FOLD_DOCUMENT_SCHEMA = z
   .object({
     file_spec: z.literal(1.2),
     frame_unit: z.literal("mm"),
-    foldforge_sourceCandidateId: z.string().min(1),
-    foldforge_sourceIrHash: z.string().regex(SHA256_PATTERN),
-    foldforge_payloadSha256: z.string().regex(SHA256_PATTERN),
+    frame_attributes: z.array(z.string()),
+    [FOLD_EXTENSION_KEYS.sourceCandidateId]: z.string().min(1),
+    [FOLD_EXTENSION_KEYS.sourceIrHash]: z.string().regex(SHA256_PATTERN),
+    [FOLD_EXTENSION_KEYS.payloadSha256]: z.string().regex(SHA256_PATTERN),
     vertices_coords: z.array(
       z.tuple([z.number().finite(), z.number().finite()]),
     ),
@@ -105,7 +107,7 @@ const FOLD_DOCUMENT_SCHEMA = z
     ),
     edges_assignment: z.array(z.enum(["B", "C", "F", "J", "M", "U", "V"])),
     edges_foldAngle: z.array(z.number().finite()).optional(),
-    edges_foldforgePathId: z.array(z.string().min(1)),
+    [FOLD_EXTENSION_KEYS.edgePathIds]: z.array(z.string().min(1)),
   })
   .passthrough();
 
@@ -639,14 +641,14 @@ const validateFold = (
     );
     const edgeCount = document.edges_vertices.length;
     assertValidation(
-      document.foldforge_sourceCandidateId === sourceCandidateId &&
-        document.foldforge_sourceIrHash === sourceIrHash,
+      document[FOLD_EXTENSION_KEYS.sourceCandidateId] === sourceCandidateId &&
+        document[FOLD_EXTENSION_KEYS.sourceIrHash] === sourceIrHash,
       "fold_invalid",
       "FOLD selected-source metadata is missing or mismatched.",
     );
     assertValidation(
       document.edges_assignment.length === edgeCount &&
-        document.edges_foldforgePathId.length === edgeCount &&
+        document[FOLD_EXTENSION_KEYS.edgePathIds].length === edgeCount &&
         (document.edges_foldAngle === undefined ||
           document.edges_foldAngle.length === edgeCount) &&
         document.edges_vertices.every(
@@ -658,6 +660,16 @@ const validateFold = (
       "fold_invalid",
       "FOLD edge arrays or vertex references are inconsistent.",
     );
+    const cutAttribute = document.edges_assignment.includes("C")
+      ? "cuts"
+      : "noCuts";
+    assertValidation(
+      document.frame_attributes.length === 2 &&
+        document.frame_attributes.includes("2D") &&
+        document.frame_attributes.includes(cutAttribute),
+      "fold_invalid",
+      "FOLD frame cut attributes do not match its edge assignments.",
+    );
     const graph = {
       vertices_coords: document.vertices_coords,
       edges_vertices: document.edges_vertices,
@@ -665,10 +677,12 @@ const validateFold = (
       ...(document.edges_foldAngle
         ? { edges_foldAngle: document.edges_foldAngle }
         : {}),
-      edges_foldforgePathId: document.edges_foldforgePathId,
+      [FOLD_EXTENSION_KEYS.edgePathIds]:
+        document[FOLD_EXTENSION_KEYS.edgePathIds],
     };
     assertValidation(
-      document.foldforge_payloadSha256 === sha256Hex(canonicalSerialize(graph)),
+      document[FOLD_EXTENSION_KEYS.payloadSha256] ===
+        sha256Hex(canonicalSerialize(graph)),
       "fold_invalid",
       "FOLD graph hash does not match its canonical crease data.",
     );

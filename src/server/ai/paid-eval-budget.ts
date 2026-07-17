@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
   open,
@@ -38,6 +38,7 @@ export type PaidEvalHaltReason =
   | "missing_usage"
   | "provider_failure"
   | "recovered_pending_reservation"
+  | "unsettled_request_failure"
   | "usage_invalid";
 
 export type PaidEvalBudgetErrorCode =
@@ -50,6 +51,7 @@ export type PaidEvalBudgetErrorCode =
   | "missing_usage"
   | "provider_failure"
   | "run_locked"
+  | "unsettled_request_failure"
   | "usage_invalid";
 
 export class PaidEvalBudgetError extends Error {
@@ -74,6 +76,7 @@ const PaidEvalHaltReasonSchema = z.enum([
   "missing_usage",
   "provider_failure",
   "recovered_pending_reservation",
+  "unsettled_request_failure",
   "usage_invalid",
 ]);
 
@@ -81,6 +84,14 @@ const PaidEvalLockSchema = z
   .object({
     pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     acquiredAtIso: z.string().datetime(),
+  })
+  .strict();
+
+const PaidEvalContinuationClaimSchema = z
+  .object({
+    sourceLedgerSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    targetLedgerPathHash: z.string().regex(/^[a-f0-9]{64}$/),
+    claimedAtIso: z.string().datetime(),
   })
   .strict();
 
@@ -114,6 +125,7 @@ const PaidEvalLedgerEntrySchema = z
       "provider_failure",
       "missing_usage",
       "recovered_pending_reservation",
+      "unsettled_request_failure",
       "usage_invalid",
     ]),
     inputTokens: NonNegativeSafeIntegerSchema.nullable(),
@@ -121,8 +133,18 @@ const PaidEvalLedgerEntrySchema = z
     cacheWriteTokens: NonNegativeSafeIntegerSchema.nullable(),
     outputTokens: NonNegativeSafeIntegerSchema.nullable(),
     reasoningTokens: NonNegativeSafeIntegerSchema.nullable(),
+    providerFailureCategory: z.string().min(1).max(120).nullable().optional(),
     chargedNanodollars: PositiveSafeIntegerSchema,
     reservedNanodollars: PositiveSafeIntegerSchema,
+  })
+  .strict();
+
+const PaidEvalContinuationSchema = z
+  .object({
+    sourceLedgerSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    sourceEntryCount: NonNegativeSafeIntegerSchema,
+    sourceChargedNanodollars: NonNegativeSafeIntegerSchema,
+    continuedAtIso: z.string().datetime(),
   })
   .strict();
 
@@ -136,6 +158,7 @@ const PaidEvalLedgerSchema = z
     haltedReason: PaidEvalHaltReasonSchema.nullable(),
     pendingReservation: PaidEvalReservationSchema.nullable(),
     entries: z.array(PaidEvalLedgerEntrySchema),
+    continuation: PaidEvalContinuationSchema.optional(),
   })
   .strict();
 
@@ -163,6 +186,7 @@ export interface PaidEvalBudgetSnapshot {
     readonly cacheWriteTokens: number | null;
     readonly outputTokens: number | null;
     readonly reasoningTokens: number | null;
+    readonly providerFailureCategory: string | null;
     readonly chargedCostUsd: number;
     readonly maximumCostUsd: number;
   }[];
@@ -173,17 +197,30 @@ interface MeterableResponse {
   readonly usage?: ResponseUsage | null;
 }
 
-export interface PaidEvalCallInput<Response extends MeterableResponse> {
+interface MeterableRequest {
+  readonly max_output_tokens: number;
+}
+
+export interface PaidEvalCallInput<
+  Request extends MeterableRequest,
+  Response extends MeterableResponse,
+> {
   readonly operation: PaidEvalOperation;
-  readonly maxOutputTokens: number;
-  readonly request: unknown;
-  readonly execute: () => Promise<Response>;
+  readonly request: Request;
+  readonly execute: (request: Request) => Promise<Response>;
 }
 
 export interface OpenPaidEvalBudgetOptions {
   readonly ledgerPath?: string;
   readonly environment?: Readonly<Record<string, string | undefined>>;
   readonly beforeReservation?: () => void | Promise<void>;
+}
+
+export interface ContinuePaidEvalLedgerOptions {
+  readonly sourceLedgerPath: string;
+  readonly targetLedgerPath: string;
+  readonly acknowledgeSealedLedgerContinuation: true;
+  readonly environment?: Readonly<Record<string, string | undefined>>;
 }
 
 const nanodollarsToUsd = (nanodollars: number): number =>
@@ -297,11 +334,19 @@ const readLedger = async (
         parsed.data.budgetNanodollars &&
       parsed.data.pendingReservation.sequence === parsed.data.entries.length + 1
     : true;
+  const continuationFits = parsed.data.continuation
+    ? parsed.data.continuation.sourceEntryCount <= parsed.data.entries.length &&
+      parsed.data.entries
+        .slice(0, parsed.data.continuation.sourceEntryCount)
+        .reduce((total, entry) => total + entry.chargedNanodollars, 0) ===
+        parsed.data.continuation.sourceChargedNanodollars
+    : true;
   if (
     !Number.isSafeInteger(entryTotal) ||
     entryTotal !== parsed.data.chargedNanodollars ||
     !sequencesValid ||
-    !pendingFits
+    !pendingFits ||
+    !continuationFits
   ) {
     throw new PaidEvalBudgetError(
       "ledger_invalid",
@@ -315,6 +360,11 @@ const lockPathFor = (ledgerPath: string): string =>
   ledgerPath.endsWith(".json")
     ? `${ledgerPath.slice(0, -".json".length)}.lock`
     : `${ledgerPath}.lock`;
+
+const continuationClaimPathFor = (ledgerPath: string): string =>
+  ledgerPath.endsWith(".json")
+    ? `${ledgerPath.slice(0, -".json".length)}.continuation-claim.json`
+    : `${ledgerPath}.continuation-claim.json`;
 
 const processIsAlive = (pid: number): boolean => {
   try {
@@ -494,11 +544,13 @@ export class PaidEvalBudget {
   static async open(
     options: OpenPaidEvalBudgetOptions = {},
   ): Promise<PaidEvalBudget> {
-    const budgetNanodollars = environmentBudgetNanodollars(
-      options.environment ?? process.env,
-    );
+    const environment = options.environment ?? process.env;
+    const budgetNanodollars = environmentBudgetNanodollars(environment);
+    const configuredLedgerPath = environment.LIVE_EVAL_LEDGER_PATH?.trim();
     const ledgerPath = path.resolve(
-      options.ledgerPath ?? DEFAULT_PAID_EVAL_LEDGER_PATH,
+      options.ledgerPath ??
+        (configuredLedgerPath ? configuredLedgerPath : undefined) ??
+        DEFAULT_PAID_EVAL_LEDGER_PATH,
     );
     const lockPath = lockPathFor(ledgerPath);
     await mkdir(path.dirname(ledgerPath), { recursive: true });
@@ -533,9 +585,159 @@ export class PaidEvalBudget {
     }
   }
 
-  async run<Response extends MeterableResponse>(
-    input: PaidEvalCallInput<Response>,
-  ): Promise<Response> {
+  static async continueFromSealedLedger(
+    options: ContinuePaidEvalLedgerOptions,
+  ): Promise<{
+    readonly sourceLedgerSha256: string;
+    readonly carriedRequestCount: number;
+    readonly carriedCostUsd: number;
+    readonly targetLedgerPath: string;
+  }> {
+    if (!options.acknowledgeSealedLedgerContinuation) {
+      throw new PaidEvalBudgetError(
+        "invalid_request",
+        "Continuing a sealed paid-evaluation ledger requires explicit acknowledgement.",
+      );
+    }
+    const environment = options.environment ?? process.env;
+    const budgetNanodollars = environmentBudgetNanodollars(environment);
+    const sourceLedgerPath = path.resolve(options.sourceLedgerPath);
+    const targetLedgerPath = path.resolve(options.targetLedgerPath);
+    if (sourceLedgerPath === targetLedgerPath) {
+      throw new PaidEvalBudgetError(
+        "invalid_request",
+        "The continuation target must be a new ledger path.",
+      );
+    }
+    await mkdir(path.dirname(targetLedgerPath), { recursive: true });
+    const sourceLockPath = lockPathFor(sourceLedgerPath);
+    const targetLockPath = lockPathFor(targetLedgerPath);
+    const sourceLock = await acquireRunLock(sourceLockPath);
+    let targetLock: FileHandle | null = null;
+    try {
+      await sourceLock.writeFile(
+        `${JSON.stringify({ pid: process.pid, acquiredAtIso: new Date().toISOString() })}\n`,
+        "utf8",
+      );
+      targetLock = await acquireRunLock(targetLockPath);
+      await targetLock.writeFile(
+        `${JSON.stringify({ pid: process.pid, acquiredAtIso: new Date().toISOString() })}\n`,
+        "utf8",
+      );
+      let sourceContents: string;
+      try {
+        sourceContents = await readFile(sourceLedgerPath, "utf8");
+      } catch (error) {
+        if (errorCode(error) === "ENOENT") {
+          throw new PaidEvalBudgetError(
+            "ledger_invalid",
+            "The sealed source ledger does not exist.",
+          );
+        }
+        throw error;
+      }
+      const sourceLedger = await readLedger(
+        sourceLedgerPath,
+        budgetNanodollars,
+      );
+      if (!sourceLedger.haltedReason || sourceLedger.pendingReservation) {
+        throw new PaidEvalBudgetError(
+          "invalid_request",
+          "Only a settled, sealed ledger can be continued.",
+        );
+      }
+      const sourceLedgerSha256 = createHash("sha256")
+        .update(sourceContents)
+        .digest("hex");
+      const continuedAtIso = new Date().toISOString();
+      const targetLedger: PaidEvalLedger = {
+        version: LEDGER_VERSION,
+        budgetNanodollars: sourceLedger.budgetNanodollars,
+        chargedNanodollars: sourceLedger.chargedNanodollars,
+        haltedReason: null,
+        pendingReservation: null,
+        entries: sourceLedger.entries,
+        continuation: {
+          sourceLedgerSha256,
+          sourceEntryCount: sourceLedger.entries.length,
+          sourceChargedNanodollars: sourceLedger.chargedNanodollars,
+          continuedAtIso,
+        },
+      };
+      let targetHandle: FileHandle;
+      try {
+        targetHandle = await open(targetLedgerPath, "wx");
+      } catch (error) {
+        if (errorCode(error) === "EEXIST") {
+          throw new PaidEvalBudgetError(
+            "invalid_request",
+            "The continuation target already exists.",
+          );
+        }
+        throw error;
+      }
+      try {
+        const claimPath = continuationClaimPathFor(sourceLedgerPath);
+        let claimHandle: FileHandle;
+        try {
+          claimHandle = await open(claimPath, "wx");
+        } catch (error) {
+          if (errorCode(error) === "EEXIST") {
+            throw new PaidEvalBudgetError(
+              "invalid_request",
+              "The sealed source ledger already has a continuation.",
+            );
+          }
+          throw error;
+        }
+        try {
+          const claim = PaidEvalContinuationClaimSchema.parse({
+            sourceLedgerSha256,
+            targetLedgerPathHash: createHash("sha256")
+              .update(targetLedgerPath)
+              .digest("hex"),
+            claimedAtIso: continuedAtIso,
+          });
+          await claimHandle.writeFile(
+            `${JSON.stringify(claim, null, 2)}\n`,
+            "utf8",
+          );
+        } finally {
+          await claimHandle.close();
+        }
+        await targetHandle.writeFile(
+          `${JSON.stringify(targetLedger, null, 2)}\n`,
+          "utf8",
+        );
+      } finally {
+        await targetHandle.close();
+        const targetContents = await readFile(targetLedgerPath, "utf8").catch(
+          () => "",
+        );
+        if (targetContents.length === 0) {
+          await unlink(targetLedgerPath).catch(() => undefined);
+        }
+      }
+      return {
+        sourceLedgerSha256,
+        carriedRequestCount: sourceLedger.entries.length,
+        carriedCostUsd: nanodollarsToUsd(sourceLedger.chargedNanodollars),
+        targetLedgerPath,
+      };
+    } finally {
+      if (targetLock) {
+        await targetLock.close();
+        await unlink(targetLockPath).catch(() => undefined);
+      }
+      await sourceLock.close();
+      await unlink(sourceLockPath).catch(() => undefined);
+    }
+  }
+
+  async run<
+    Request extends MeterableRequest,
+    Response extends MeterableResponse,
+  >(input: PaidEvalCallInput<Request, Response>): Promise<Response> {
     this.assertOpen();
     if (this.ledger.haltedReason) {
       throw new PaidEvalBudgetError(
@@ -550,7 +752,9 @@ export class PaidEvalBudget {
       );
     }
     await this.beforeReservation();
-    const maxOutputTokens = input.maxOutputTokens;
+    // The reservation is derived from the same request object supplied to the
+    // provider callback. Callers cannot declare a cheaper independent ceiling.
+    const maxOutputTokens = input.request.max_output_tokens;
     if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens <= 0) {
       throw new PaidEvalBudgetError(
         "invalid_request",
@@ -610,23 +814,32 @@ export class PaidEvalBudget {
 
     let response: Response;
     try {
-      response = await input.execute();
-    } catch {
-      await this.settleUnknown(reservation, null, "provider_failure");
+      response = await input.execute(input.request);
+    } catch (error) {
+      const providerFailureCategory =
+        error instanceof Error && error.name.trim().length > 0
+          ? error.name.slice(0, 120)
+          : "unknown";
+      await this.settleUnknown(
+        reservation,
+        null,
+        "unsettled_request_failure",
+        providerFailureCategory,
+      );
       throw new PaidEvalBudgetError(
-        "provider_failure",
-        "The provider request failed; its full reservation was charged and the budget was halted.",
+        "unsettled_request_failure",
+        "The paid request did not settle; its full reservation was charged and the budget was halted.",
       );
     }
     if (!response.usage) {
-      await this.settleUnknown(reservation, response.id, "missing_usage");
+      await this.settleUnknown(reservation, response.id, "missing_usage", null);
       throw new PaidEvalBudgetError(
         "missing_usage",
         "The provider omitted usage; its full reservation was charged and the budget was halted.",
       );
     }
     if (response.id.trim().length === 0) {
-      await this.settleUnknown(reservation, null, "usage_invalid");
+      await this.settleUnknown(reservation, null, "usage_invalid", null);
       throw new PaidEvalBudgetError(
         "usage_invalid",
         "The provider response ID was missing; the full reservation was charged and the budget was halted.",
@@ -649,7 +862,7 @@ export class PaidEvalBudget {
         );
       }
     } catch {
-      await this.settleUnknown(reservation, response.id, "usage_invalid");
+      await this.settleUnknown(reservation, response.id, "usage_invalid", null);
       throw new PaidEvalBudgetError(
         "usage_invalid",
         "Provider usage was invalid; the full reservation was charged and the budget was halted.",
@@ -708,6 +921,7 @@ export class PaidEvalBudget {
         cacheWriteTokens: entry.cacheWriteTokens,
         outputTokens: entry.outputTokens,
         reasoningTokens: entry.reasoningTokens,
+        providerFailureCategory: entry.providerFailureCategory ?? null,
         chargedCostUsd: nanodollarsToUsd(entry.chargedNanodollars),
         maximumCostUsd: nanodollarsToUsd(entry.reservedNanodollars),
       })),
@@ -755,7 +969,12 @@ export class PaidEvalBudget {
   private async settleUnknown(
     reservation: PaidEvalReservation,
     responseId: string | null,
-    outcome: "provider_failure" | "missing_usage" | "usage_invalid",
+    outcome:
+      | "provider_failure"
+      | "missing_usage"
+      | "unsettled_request_failure"
+      | "usage_invalid",
+    providerFailureCategory: string | null,
   ): Promise<void> {
     const entry: PaidEvalLedgerEntry = {
       sequence: reservation.sequence,
@@ -767,6 +986,7 @@ export class PaidEvalBudget {
       cacheWriteTokens: null,
       outputTokens: null,
       reasoningTokens: null,
+      providerFailureCategory,
       chargedNanodollars: reservation.reservedNanodollars,
       reservedNanodollars: reservation.reservedNanodollars,
     };

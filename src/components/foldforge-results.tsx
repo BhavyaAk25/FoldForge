@@ -93,6 +93,7 @@ export function FoldForgeResults({
   rotationDeg,
   selected,
 }: FoldForgeResultsProps) {
+  const hasMotion = selected.ir.driver !== null;
   const foldCompatibility = inspectFabricationFoldCompatibility({
     ir: selected.ir,
     sourceCandidateId: selected.candidateId,
@@ -114,7 +115,9 @@ export function FoldForgeResults({
         </h2>
         <p className={styles.sectionIntro}>
           {experienceMode === "saved"
-            ? "This example is not a response to your current prompt. It is a prepared design you can inspect, move, and export while live generation is off."
+            ? hasMotion
+              ? "This example is not a response to your current prompt. It is a prepared design you can inspect, move, and export while live generation is off."
+              : "This example is not a response to your current prompt. It is a prepared static crease-pattern study you can inspect, rotate, and export; no open-and-close motion is modeled."
             : "Choose a design, inspect the 3D result and flat pattern, then download the one you want to make."}
         </p>
       </div>
@@ -176,7 +179,7 @@ export function FoldForgeResults({
             rotationDeg={rotationDeg}
             label={`${selected.label} ${previewMode} preview`}
           />
-          {previewMode === "assembled" ? (
+          {previewMode === "assembled" && hasMotion ? (
             <div className={styles.controls} data-testid="motion-controls">
               <label>
                 Open and close
@@ -186,7 +189,6 @@ export function FoldForgeResults({
                   min="0"
                   max="1"
                   step="0.01"
-                  disabled={!selected.ir.driver}
                   value={motionPosition}
                   aria-valuetext={`${Math.round(motionPosition * 100)} percent`}
                   onChange={(event) =>
@@ -196,18 +198,10 @@ export function FoldForgeResults({
                 <output>{Math.round(motionPosition * 100)}%</output>
               </label>
               <div className={styles.motionEndpoints}>
-                <button
-                  type="button"
-                  disabled={!selected.ir.driver}
-                  onClick={() => onMotionPositionChange(0)}
-                >
+                <button type="button" onClick={() => onMotionPositionChange(0)}>
                   Closed
                 </button>
-                <button
-                  type="button"
-                  disabled={!selected.ir.driver}
-                  onClick={() => onMotionPositionChange(1)}
-                >
+                <button type="button" onClick={() => onMotionPositionChange(1)}>
                   Open
                 </button>
               </div>
@@ -340,7 +334,9 @@ export function FoldForgeResults({
                 foldCompatibility.status === "omitted";
               const description = foldUnavailable
                 ? foldCompatibility.reason.message
-                : option.description;
+                : option.format === "glb" && !hasMotion
+                  ? "Open in a 3D viewer. This static model has no animation clip."
+                  : option.description;
               return (
                 <button
                   key={option.format}

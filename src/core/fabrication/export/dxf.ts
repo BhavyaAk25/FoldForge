@@ -4,8 +4,11 @@ import type {
   FabricationPathV1,
 } from "../types";
 import {
+  createFabricationPatternLayout,
+  placePointsOnSheet,
+} from "../pattern-layout";
+import {
   CALIBRATION_LENGTH_MM,
-  createSheetLayout,
   createTextArtifact,
   fabricationExportOk,
   formatExportNumber,
@@ -62,7 +65,6 @@ const addPolyline = (
   points: readonly { readonly xMm: number; readonly yMm: number }[],
   closed: boolean,
   strokeWidthMm: number,
-  offsetYmm: number,
 ): void => {
   pair(lines, 999, asciiText(identifier));
   pair(lines, 0, "LWPOLYLINE");
@@ -74,7 +76,7 @@ const addPolyline = (
   pair(lines, 43, formatExportNumber(strokeWidthMm));
   for (const point of points) {
     pair(lines, 10, formatExportNumber(point.xMm));
-    pair(lines, 20, formatExportNumber(point.yMm + offsetYmm));
+    pair(lines, 20, formatExportNumber(point.yMm));
   }
 };
 
@@ -103,10 +105,8 @@ export const exportFabricationDxf = (
   const preparedResult = prepareExportSource(source);
   if (!preparedResult.ok) return preparedResult;
   const prepared = preparedResult.value;
-  const layout = createSheetLayout(prepared.ir);
-  const layoutBySheetId = new Map(
-    layout.sheets.map((sheet) => [sheet.sheetId, sheet]),
-  );
+  const patternLayout = createFabricationPatternLayout(prepared.ir);
+  const layout = patternLayout.sheetLayout;
   const lines: string[] = [];
 
   pair(lines, 0, "SECTION");
@@ -156,15 +156,17 @@ export const exportFabricationDxf = (
       lines,
       `generated:sheet-boundary:${sheet.sheetId}`,
       "ENGRAVE",
-      [
-        { xMm: 0, yMm: 0 },
-        { xMm: sheet.widthMm, yMm: 0 },
-        { xMm: sheet.widthMm, yMm: sheet.heightMm },
-        { xMm: 0, yMm: sheet.heightMm },
-      ],
+      placePointsOnSheet(
+        [
+          { xMm: 0, yMm: 0 },
+          { xMm: sheet.widthMm, yMm: 0 },
+          { xMm: sheet.widthMm, yMm: sheet.heightMm },
+          { xMm: 0, yMm: sheet.heightMm },
+        ],
+        sheet,
+      ),
       true,
       0.12,
-      sheet.offsetYmm,
     );
     addText(
       lines,
@@ -175,19 +177,17 @@ export const exportFabricationDxf = (
     );
   }
 
-  for (const path of [...prepared.ir.paths].sort((left, right) =>
-    left.pathId.localeCompare(right.pathId),
+  for (const laidOutPath of [...patternLayout.paths].sort((left, right) =>
+    left.path.pathId.localeCompare(right.path.pathId),
   )) {
-    const sheet = layoutBySheetId.get(path.sheetId);
-    if (!sheet) continue;
+    const path = laidOutPath.path;
     addPolyline(
       lines,
       `source-path:${path.pathId}`,
       layerForPath(path),
-      path.points,
+      laidOutPath.points,
       path.closed,
       path.strokeWidthMm,
-      sheet.offsetYmm,
     );
   }
 

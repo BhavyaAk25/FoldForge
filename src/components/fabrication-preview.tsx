@@ -13,7 +13,10 @@ import {
 import { BufferGeometry, DoubleSide, Float32BufferAttribute } from "three";
 
 import { evaluateMotionState } from "@/core/fabrication/kinematics";
-import { transformPoint2 } from "@/core/fabrication/polygon";
+import {
+  createFabricationPatternLayout,
+  type FabricationPatternPanel,
+} from "@/core/fabrication/pattern-layout";
 import type {
   FabricationIRV1,
   PanelV1,
@@ -24,12 +27,6 @@ import type {
 import styles from "./fabrication-preview.module.css";
 
 export type FabricationPreviewMode = "assembled" | "pattern";
-
-interface PreviewPolygon {
-  readonly panel: PanelV1;
-  readonly points: readonly Point2Mm[];
-  readonly holes: readonly (readonly Point2Mm[])[];
-}
 
 interface ScenePanel {
   readonly color: string;
@@ -86,19 +83,6 @@ const homeDriverValue = (
   );
 };
 
-const flatPolygons = (ir: FabricationIRV1): readonly PreviewPolygon[] =>
-  ir.panels.map((panel) => ({
-    panel,
-    points: panel.contour.vertices.map((point) =>
-      transformPoint2(point, panel.flatTransform),
-    ),
-    holes: panel.innerCutContours.map((contour) =>
-      contour.vertices.map((point) =>
-        transformPoint2(point, panel.flatTransform),
-      ),
-    ),
-  }));
-
 interface ViewBox {
   readonly height: number;
   readonly width: number;
@@ -106,7 +90,7 @@ interface ViewBox {
   readonly y: number;
 }
 
-const viewBoxFor = (polygons: readonly PreviewPolygon[]): ViewBox => {
+const viewBoxFor = (polygons: readonly FabricationPatternPanel[]): ViewBox => {
   const points = polygons.flatMap((polygon) => polygon.points);
   if (points.length === 0) return { x: 0, y: 0, width: 100, height: 100 };
   const minimumX = Math.min(...points.map((point) => point.xMm));
@@ -145,7 +129,7 @@ const pathSegment = (points: readonly Point2Mm[]): string =>
     ? ""
     : `M ${points.map((point) => `${point.xMm} ${point.yMm}`).join(" L ")} Z`;
 
-const polygonPath = (polygon: PreviewPolygon): string =>
+const polygonPath = (polygon: FabricationPatternPanel): string =>
   [polygon.points, ...polygon.holes].map(pathSegment).join(" ");
 
 const roleClass = (role: PanelV1["role"]): string => {
@@ -574,7 +558,8 @@ function PatternPreview({
   ir,
   label,
 }: PatternPreviewProps) {
-  const polygons = useMemo(() => flatPolygons(ir), [ir]);
+  const patternLayout = useMemo(() => createFabricationPatternLayout(ir), [ir]);
+  const polygons = patternLayout.panels;
   const baseViewBox = useMemo(() => viewBoxFor(polygons), [polygons]);
   const highlighted = useMemo(
     () => new Set(highlightedPanelIds),
@@ -635,14 +620,17 @@ function PatternPreview({
             aria-hidden="true"
             data-testid="pattern-cut-lines"
           >
-            {ir.paths
+            {patternLayout.paths
               .filter(
-                (path) => path.kind === "cut" || path.kind === "perforation",
+                ({ path }) =>
+                  path.kind === "cut" || path.kind === "perforation",
               )
-              .map((path) => (
+              .map(({ path, points }) => (
                 <polyline
                   key={path.pathId}
-                  points={polygonPoints(path.points)}
+                  points={polygonPoints(points)}
+                  data-sheet-id={path.sheetId}
+                  data-source-path-id={path.pathId}
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
@@ -654,12 +642,14 @@ function PatternPreview({
             aria-hidden="true"
             data-testid="pattern-fold-lines"
           >
-            {ir.paths
-              .filter((path) => path.kind === "score")
-              .map((path) => (
+            {patternLayout.paths
+              .filter(({ path }) => path.kind === "score")
+              .map(({ path, points }) => (
                 <polyline
                   key={path.pathId}
-                  points={polygonPoints(path.points)}
+                  points={polygonPoints(points)}
+                  data-sheet-id={path.sheetId}
+                  data-source-path-id={path.pathId}
                   vectorEffect="non-scaling-stroke"
                 />
               ))}

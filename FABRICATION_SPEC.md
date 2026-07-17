@@ -1,6 +1,6 @@
 # FoldForge fabrication compiler specification
 
-Status: **implemented and release-tested offline; live GPT-5.6 Sol evaluation pending user activation**. This document is normative. “Must” and “must not” are release requirements.
+Status: **implemented and release-tested offline; paid intent evaluation passed, but live program-generation readiness failed and remains gated**. This document is normative. “Must” and “must not” are release requirements.
 
 ## 1. Scope
 

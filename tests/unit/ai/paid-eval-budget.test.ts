@@ -34,6 +34,11 @@ const responseUsage = (input?: {
   };
 };
 
+const meteredRequest = (input: string, maxOutputTokens = 3_000) => ({
+  input,
+  max_output_tokens: maxOutputTokens,
+});
+
 describe("persistent paid OpenAI evaluation budget", () => {
   let temporaryDirectory: string;
   let ledgerPath: string;
@@ -77,8 +82,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "bounded" },
+        request: meteredRequest("bounded"),
         execute: async () => ({
           id: "resp-cost",
           usage: responseUsage(),
@@ -103,12 +107,28 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await budget.close();
   });
 
+  it("derives the reservation from the exact request passed to the provider", async () => {
+    const budget = await openBudget();
+    const request = meteredRequest("same request", 2_345);
+    const execute = vi.fn(async (received: typeof request) => ({
+      id: "resp-same-request",
+      usage: responseUsage(),
+      received,
+    }));
+
+    await budget.run({ operation: "compile_intent", request, execute });
+
+    expect(execute).toHaveBeenCalledWith(request);
+    expect(execute.mock.calls[0]?.[0]).toBe(request);
+    expect(budget.snapshot().entries[0]?.maximumCostUsd).toBeGreaterThan(0.07);
+    await budget.close();
+  });
+
   it("persists cumulative usage across sequential evaluation processes", async () => {
     const first = await openBudget();
     await first.run({
       operation: "compile_intent",
-      maxOutputTokens: 3_000,
-      request: { input: "first" },
+      request: meteredRequest("first"),
       execute: async () => ({ id: "resp-first", usage: responseUsage() }),
     });
     await first.close();
@@ -122,8 +142,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     });
     await second.run({
       operation: "compile_intent",
-      maxOutputTokens: 3_000,
-      request: { input: "second" },
+      request: meteredRequest("second"),
       execute: async () => ({ id: "resp-second", usage: responseUsage() }),
     });
     expect(second.snapshot().chargedCostUsd).toBe(0.01445);
@@ -154,8 +173,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     });
     const first = budget.run({
       operation: "compile_intent",
-      maxOutputTokens: 3_000,
-      request: { input: "first" },
+      request: meteredRequest("first"),
       execute: () => firstResponse,
     });
     await vi.waitFor(() => {
@@ -165,8 +183,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "second" },
+        request: meteredRequest("second"),
         execute: secondCallback,
       }),
     ).rejects.toMatchObject({ code: "concurrent_request" });
@@ -182,8 +199,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "generate_program",
-        maxOutputTokens: 8_000,
-        request: { input: "too expensive" },
+        request: meteredRequest("too expensive", 8_000),
         execute,
       }),
     ).rejects.toMatchObject({ code: "budget_exhausted" });
@@ -209,8 +225,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "must remain uncommitted" },
+        request: meteredRequest("must remain uncommitted"),
         execute,
       }),
     ).rejects.toThrow("build changed");
@@ -229,8 +244,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "missing usage" },
+        request: meteredRequest("missing usage"),
         execute: async () => ({ id: "resp-no-usage" }),
       }),
     ).rejects.toMatchObject({ code: "missing_usage" });
@@ -242,29 +256,28 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "must not run" },
+        request: meteredRequest("must not run"),
         execute: vi.fn(),
       }),
     ).rejects.toMatchObject({ code: "budget_exhausted" });
     await budget.close();
   });
 
-  it("charges the full reservation and halts after a provider failure", async () => {
+  it("charges the full reservation and halts after an unsettled request", async () => {
     const budget = await openBudget();
     await expect(
       budget.run({
         operation: "diagnose_repair",
-        maxOutputTokens: 2_000,
-        request: { input: "provider failure" },
+        request: meteredRequest("provider failure", 2_000),
         execute: async () => {
           throw new Error("network timeout");
         },
       }),
-    ).rejects.toMatchObject({ code: "provider_failure" });
+    ).rejects.toMatchObject({ code: "unsettled_request_failure" });
     expect(budget.snapshot()).toMatchObject({
-      haltedReason: "provider_failure",
+      haltedReason: "unsettled_request_failure",
       requestCount: 1,
+      entries: [{ providerFailureCategory: "Error" }],
     });
     await budget.close();
   });
@@ -276,8 +289,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "compile_intent",
-        maxOutputTokens: 3_000,
-        request: { input: "invalid usage" },
+        request: meteredRequest("invalid usage"),
         execute: async () => ({ id: "resp-invalid", usage: invalidUsage }),
       }),
     ).rejects.toMatchObject({ code: "usage_invalid" });
@@ -291,8 +303,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "generate_program",
-        maxOutputTokens: 1,
-        request: { input: "x".repeat(140_000) },
+        request: meteredRequest("x".repeat(140_000), 1),
         execute,
       }),
     ).rejects.toMatchObject({ code: "invalid_request" });
@@ -350,6 +361,76 @@ describe("persistent paid OpenAI evaluation budget", () => {
       chargedNanodollars: 302_500_000,
     });
     await budget.close();
+  });
+
+  it("continues a sealed ledger without mutating or resetting its charge", async () => {
+    const source = await openBudget();
+    await expect(
+      source.run({
+        operation: "generate_program",
+        request: meteredRequest("failed request", 2_000),
+        execute: async () => {
+          throw new Error("timeout");
+        },
+      }),
+    ).rejects.toMatchObject({ code: "unsettled_request_failure" });
+    await source.close();
+    const sealedContents = await readFile(ledgerPath, "utf8");
+    const continuationPath = path.join(
+      temporaryDirectory,
+      "live-cost-ledger-continuation-1.json",
+    );
+
+    const continuation = await PaidEvalBudget.continueFromSealedLedger({
+      sourceLedgerPath: ledgerPath,
+      targetLedgerPath: continuationPath,
+      acknowledgeSealedLedgerContinuation: true,
+      environment: { LIVE_EVAL_BUDGET_USD: "3.70" },
+    });
+
+    expect(await readFile(ledgerPath, "utf8")).toBe(sealedContents);
+    expect(continuation).toMatchObject({
+      carriedRequestCount: 1,
+      carriedCostUsd: expect.any(Number),
+      targetLedgerPath: continuationPath,
+    });
+    const branchedPath = path.join(
+      temporaryDirectory,
+      "live-cost-ledger-illegal-branch.json",
+    );
+    await expect(
+      PaidEvalBudget.continueFromSealedLedger({
+        sourceLedgerPath: ledgerPath,
+        targetLedgerPath: branchedPath,
+        acknowledgeSealedLedgerContinuation: true,
+        environment: { LIVE_EVAL_BUDGET_USD: "3.70" },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      message: "The sealed source ledger already has a continuation.",
+    });
+    await expect(readFile(branchedPath, "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    const continued = await openBudget("3.70", continuationPath);
+    expect(continued.snapshot()).toMatchObject({
+      haltedReason: null,
+      requestCount: 1,
+      chargedCostUsd: continuation.carriedCostUsd,
+    });
+    await continued.run({
+      operation: "compile_intent",
+      request: meteredRequest("continued request", 1_000),
+      execute: async () => ({
+        id: "resp-after-continuation",
+        usage: responseUsage(),
+      }),
+    });
+    expect(continued.snapshot()).toMatchObject({
+      haltedReason: null,
+      requestCount: 2,
+    });
+    await continued.close();
   });
 
   it("rejects a changed limit for an existing cumulative ledger", async () => {

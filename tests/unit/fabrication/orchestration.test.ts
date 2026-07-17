@@ -95,6 +95,30 @@ describe("fabrication AI orchestration", () => {
     });
   });
 
+  it("publishes each completed proposal before a later request fails", async () => {
+    const completed: string[] = [];
+    const model: FabricationProgramModel = {
+      generateProgram: vi
+        .fn()
+        .mockResolvedValueOnce({
+          diversityClaim: "First",
+          program: fixtureProgram(),
+        })
+        .mockRejectedValueOnce(new Error("provider failure")),
+    };
+
+    await expect(
+      generateDistinctFabricationPrograms(
+        fixtureIntent(),
+        "ff_test_subject",
+        model,
+        3,
+        (outcome) => completed.push(outcome.structureFingerprint),
+      ),
+    ).rejects.toThrow("provider failure");
+    expect(completed).toHaveLength(1);
+  });
+
   it("returns immediately when deterministic verification already passes", async () => {
     const model: FabricationRepairModel = {
       diagnoseRepair: vi.fn().mockRejectedValue(new Error("must not run")),

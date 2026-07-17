@@ -12,6 +12,7 @@ import {
 import { OpenAIFabricationIntentModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 const invalidRequest = (): NextResponse =>
   apiError(

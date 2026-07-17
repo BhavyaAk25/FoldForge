@@ -7,6 +7,7 @@ import type { FabricationPreviewMode } from "@/components/fabrication-preview";
 import { FoldForgeResults } from "@/components/foldforge-results";
 import {
   DEFAULT_PROMPT,
+  DUCK_CREASE_PATTERN_PROMPT,
   FoldForgeStart,
   type AccessState,
   type ExamplePrompt,
@@ -476,9 +477,11 @@ export function FoldForgeApp() {
     const isDuck = exampleId === "duck";
     const program: FabricationProgramV1 = {
       ...showcase.program,
-      candidateLabel: isDuck ? "Duck-shaped gift box" : "Pop-up flower card",
+      candidateLabel: isDuck
+        ? "Static duck crease pattern"
+        : "Pop-up flower card",
       designSummary: isDuck
-        ? showcase.program.designSummary
+        ? "A prepared static crease-pattern study with a faceted duck silhouette. The verified file contains cut and score geometry only; no lid motion or open-and-close animation is modeled."
         : "A prepared motion study: a rigid flower crown moves 30 mm on a vertical guide. The paper linkage that would turn a card opening or horizontal pull into lift is not modeled.",
     };
     const candidate = buildCandidate(
@@ -497,7 +500,7 @@ export function FoldForgeApp() {
     }
 
     const ranked = rankedCandidates([candidate]);
-    setPrompt(showcase.prompt);
+    setPrompt(isDuck ? DUCK_CREASE_PATTERN_PROMPT : showcase.prompt);
     setIntent(showcase.intent);
     setCandidates(ranked);
     setSelectedId(ranked[0]?.candidateId ?? "");
@@ -511,7 +514,7 @@ export function FoldForgeApp() {
     shouldFocusResultsRef.current = true;
     setPhase("ready");
     setStatusMessage(
-      `Saved ${isDuck ? "duck gift-box" : "pop-up flower"} example opened.`,
+      `Saved ${isDuck ? "static duck crease-pattern" : "pop-up flower"} example opened.`,
     );
   };
 

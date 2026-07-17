@@ -10,6 +10,7 @@ export {
 export { dxfArtifactMatchesSource, exportFabricationDxf } from "./dxf";
 export {
   exportFabricationFold,
+  FOLD_EXTENSION_KEYS,
   foldArtifactMatchesSource,
   inspectFabricationFoldCompatibility,
   type FabricationFoldCompatibilitySource,

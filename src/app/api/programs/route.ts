@@ -15,6 +15,7 @@ import { OpenAIFabricationProgramModel } from "@/server/fabrication-ai/models";
 import { programStructureFingerprint } from "@/server/fabrication-ai/orchestration";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 const invalidRequest = (): NextResponse =>
   apiError(

@@ -24,6 +24,7 @@ import { RepairFabricationRequestSchema } from "@/server/fabrication-ai/contract
 import { OpenAIFabricationRepairModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 type RepairStatus = "infeasible" | "passed" | "still_invalid";
 

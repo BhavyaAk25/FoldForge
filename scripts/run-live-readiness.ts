@@ -223,6 +223,8 @@ if (!liveEnabled) {
     for (const [caseIndex, liveCase] of selectedCases.entries()) {
       const startedAt = performance.now();
       const beforeIntentEntries = budget.snapshot().entries.length;
+      let partialResult = emptyResult(liveCase, "failed", "in_progress");
+      let beforeProgramEntries: number | null = null;
       try {
         const intent = await intentModel.compileIntent(
           liveCase.prompt,
@@ -234,10 +236,12 @@ if (!liveEnabled) {
           "compile_intent",
         )[0];
         if (!intentResponseId) throw new Error("intent_response_id_missing");
+        partialResult = { ...partialResult, intentResponseId };
         const constraintEvidence = evaluateLiveIntentConstraints(
           intent,
           liveCase.expected,
         );
+        partialResult = { ...partialResult, constraintEvidence };
         if (!constraintEvidence.passed) {
           results.push({
             ...emptyResult(
@@ -252,12 +256,31 @@ if (!liveEnabled) {
           continue;
         }
 
-        const beforeProgramEntries = budget.snapshot().entries.length;
+        const programEvidenceStart = budget.snapshot().entries.length;
+        beforeProgramEntries = programEvidenceStart;
         const proposals = await generateDistinctFabricationPrograms(
           intent,
           safetyIdentifier,
           programModel,
           3,
+          (outcome) => {
+            const observedFingerprints = [
+              ...partialResult.topologyFingerprints,
+              outcome.structureFingerprint,
+            ];
+            partialResult = {
+              ...partialResult,
+              programResponseIds: responseIdsSince(
+                budget,
+                programEvidenceStart,
+                "generate_program",
+              ),
+              topologyFingerprints: observedFingerprints,
+              generatedCandidateCount:
+                partialResult.generatedCandidateCount +
+                (outcome.status === "generated" ? 1 : 0),
+            };
+          },
         );
         const programResponseIds = responseIdsSince(
           budget,
@@ -267,6 +290,14 @@ if (!liveEnabled) {
         const generated = proposals.filter(
           (proposal) => proposal.status === "generated",
         );
+        partialResult = {
+          ...partialResult,
+          programResponseIds,
+          topologyFingerprints: proposals.map(
+            (proposal) => proposal.structureFingerprint,
+          ),
+          generatedCandidateCount: generated.length,
+        };
         const candidateRuns: CandidateRun[] = [];
 
         for (const [index, proposal] of proposals.entries()) {
@@ -514,15 +545,29 @@ if (!liveEnabled) {
         });
       } catch (error) {
         const durationMs = Number((performance.now() - startedAt).toFixed(3));
+        if (beforeProgramEntries !== null) {
+          partialResult = {
+            ...partialResult,
+            programResponseIds: responseIdsSince(
+              budget,
+              beforeProgramEntries,
+              "generate_program",
+            ),
+          };
+        }
         if (error instanceof PaidEvalBudgetError) {
           budgetStopped = true;
           const currentStatus: LiveReadinessCaseStatus =
-            error.code === "budget_exhausted"
+            error.code === "budget_exhausted" &&
+            partialResult.intentResponseId === null
               ? "not_run_budget_exhausted"
               : "failed";
-          results.push(
-            emptyResult(liveCase, currentStatus, errorCode(error), durationMs),
-          );
+          results.push({
+            ...partialResult,
+            status: currentStatus,
+            failureCode: errorCode(error),
+            durationMs,
+          });
           for (const notRun of selectedCases.slice(caseIndex + 1)) {
             results.push(
               emptyResult(
@@ -534,9 +579,12 @@ if (!liveEnabled) {
           }
           break;
         }
-        results.push(
-          emptyResult(liveCase, "failed", errorCode(error), durationMs),
-        );
+        results.push({
+          ...partialResult,
+          status: "failed",
+          failureCode: errorCode(error),
+          durationMs,
+        });
       }
     }
   } finally {
