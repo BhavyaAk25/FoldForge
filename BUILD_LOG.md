@@ -1,5 +1,21 @@
 # FoldForge build log
 
+## 2026-07-17 — Submission hardening
+
+- Removed Vercel Authentication from the production project and verified the
+  public app and health endpoint in an isolated browser with no bypass or Vercel
+  session.
+- Replaced undocumented binary onboarding images and the scaffold favicon with
+  small original FoldForge SVG assets.
+- Added pinned GitHub Actions gates for strict deterministic verification,
+  coverage, 1,000 seeded properties, dependency audit, and rendered Chromium
+  flows.
+- Extracted collision/contact and semantic geometry math from the verifier into
+  a typed pure module without changing stage order, failure IDs, or tolerances.
+- Rewrote the README and under-three-minute demo script around the official four
+  judging criteria, the immutable paid-evaluation ledger, and the exact remaining
+  live-Sol truth gate.
+
 This log records product decisions and evidence boundaries. Counts are snapshots from the named milestone; [EVALS.md](./EVALS.md) holds the current release results.
 
 ## 2026-07-14 — deterministic foundation

@@ -12,6 +12,7 @@ export interface ExamplePrompt {
   readonly imageAlt: string;
   readonly imageSrc: string;
   readonly prompt: string;
+  readonly savedActionLabel?: string;
   readonly savedExampleId?: SavedExampleId;
   readonly title: string;
 }
@@ -24,7 +25,7 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     id: "playing-card-box",
     title: "Playing-card box",
     description: "Holds one standard deck in a simple slide-out tray.",
-    imageSrc: "/examples/playing-card-box.jpg",
+    imageSrc: "/examples/playing-card-box.svg",
     imageAlt: "A paper playing-card box with its tray partly open",
     prompt:
       "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible. Show me three ways to build it.",
@@ -32,18 +33,20 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   {
     id: "pop-up-flower-card",
     title: "Pop-up flower card",
-    description: "A flower rises when the card opens and folds flat again.",
-    imageSrc: "/examples/pop-up-flower-card.jpg",
+    description:
+      "An editable card brief with a prepared pull-tab motion study to inspect.",
+    imageSrc: "/examples/pop-up-flower-card.svg",
     imageAlt: "An open paper card with a pink flower rising from its center",
     prompt:
       "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+    savedActionLabel: "Open motion study",
     savedExampleId: "flower",
   },
   {
     id: "duck-shaped-gift-box",
     title: "Static duck crease pattern",
     description: "A fold-only duck study with no open-and-close motion.",
-    imageSrc: "/examples/duck-shaped-gift-box.jpg",
+    imageSrc: "/examples/duck-shaped-gift-box.svg",
     imageAlt: "A faceted yellow paper duck crease-pattern study",
     prompt: DUCK_CREASE_PATTERN_PROMPT,
     savedExampleId: "duck",
@@ -145,7 +148,7 @@ export function FoldForgeStart({
               type="button"
               onClick={() => onOpenSavedExample("flower")}
             >
-              Explore a finished example
+              Explore a prepared motion study
             </button>
           </div>
           {!liveGenerationAvailable && healthKnown ? (
@@ -214,7 +217,7 @@ export function FoldForgeStart({
                         type="button"
                         onClick={() => onOpenSavedExample(savedExampleId)}
                       >
-                        Open finished design
+                        {example.savedActionLabel ?? "Open finished design"}
                       </button>
                     ) : null}
                   </div>

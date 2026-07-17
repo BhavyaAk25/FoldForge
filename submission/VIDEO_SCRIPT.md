@@ -1,70 +1,103 @@
 # FoldForge demo video script
 
-Target: **2:35–2:50**. Keep the capture continuous, the cursor slow, and the evidence readable. Do not show secrets. Record only after the live Sol suite passes.
+Target: **2:40–2:55**. Record one continuous product story with clear voiceover and corrected captions. Judges are not required to watch after three minutes.
 
-## Prompt
+## Truth gate before recording
 
-Use an unseen supported brief, not an example button:
+Do not record the final live-prompt version until all of these are true on the exact deployed commit:
+
+- production visibly says **Live generation ready**;
+- the sealed five-case suite attempted all five cases and completed at least four full prompt → programs → verify/repair → rank → narrative → export journeys;
+- the exact selected SVG, DXF, GLB, JSON, and conditional FOLD status passed the recorded source-equivalence and consumer checks;
+- the deployed build SHA equals the repository commit, the eval report records that same build SHA, and the video visibly shows it; and
+- the final ledger remains below the builder's $4.00 authorization.
+
+Current evidence does **not** meet that gate: the paid intent contract passed 3/3, the first complex program proposal failed at the provider boundary, the ledger sealed at $0.8307225, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
+
+## Set up the recording
+
+Have these ready before pressing Record:
+
+1. A clean browser on [foldforge.vercel.app](https://foldforge.vercel.app), at the empty **Describe** stage.
+2. The exact downloaded live-selected artifact ready to inspect in a local viewer, with all third-party branding cropped from the recording.
+3. [EVALS.md](../EVALS.md) at the current result table and the sanitized [Sol evidence packet](./evidence/sol-live-evidence.json) at its final ledger total.
+4. The repository page at the exact deployed commit.
+
+Use an unseen supported prompt, not a starter or saved example:
 
 > Make a one-sheet fold-flat desk nameplate, 180 millimetres wide, 70 millimetres high, and 55 millimetres deep. Opening the base should rotate a 150 by 60 millimetre display panel to 65 degrees. Use 0.45 millimetre cardstock, allow cuts, and use no glue. Show three buildable designs.
 
-## Script
+## Final under-three-minute script
 
-### 0:00–0:15 — problem
+### 0:00–0:13 — problem and promise
 
-**Screen:** Empty Describe view.
+**Screen:** Empty **Describe** view and the one-line product explanation.
 
-**Say:** “Turning a product brief into moving geometry, checks, and fabrication files takes multiple tools and repeated handoffs. FoldForge compiles that work into one verified flow.”
+**Say:** “A product brief normally passes through separate sketching, geometry, mechanism, checking, and fabrication-file tools. FoldForge turns that handoff into one inspected flow: describe a flat-sheet object, compare verified designs, and export the exact one you chose.”
 
-### 0:15–0:35 — live intent
+### 0:13–0:34 — unseen prompt and GPT-5.6
 
-**Screen:** Type the unseen prompt. Show `Sol ready`. Select **Create 3 designs**.
+**Screen:** Type the prompt. Keep **Live generation ready** visible and select **Create 3 designs**.
 
-**Say:** “GPT-5.6 Sol interprets this unseen request and proposes strict fabrication programs. It explores the design space, but it cannot declare a design valid or write trusted export geometry.”
+**Say:** “GPT-5.6 Sol interprets this unseen brief and proposes strict fabrication programs. It explores panels, joints, tabs, slots, and motion, but it cannot declare validity, edit trusted coordinates, choose the winner, or write export bytes.”
 
-### 0:35–1:00 — deterministic proof
+### 0:34–0:57 — deterministic proof
 
-**Screen:** Show the `USER`, `AI`, `CODE` trace, then the verifier summary.
+**Screen:** Show the `USER`, `AI`, and `CODE` trace, the candidate summaries, then the verifier result.
 
-**Say:** “Code compiles panels, joints, tabs, slots, and motion into one canonical IR. The verifier checks topology, manufacturable cut paths, packing, rigid transforms, and 201 motion states for collision, clearance, travel, and continuity. Failed candidates never reach ranking or export.”
+**Say:** “Deterministic TypeScript compiles each program into one canonical model. The ordered verifier checks topology, features, packing, rigid transforms, requested dimensions, and 201 motion states for collision, clearance, travel, and continuity. A hard-invalid candidate never reaches ranking or export.”
 
-### 1:00–1:22 — measured repair
+### 0:57–1:18 — measured repair
 
-**Screen:** Open the live-readiness report's explicitly labelled `deliberate_evaluation_probe`. Show the failure ID, measured limit violation, Sol response ID, typed patch path, before/after hashes, and passing revalidation. Do not present this evaluation-only probe as an app interaction or a naturally failed candidate.
+**Screen:** Show the live report's clearly labelled `deliberate_evaluation_probe`: stable failure ID, measured value and limit, cited report path, typed patch, different before-and-after hashes, and passing full revalidation. Keep the evaluation-only label visible.
 
-**Say:** “To prove repair instead of waiting for a lucky failure, I deliberately push this verified design’s motion range beyond its joint limit. Code measures the failure. Sol cites that exact report field and proposes a typed local patch. Code rejects intent changes, applies only allowlisted parameters, regenerates the design, and reruns every check. Repair stops after three operations per cycle and five cycles.”
+**Say:** “This labelled evaluation probe pushes a verified design beyond its joint limit. Code measures the failure. Sol cites that exact report field and proposes a typed local patch. Code rejects unrelated or intent-changing edits, applies only allowlisted parameters, and reruns every hard check.”
 
-### 1:22–1:47 — product design
+### 1:18–1:43 — compare and inspect
 
-**Screen:** Switch candidates, press **Closed** and **Open**, rotate the 3D view, then switch to the cut-and-fold pattern and use its pan/zoom controls.
+**Screen:** Switch between all three candidates. Show that at least two topologies differ. On the selected result, use **Closed** and **Open**, orbit the 3D model, then switch to **Cut-and-fold pattern** and pan or zoom.
 
-**Say:** “The three candidates differ by topology, not styling. The selected 3D view, flat pattern, motion, score, verifier evidence, and provenance stay synchronized because they share the same candidate IR.”
+**Say:** “These candidates differ by program and topology, not just color. The selected 3D model, motion, flat pattern, measurements, verifier evidence, score, and provenance stay synchronized because every view comes from the same candidate IR.”
 
-### 1:47–2:08 — exact handoff
+### 1:43–2:05 — exact handoff
 
-**Screen:** Download GLB, SVG, DXF, and JSON. Show the selected hash and FOLD status.
+**Screen:** Download GLB, SVG, DXF, and JSON; show the selected IR hash and FOLD compatibility reason. Inspect that same DXF with millimetres and fabrication layers visible, or play that same GLB when it has motion. Crop all third-party viewer branding from the recording.
 
-**Say:** “Export produces the exact selected candidate: source-bound GLB, print-scale SVG and DXF, canonical fabrication JSON, and FOLD when the topology fits. Geometry, paths, motion, units, and hashes are verified before download.”
+**Say:** “Export produces this exact candidate: animated GLB when motion exists, print-scale SVG and DXF, canonical fabrication JSON, and FOLD only when no source meaning would be lost. The selected hash ties the preview, report, and downloaded files together.”
 
-### 2:08–2:27 — evidence and impact
+### 2:05–2:33 — judge-derived evals and budget safety
 
-**Screen:** Briefly show `EVALS.md` numbers, then return to the moving result.
+**Screen:** Show the four judging criteria mapped to evidence in `README.md`, the current `EVALS.md` results, then the sanitized ledger summary. Never show prompts, model bodies, response IDs, environment files, or credentials.
 
-**Say:** “Offline release tests rejected all 560 hard-invalid mutations, reproduced 50 programs ten times byte-for-byte, repaired 40 measured failures, and passed all 327 tests and seven browser flows. Independent tools also parsed the DXF and FOLD files and validated every showcase GLB. FoldForge gives product and operations teams an inspectable handoff instead of model prose.”
+**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Offline, code rejected all 560 hard-invalid mutations, repaired 40 measured failures, repeated 50 programs byte-for-byte, and passed 327 tests plus seven browser flows. Paid testing has a $4 outer ceiling and a $3.70 executable cap. Code reserves worst-case cost before each call; uncertain usage seals an immutable ledger instead of silently retrying.”
 
-### 2:27–2:43 — Codex and close
+### 2:33–2:53 — Codex, human decisions, and close
 
-**Screen:** Show the build SHA, repository, and final moving candidate.
+**Screen:** Show the exact repository commit, then return to the live-selected moving result and its downloads.
 
-**Say:** “Codex helped build and review the contracts, compiler, verifier, repair loop, security boundary, tests, interface, and exports. The principle is simple: let AI explore; make code prove. This is FoldForge.”
+**Say:** “Codex helped turn an initial phone-stand idea into the contracts, compiler, verifier, repair loop, security boundary, tests, interface, and exports. I chose the broader Work and Productivity problem, the bounded grammar, and the evidence bar. Let AI explore; make code prove. This is FoldForge.”
+
+## Practice the current deployed build
+
+Until the truth gate passes, rehearse the controls without implying live generation:
+
+1. Select **Explore a prepared motion study**.
+2. Use **Closed** and **Open**, orbit the 3D view, and inspect the cut-and-fold pattern.
+3. Download SVG, DXF, GLB, and JSON and locate the selected hash and FOLD omission reason.
+4. Open **Static duck crease pattern** and point out that it is static, has no false motion controls, and offers FOLD because its semantics are representable.
+5. End on the banner that identifies examples as prepared and live AI as unavailable.
+
+This is a product rehearsal, not the final Devpost demo.
 
 ## Recording checklist
 
-- Under 3:00 with audible narration and corrected captions.
-- Public YouTube link; Work & Productivity named in the title or description.
-- `Sol ready` visible and the prompt is genuinely unseen.
-- Submission build SHA matches the deployed build and repository.
-- Failure ID, patch path, passing report, selected hash, and downloads are readable.
-- No access code, API key, cookie, private tab, notification, or personal data appears.
-- Do not claim force, strength, durability, or material validation.
-- Include the requested Codex session ID in the submission form, not on screen if it harms readability.
+- Final video is under 3:00, public on YouTube, narrated, and captioned.
+- Work & Productivity appears in the title or description.
+- The prompt is genuinely unseen; no starter or prepared fixture is narrated as live.
+- The screen clearly distinguishes `USER`, `AI`, and `CODE`.
+- The failure ID, measured value, patch path, passing recheck, selected hash, and external-file handoff are readable.
+- The deployed build SHA equals the repository commit, and the final eval report records that same build SHA.
+- No API key, access code, cookie, environment file, response ID, prompt body from the ledger, private tab, notification, or personal data appears.
+- Narration explains what FoldForge does, how GPT-5.6 works inside it, how Codex accelerated development, and which key decisions remained human.
+- No claim implies universal generation, strength, durability, material validation, or certified fabrication.
+- Add the required `/feedback` Codex Session ID to the submission form; it need not appear on screen.

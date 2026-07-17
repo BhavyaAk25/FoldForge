@@ -547,6 +547,18 @@ test("keeps prompt examples honest and provides a saved result when live generat
 }) => {
   const state = await installStudioMocks(page, { liveAiEnabled: false });
   await page.goto("/");
+  const starterIllustrations = page.locator("article img");
+  await expect(starterIllustrations).toHaveCount(3);
+  expect(
+    await starterIllustrations.evaluateAll((images) =>
+      images.every(
+        (image) =>
+          image instanceof HTMLImageElement &&
+          image.complete &&
+          image.naturalWidth > 0,
+      ),
+    ),
+  ).toBe(true);
   const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill("A completely arbitrary paper mechanism.");
   const flowerExample = page.locator("article").filter({
@@ -568,10 +580,12 @@ test("keeps prompt examples honest and provides a saved result when live generat
   ).toBeVisible();
 
   await page
-    .getByRole("button", { name: "Explore a finished example" })
+    .getByRole("button", { name: "Explore a prepared motion study" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Explore the pop-up flower card." }),
+    page.getByRole("heading", {
+      name: "Explore the pull-tab flower motion study.",
+    }),
   ).toBeFocused();
   await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   await expect(
@@ -598,7 +612,7 @@ test("keeps prompt examples honest and provides a saved result when live generat
   );
   await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
   const savedPatternPreview = page.getByRole("img", {
-    name: /Pop-up flower card pattern preview/iu,
+    name: /Pull-tab flower motion study pattern preview/iu,
   });
   await expect(savedPatternPreview).toBeVisible();
   await expect(page.getByLabel("Open and close the design")).toHaveCount(0);

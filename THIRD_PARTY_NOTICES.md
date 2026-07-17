@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Original interface illustrations
+
+The three vector illustrations under `public/examples/` and the FoldForge app
+icon were created specifically for this repository. They contain no external
+images, fonts, scripts, or trademarks and are distributed under the repository's
+MIT license. The example illustrations explain prepared demonstrations; they are
+not evidence of generated fabrication geometry.
+
 FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. This inventory describes the current lockfile and must be regenerated when dependencies change.
 
 | Dependency           | Purpose               |        Version | License    | Source / attribution                           |

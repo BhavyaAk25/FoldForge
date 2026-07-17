@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 576" role="img" aria-labelledby="title desc">
+  <title id="title">Faceted duck crease-pattern study</title>
+  <desc id="desc">A yellow faceted paper duck beside its blue cut-and-fold crease pattern.</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#315f63" stroke-opacity=".08"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#20201d" flood-opacity=".14"/>
+    </filter>
+  </defs>
+  <rect width="768" height="576" fill="#f4f0e6"/>
+  <rect width="768" height="576" fill="url(#grid)"/>
+  <g transform="translate(74 117)" filter="url(#shadow)" stroke="#20201d" stroke-linejoin="round" stroke-width="8">
+    <path d="m91 209 70-92 135 21 64 96-83 92-153-21z" fill="#e7b851"/>
+    <path d="m161 117 51 105-121-13z" fill="#f0ca64"/>
+    <path d="m212 222 148 12-83 92z" fill="#d7a43c"/>
+    <path d="m261 142 36-104 91 37-28 159z" fill="#edc15a"/>
+    <path d="m297 38 91 37-27 55-83-34z" fill="#f4d77c"/>
+    <path d="m388 75 82 31-91 41z" fill="#cf6b3f"/>
+    <circle cx="342" cy="73" r="9" fill="#20201d" stroke="none"/>
+    <path d="m118 303-20 55m187-36 16 52" fill="none" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(495 128)" fill="#dce8e6" stroke="#315f63" stroke-linejoin="round" stroke-width="6">
+    <path d="m0 58 80-45 80 45-21 87 48 69-63 73-92-23-28-84 38-57z"/>
+    <path d="M0 58h160M42 123l97 22M32 264l107-119M80 13l44 274M4 180l183 34" fill="none" stroke-dasharray="12 9" stroke-width="4"/>
+    <path d="m139 145 48 69" fill="none" stroke="#b43a32" stroke-width="6"/>
+  </g>
+</svg>
