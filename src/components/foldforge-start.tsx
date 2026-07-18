@@ -28,7 +28,8 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     description: "Holds one standard deck in a simple slide-out tray.",
     imageLabel: "Prompt inspiration",
     imageSrc: "/examples/playing-card-box.jpg",
-    imageAlt: "A paper playing-card box with its tray partly open",
+    imageAlt:
+      "Prompt-inspiration concept render of a paper playing-card box with its tray partly open",
     prompt:
       "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible. Show me three ways to build it.",
   },
@@ -39,7 +40,8 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
       "Edit a pop-up-card brief or inspect a prepared vertical-lift study.",
     imageLabel: "Prompt inspiration",
     imageSrc: "/examples/pop-up-flower-card.jpg",
-    imageAlt: "An open paper card with a pink flower rising from its center",
+    imageAlt:
+      "Prompt-inspiration concept render of an open paper card with a pink flower rising from its center",
     prompt:
       "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
     savedActionLabel: "Open vertical-lift study",
@@ -98,12 +100,20 @@ export function FoldForgeStart({
     <>
       <section className={styles.compose} aria-labelledby="studio-title">
         <div className={styles.intro}>
-          <p className={styles.eyebrow}>AI cut-and-fold designer</p>
-          <h1 id="studio-title">Turn an idea into a buildable paper design.</h1>
+          <p className={styles.eyebrow}>
+            {liveGenerationAvailable
+              ? "AI cut-and-fold designer"
+              : "Prepared cut-and-fold studies"}
+          </p>
+          <h1 id="studio-title">
+            {liveGenerationAvailable
+              ? "Turn an idea into a buildable paper design."
+              : "Explore checked paper-design studies."}
+          </h1>
           <p>
-            Describe something made from paper or thin cardboard. FoldForge
-            creates three checked designs, shows how they assemble, and gives
-            you the cutting pattern.
+            {liveGenerationAvailable
+              ? "Describe something made from paper or thin cardboard. FoldForge creates three checked designs, shows how they assemble, and gives you the cutting pattern."
+              : "Live AI generation is off. Open a prepared study to inspect its motion, cutting pattern, checks, and fabrication files."}
           </p>
           <ol className={styles.processSteps} aria-label="How FoldForge works">
             <li>
@@ -192,8 +202,14 @@ export function FoldForgeStart({
 
       <section className={styles.examples} aria-labelledby="examples-title">
         <div className={styles.examplesHeading}>
-          <h2 id="examples-title">Try an example</h2>
-          <p>Each prompt is ready to edit.</p>
+          <h2 id="examples-title">
+            {liveGenerationAvailable ? "Try an example" : "Prompt ideas"}
+          </h2>
+          <p>
+            {liveGenerationAvailable
+              ? "Each prompt is ready to edit."
+              : "Load a prompt for a future live run, or open a prepared study now."}
+          </p>
         </div>
         <div className={styles.exampleGrid}>
           {EXAMPLE_PROMPTS.map((example, index) => {
@@ -220,7 +236,9 @@ export function FoldForgeStart({
                       type="button"
                       onClick={() => onSelectExample(example)}
                     >
-                      Use this prompt
+                      {liveGenerationAvailable
+                        ? "Use this prompt"
+                        : "Load future prompt"}
                     </button>
                     {savedExampleId ? (
                       <button

@@ -36,6 +36,7 @@ import {
   StudioCheckpointSchema,
   type FinalizeApiResponse,
   type HealthApiResponse,
+  type ProgramsApiResponse,
   type RepairEvidence,
 } from "@/lib/api-contracts";
 import {
@@ -53,7 +54,6 @@ type ExperienceMode = "live" | "saved";
 const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v4";
 const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const COMPILER_VERSION = "foldforge-fabrication-v1";
-const MODEL_ID = "gpt-5.6-sol";
 const BASE_SEED = 20_260_714;
 
 const SAVED_EXAMPLE_GENERATED_AT = "2026-07-14T00:00:00.000Z";
@@ -87,7 +87,7 @@ const buildCandidate = (
   generatedAtIso: string,
   appliedPatchIds: readonly string[],
   repairCycle: number,
-  modelId: string | null = MODEL_ID,
+  generationProvenance: ProgramsApiResponse["proposal"]["provenance"] | null,
 ): CandidateV2 | null => {
   const built = buildFabricationCandidate({
     candidateId,
@@ -99,8 +99,10 @@ const buildCandidate = (
       compilerVersion: COMPILER_VERSION,
       generatedAtIso,
       deterministicSeed: BASE_SEED + ordinal,
-      modelId,
-      modelResponseId: null,
+      modelId: generationProvenance?.modelId ?? null,
+      modelResponseId: generationProvenance?.modelResponseId ?? null,
+      modelPlanHash: generationProvenance?.planHash ?? null,
+      planExpanderVersion: generationProvenance?.expanderVersion ?? null,
       parentCandidateId: null,
       appliedPatchIds,
       repairCycle,
@@ -420,6 +422,7 @@ export function FoldForgeApp() {
           generatedAtIso,
           appliedPatchIds,
           repairCycle,
+          generated.proposal.provenance,
         );
         if (!candidate) continue;
         accepted.push(candidate);

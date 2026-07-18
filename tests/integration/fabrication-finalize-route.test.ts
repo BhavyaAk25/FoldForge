@@ -73,6 +73,8 @@ const provenance = {
   deterministicSeed: 2_026_071_4,
   modelId: "gpt-5.6-sol",
   modelResponseId: "response-finalize-route-fixture",
+  modelPlanHash: "a".repeat(64),
+  planExpanderVersion: "1",
   parentCandidateId: null,
   appliedPatchIds: [],
   repairCycle: 0,

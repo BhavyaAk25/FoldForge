@@ -32,7 +32,7 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
   {
     format: "glb",
     label: "GLB model",
-    description: "Open in a 3D viewer and play “FoldForge Open Close”.",
+    description: "Open in a 3D viewer and play its animation when one exists.",
   },
   {
     format: "fold",
@@ -295,13 +295,15 @@ export function FoldForgeResults({
                 <span>
                   {experienceMode === "saved"
                     ? "Not called for this prepared example."
-                    : `${selected.provenance.modelId ?? "The configured model"} proposed the typed design program${repairs.length > 0 ? " and bounded repair" : ""}.`}
+                    : `${selected.provenance.modelId ?? "The configured model"} proposed the compact design plan${repairs.length > 0 ? " and bounded repair" : ""}.`}
                 </span>
               </li>
               <li>
                 <strong>CODE</strong>
                 <span>
-                  Compiled the geometry, ran{" "}
+                  {selected.provenance.planExpanderVersion
+                    ? `Expanded the plan with deterministic expander ${selected.provenance.planExpanderVersion}, compiled the geometry, and ran `
+                    : "Compiled the geometry and ran "}
                   {selected.verification.checks.length}
                   {" checks"}, applied any allowed patch, and ranked only valid
                   candidates.
@@ -309,6 +311,20 @@ export function FoldForgeResults({
               </li>
             </ol>
             <dl className={styles.proofHashes}>
+              {selected.provenance.modelPlanHash ? (
+                <div>
+                  <dt>AI plan hash</dt>
+                  <dd>
+                    <code>{selected.provenance.modelPlanHash}</code>
+                  </dd>
+                </div>
+              ) : null}
+              {selected.provenance.modelResponseId ? (
+                <div>
+                  <dt>AI response provenance</dt>
+                  <dd>Recorded in design data</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Selected candidate hash</dt>
                 <dd>

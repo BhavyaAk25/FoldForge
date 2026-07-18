@@ -276,6 +276,8 @@ const candidate = {
     irHash: HASH,
     modelId: "gpt-5.6-sol",
     modelResponseId: "response-1",
+    modelPlanHash: HASH,
+    planExpanderVersion: "1",
     generatedAtIso: "2026-07-14T12:00:00.000Z",
     deterministicSeed: 20260714,
     parentCandidateId: null,

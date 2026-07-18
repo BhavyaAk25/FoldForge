@@ -4,6 +4,7 @@ import { err, ok, type Result } from "../result";
 
 export type FabricationContractName =
   | "FabricationIntentV1"
+  | "FabricationPlanV1"
   | "FabricationProgramV1"
   | "FabricationIRV1"
   | "VerificationReportV2"

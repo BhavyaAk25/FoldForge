@@ -14,6 +14,13 @@ import {
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
 describe("fabrication AI orchestration", () => {
+  const proposalProvenance = {
+    modelId: "gpt-5.6-sol",
+    modelResponseId: "resp-orchestration",
+    planHash: "a".repeat(64),
+    expanderVersion: "1",
+  } as const;
+
   it("validates and traces strict prompt compilation", async () => {
     const model: FabricationIntentModel = {
       compileIntent: vi.fn().mockResolvedValue(fixtureIntent()),
@@ -74,6 +81,7 @@ describe("fabrication AI orchestration", () => {
         Promise.resolve({
           diversityClaim: `Candidate ${ordinal}`,
           program: proposals[ordinal - 1],
+          provenance: proposalProvenance,
         }),
       ),
     };
@@ -103,6 +111,7 @@ describe("fabrication AI orchestration", () => {
         .mockResolvedValueOnce({
           diversityClaim: "First",
           program: fixtureProgram(),
+          provenance: proposalProvenance,
         })
         .mockRejectedValueOnce(new Error("provider failure")),
     };

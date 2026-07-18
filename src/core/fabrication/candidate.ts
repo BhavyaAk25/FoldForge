@@ -50,6 +50,8 @@ export interface CandidateProvenanceInput {
   readonly deterministicSeed: number;
   readonly modelId: string | null;
   readonly modelResponseId: string | null;
+  readonly modelPlanHash: string | null;
+  readonly planExpanderVersion: string | null;
   readonly parentCandidateId: string | null;
   readonly appliedPatchIds: readonly string[];
   readonly repairCycle: number;
@@ -186,6 +188,8 @@ const normalizedProvenanceInput = (
   deterministicSeed: input.deterministicSeed,
   modelId: input.modelId?.trim() ?? null,
   modelResponseId: input.modelResponseId?.trim() ?? null,
+  modelPlanHash: input.modelPlanHash?.trim() ?? null,
+  planExpanderVersion: input.planExpanderVersion?.trim() ?? null,
   parentCandidateId: input.parentCandidateId,
   appliedPatchIds: input.appliedPatchIds,
   repairCycle: input.repairCycle,
@@ -205,6 +209,8 @@ const buildProvenance = (
     irHash: hashes.irHash,
     modelId: normalized.modelId,
     modelResponseId: normalized.modelResponseId,
+    modelPlanHash: normalized.modelPlanHash,
+    planExpanderVersion: normalized.planExpanderVersion,
     generatedAtIso: normalized.generatedAtIso,
     deterministicSeed: normalized.deterministicSeed,
     parentCandidateId: normalized.parentCandidateId,
@@ -228,6 +234,8 @@ const provenanceInputFrom = (
   deterministicSeed: provenance.deterministicSeed,
   modelId: provenance.modelId,
   modelResponseId: provenance.modelResponseId,
+  modelPlanHash: provenance.modelPlanHash,
+  planExpanderVersion: provenance.planExpanderVersion,
   parentCandidateId: provenance.parentCandidateId,
   appliedPatchIds: provenance.appliedPatchIds,
   repairCycle: provenance.repairCycle,

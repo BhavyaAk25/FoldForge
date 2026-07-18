@@ -55,7 +55,10 @@ import {
   requireCleanBuildEvidence,
   requireUnchangedCleanBuildEvidence,
 } from "./lib/build-evidence";
-import { loadCompilerLiveEvidence } from "./lib/compiler-live-evidence";
+import {
+  requireCompilerLiveEvidence,
+  type CompilerLiveEvidence,
+} from "./lib/compiler-live-evidence";
 
 const REQUESTED_FORMATS = [
   "svg",
@@ -81,12 +84,16 @@ const requestedCount = Math.max(
   Math.min(LIVE_READINESS_CASES.length, requestedCountValue),
 );
 const selectedCases = LIVE_READINESS_CASES.slice(0, requestedCount);
-const reportPath = path.resolve("artifacts/evals/live-readiness.json");
 const artifactRoot = path.resolve("artifacts/evals/live-readiness");
 const runStartedIso = new Date().toISOString();
 const buildEvidence = captureBuildEvidence();
 const runId = sha256Hex(runStartedIso).slice(0, 16);
 const runArtifactRoot = path.join(artifactRoot, runId);
+const reportPath = path.join(runArtifactRoot, "live-readiness.json");
+const compilerReportArgument = argument("--compiler-report");
+const compilerReportPath = compilerReportArgument
+  ? path.resolve(compilerReportArgument)
+  : null;
 const liveEnabled =
   process.env.ENABLE_LIVE_OPENAI === "true" &&
   process.env.ENABLE_LIVE_OPENAI_EVALS === "true" &&
@@ -94,16 +101,52 @@ const liveEnabled =
 
 const writeReport = async (report: unknown): Promise<void> => {
   await mkdir(path.dirname(reportPath), { recursive: true });
-  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
   process.stdout.write(`${JSON.stringify(report)}\n`);
 };
 
 const errorCode = (error: unknown): string => {
   if (error instanceof PaidEvalBudgetError) return `budget_${error.code}`;
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = String(error.code);
+    if (
+      [
+        "model_incomplete",
+        "missing_plan_call",
+        "duplicate_plan_call",
+        "invalid_plan",
+      ].includes(code)
+    ) {
+      return code.startsWith("model_") ? code : `model_${code}`;
+    }
+  }
   if (typeof error === "object" && error !== null && "kind" in error) {
     return `pipeline_${String(error.kind)}`;
   }
   return "live_pipeline_error";
+};
+
+const requireImmutableCompilerReport = (): string => {
+  if (!compilerReportPath) {
+    throw new Error(
+      "--compiler-report must identify the immutable paid compiler report before live readiness can run.",
+    );
+  }
+  const immutableRoot = path.resolve("artifacts/evals/live");
+  const relative = path.relative(immutableRoot, compilerReportPath);
+  if (
+    relative.length === 0 ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(
+      "--compiler-report must be an immutable report below artifacts/evals/live.",
+    );
+  }
+  return compilerReportPath;
 };
 
 interface CandidateRun {
@@ -198,6 +241,7 @@ if (!liveEnabled) {
     passed: false,
   });
 } else {
+  const immutableCompilerReportPath = requireImmutableCompilerReport();
   if (!process.env.OPENAI_API_KEY?.trim()) {
     throw new Error(
       "OPENAI_API_KEY is required before the paid live evaluation can run.",
@@ -209,6 +253,17 @@ if (!liveEnabled) {
       requireUnchangedCleanBuildEvidence(buildEvidence);
     },
   });
+  let compilerContractEvidence: CompilerLiveEvidence;
+  try {
+    compilerContractEvidence = await requireCompilerLiveEvidence(
+      immutableCompilerReportPath,
+      buildEvidence,
+      budget.snapshot().entries,
+    );
+  } catch (error) {
+    await budget.close();
+    throw error;
+  }
   const paidRunStartRequestCount = budget.snapshot().requestCount;
   const results: LiveCaseResult[] = [];
   let budgetStopped = false;
@@ -341,8 +396,11 @@ if (!liveEnabled) {
                 compilerVersion: "foldforge-fabrication-v1",
                 generatedAtIso: runStartedIso,
                 deterministicSeed: 20_260_717 + caseIndex * 10 + index,
-                modelId: FOLDFORGE_MODEL,
-                modelResponseId: programResponseIds[index] ?? null,
+                modelId: proposal.proposal.provenance.modelId,
+                modelResponseId: proposal.proposal.provenance.modelResponseId,
+                modelPlanHash: proposal.proposal.provenance.planHash,
+                planExpanderVersion:
+                  proposal.proposal.provenance.expanderVersion,
                 parentCandidateId: null,
                 appliedPatchIds: outcome.cycles.map(
                   (cycle) => cycle.patch.patchId,
@@ -465,6 +523,9 @@ if (!liveEnabled) {
             deterministicSeed: winner.candidate.provenance.deterministicSeed,
             modelId: winner.candidate.provenance.modelId,
             modelResponseId: winner.candidate.provenance.modelResponseId,
+            modelPlanHash: winner.candidate.provenance.modelPlanHash,
+            planExpanderVersion:
+              winner.candidate.provenance.planExpanderVersion,
             parentCandidateId: winner.candidate.provenance.parentCandidateId,
             appliedPatchIds: winner.candidate.provenance.appliedPatchIds,
             repairCycle: winner.candidate.provenance.repairCycle,
@@ -608,11 +669,6 @@ if (!liveEnabled) {
       (result) =>
         result.consumerValidation?.sourceIrHash === result.selectedIrHash,
     );
-  const compilerContractEvidence = await loadCompilerLiveEvidence(
-    path.resolve("artifacts/evals/compiler.json"),
-    buildEvidence,
-    paidUsage.entries,
-  );
   const releaseEvidencePassed =
     gate.releaseGatePassed &&
     compilerContractEvidence.passed &&
@@ -630,8 +686,8 @@ if (!liveEnabled) {
     runId,
     buildEvidence,
     completionBuildEvidence,
-    approvedMaximumCostUsd: 4,
-    enforcedMaximumCostUsd: paidUsage.budgetUsd,
+    builderAuthorizedBudgetUsd: 4,
+    preRequestReservationCeilingUsd: paidUsage.budgetUsd,
     caseCount: selectedCases.length,
     ...gate,
     measuredRepairPassed,

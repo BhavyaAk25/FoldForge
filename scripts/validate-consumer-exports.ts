@@ -38,6 +38,8 @@ for (const [index, showcase] of showcases.entries()) {
       deterministicSeed: 20_260_714 + index,
       modelId: null,
       modelResponseId: null,
+      modelPlanHash: null,
+      planExpanderVersion: null,
       parentCandidateId: null,
       appliedPatchIds: [],
       repairCycle: 0,

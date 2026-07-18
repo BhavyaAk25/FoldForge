@@ -24,6 +24,8 @@ const provenance = {
   deterministicSeed: 2_026_071_4,
   modelId: null,
   modelResponseId: null,
+  modelPlanHash: null,
+  planExpanderVersion: null,
   parentCandidateId: null,
   appliedPatchIds: [],
   repairCycle: 0,

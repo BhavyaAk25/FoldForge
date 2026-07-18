@@ -110,5 +110,6 @@ export const StudioCheckpointSchema = z
   .strict();
 
 export type HealthApiResponse = z.infer<typeof HealthApiResponseSchema>;
+export type ProgramsApiResponse = z.infer<typeof ProgramsApiResponseSchema>;
 export type FinalizeApiResponse = z.infer<typeof FinalizeApiResponseSchema>;
 export type RepairEvidence = z.infer<typeof RepairEvidenceSchema>;

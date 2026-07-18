@@ -297,6 +297,112 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await budget.close();
   });
 
+  it("settles and halts when provider usage has no billable tokens", async () => {
+    const budget = await openBudget();
+    await expect(
+      budget.run({
+        operation: "compile_intent",
+        request: meteredRequest("zero usage"),
+        execute: async () => ({
+          id: "resp-zero-usage",
+          usage: responseUsage({
+            inputTokens: 0,
+            cachedInputTokens: 0,
+            cacheWriteTokens: 0,
+            outputTokens: 0,
+            reasoningTokens: 0,
+          }),
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "usage_invalid" });
+    expect(budget.snapshot()).toMatchObject({
+      haltedReason: "usage_invalid",
+      pendingReservation: null,
+      requestCount: 1,
+    });
+    await budget.close();
+  });
+
+  it("records actual cost and seals the ledger when provider usage exceeds its reservation", async () => {
+    const budget = await openBudget();
+    await expect(
+      budget.run({
+        operation: "generate_program",
+        request: meteredRequest("bounded generation", 1),
+        execute: async () => ({
+          id: "resp-output-overage",
+          usage: responseUsage({
+            inputTokens: 1_000,
+            outputTokens: 200_000,
+            reasoningTokens: 100_000,
+          }),
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "usage_invalid" });
+    const snapshot = budget.snapshot();
+    expect(snapshot).toMatchObject({
+      haltedReason: "usage_invalid",
+      requestCount: 1,
+      entries: [
+        {
+          outcome: "usage_invalid",
+          inputTokens: 1_000,
+          outputTokens: 200_000,
+          reasoningTokens: 100_000,
+        },
+      ],
+    });
+    expect(snapshot.chargedCostUsd).toBeGreaterThan(snapshot.budgetUsd);
+    expect(snapshot.entries[0]?.chargedCostUsd).toBeGreaterThan(
+      snapshot.entries[0]?.maximumCostUsd ?? Number.POSITIVE_INFINITY,
+    );
+    await budget.close();
+
+    const continuationPath = path.join(
+      temporaryDirectory,
+      "overage-continuation.json",
+    );
+    await expect(
+      PaidEvalBudget.continueFromSealedLedger({
+        sourceLedgerPath: ledgerPath,
+        targetLedgerPath: continuationPath,
+        acknowledgeSealedLedgerContinuation: true,
+        environment: { LIVE_EVAL_BUDGET_USD: "3.70" },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      message:
+        "A sealed ledger with no remaining authorized budget cannot be continued.",
+    });
+    await expect(readFile(continuationPath, "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      readFile(
+        path.join(
+          temporaryDirectory,
+          "live-cost-ledger.continuation-claim.json",
+        ),
+        "utf8",
+      ),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const reopened = await openBudget();
+    expect(reopened.snapshot()).toMatchObject({
+      chargedCostUsd: snapshot.chargedCostUsd,
+      remainingBudgetUsd: 0,
+      haltedReason: "usage_invalid",
+    });
+    await expect(
+      reopened.run({
+        operation: "compile_intent",
+        request: meteredRequest("must not run"),
+        execute: vi.fn(),
+      }),
+    ).rejects.toMatchObject({ code: "budget_exhausted" });
+    await reopened.close();
+  });
+
   it("rejects requests that could enter long-context pricing", async () => {
     const budget = await openBudget();
     const execute = vi.fn();

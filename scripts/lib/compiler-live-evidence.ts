@@ -173,3 +173,21 @@ export const loadCompilerLiveEvidence = async (
     ledgerLineageMatched,
   };
 };
+
+export const requireCompilerLiveEvidence = async (
+  reportPath: string,
+  buildEvidence: BuildEvidence,
+  currentLedgerEntries: PaidEvalBudgetSnapshot["entries"],
+): Promise<CompilerLiveEvidence> => {
+  const evidence = await loadCompilerLiveEvidence(
+    reportPath,
+    buildEvidence,
+    currentLedgerEntries,
+  );
+  if (!evidence.passed) {
+    throw new Error(
+      "Live readiness requires a valid same-build compiler report bound to the current paid ledger before any provider request.",
+    );
+  }
+  return evidence;
+};

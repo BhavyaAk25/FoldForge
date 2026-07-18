@@ -8,6 +8,10 @@ import type {
 
 import { canonicalSerialize } from "@/core/canonical";
 import {
+  expandFabricationPlan,
+  FABRICATION_PLAN_EXPANDER_VERSION,
+} from "@/core/fabrication/planning";
+import {
   FabricationIntentV1Schema,
   ProgramPatchV1Schema,
 } from "@/core/fabrication/schemas";
@@ -18,6 +22,7 @@ import type {
   ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
+import { sha256Hex } from "@/core/sha256";
 import { getOpenAIClient } from "@/server/ai/client";
 import type {
   PaidEvalBudget,
@@ -25,8 +30,10 @@ import type {
 } from "@/server/ai/paid-eval-budget";
 
 import {
+  FabricationPlanProposalV1Schema,
   FabricationNarrativeV1Schema,
   ProgramProposalV1Schema,
+  type FabricationPlanProposalV1,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
 } from "./contracts";
@@ -123,23 +130,6 @@ const runBackgroundResponse = async (
   return response;
 };
 
-const responseOutputText = (response: OpenAIResponse): string => {
-  if (
-    typeof response.output_text === "string" &&
-    response.output_text.length > 0
-  ) {
-    return response.output_text;
-  }
-  const texts: string[] = [];
-  for (const item of response.output ?? []) {
-    if (item.type !== "message") continue;
-    for (const content of item.content) {
-      if (content.type === "output_text") texts.push(content.text);
-    }
-  }
-  return texts.join("");
-};
-
 const runMeteredRequest = async <
   Request extends { readonly max_output_tokens: number },
   Response extends {
@@ -168,6 +158,20 @@ class LiveEvaluationBudgetRequiredError extends Error {
       "Live OpenAI evaluations require the persistent paid-evaluation budget.",
     );
     this.name = "LiveEvaluationBudgetRequiredError";
+  }
+}
+
+class FabricationProgramModelError extends Error {
+  constructor(
+    readonly code:
+      | "model_incomplete"
+      | "missing_plan_call"
+      | "duplicate_plan_call"
+      | "invalid_plan",
+    message: string,
+  ) {
+    super(message);
+    this.name = "FabricationProgramModelError";
   }
 }
 
@@ -278,12 +282,15 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
         },
       ],
       reasoning: { effort: "medium" },
-      text: {
-        format: zodTextFormat(
-          ProgramProposalV1Schema,
-          "fabrication_program_proposal_v1",
-        ),
-      },
+      tools: [
+        zodResponsesFunction({
+          name: "submit_fabrication_plan",
+          description:
+            "Submit one compact bounded plan for deterministic expansion.",
+          parameters: FabricationPlanProposalV1Schema,
+        }),
+      ],
+      tool_choice: { type: "function", name: "submit_fabrication_plan" },
       max_output_tokens: maxOutputTokens,
       background: true,
       parallel_tool_calls: false,
@@ -301,11 +308,62 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
       execute: (meteredRequest) =>
         runBackgroundResponse(openAI, meteredRequest),
     });
-    const outputText = responseOutputText(response);
-    if (response.status !== "completed" || outputText.length === 0) {
-      throw new Error("GPT-5.6 Sol returned no parsed fabrication program.");
+    if (response.status !== "completed") {
+      throw new FabricationProgramModelError(
+        "model_incomplete",
+        "GPT-5.6 Sol did not complete the fabrication plan.",
+      );
     }
-    return ProgramProposalV1Schema.parse(JSON.parse(outputText));
+    const planCalls = (response.output ?? []).filter(
+      (item) =>
+        item.type === "function_call" &&
+        item.name === "submit_fabrication_plan",
+    );
+    const planCall = planCalls[0];
+    if (!planCall || planCall.type !== "function_call") {
+      throw new FabricationProgramModelError(
+        "missing_plan_call",
+        "GPT-5.6 Sol returned no fabrication plan call.",
+      );
+    }
+    if (planCalls.length !== 1) {
+      throw new FabricationProgramModelError(
+        "duplicate_plan_call",
+        "GPT-5.6 Sol returned more than one fabrication plan call.",
+      );
+    }
+    let proposal: FabricationPlanProposalV1;
+    try {
+      proposal = FabricationPlanProposalV1Schema.parse(
+        JSON.parse(planCall.arguments),
+      );
+    } catch {
+      throw new FabricationProgramModelError(
+        "invalid_plan",
+        "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+      );
+    }
+    const expanded = expandFabricationPlan(
+      intent,
+      proposal.plan,
+      candidateOrdinal,
+    );
+    if (!expanded.ok) {
+      throw new FabricationProgramModelError(
+        "invalid_plan",
+        "GPT-5.6 Sol returned an invalid fabrication plan.",
+      );
+    }
+    return ProgramProposalV1Schema.parse({
+      diversityClaim: proposal.diversityClaim,
+      program: expanded.value,
+      provenance: {
+        modelId: FOLDFORGE_MODEL,
+        modelResponseId: response.id,
+        planHash: sha256Hex(canonicalSerialize(proposal.plan)),
+        expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+      },
+    });
   }
 }
 

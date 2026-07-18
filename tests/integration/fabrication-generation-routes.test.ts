@@ -155,6 +155,12 @@ describe("POST /api/programs", () => {
     const proposal = ProgramProposalV1Schema.parse({
       diversityClaim: "A direct single-fold topology.",
       program,
+      provenance: {
+        modelId: "gpt-5.6-sol",
+        modelResponseId: "resp-program-route",
+        planHash: "a".repeat(64),
+        expanderVersion: "1",
+      },
     });
     mocks.generateProgram.mockResolvedValueOnce(proposal);
     const requestBody = {
@@ -166,13 +172,18 @@ describe("POST /api/programs", () => {
       authorizedRequest("/api/programs", requestBody),
     );
     const body = (await response.json()) as {
-      proposal: { diversityClaim: string; program: FabricationProgramV1 };
+      proposal: {
+        diversityClaim: string;
+        program: FabricationProgramV1;
+        provenance: { modelResponseId: string };
+      };
       programStructureFingerprint: string;
     };
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.proposal.diversityClaim).toBe("A direct single-fold topology.");
+    expect(body.proposal.provenance.modelResponseId).toBe("resp-program-route");
     expect(body.programStructureFingerprint).toBe(
       programStructureFingerprint(program),
     );

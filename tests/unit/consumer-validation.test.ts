@@ -33,6 +33,8 @@ const finalizedShowcase = (
       deterministicSeed: 20_260_717,
       modelId: null,
       modelResponseId: null,
+      modelPlanHash: null,
+      planExpanderVersion: null,
       parentCandidateId: null,
       appliedPatchIds: [],
       repairCycle: 0,

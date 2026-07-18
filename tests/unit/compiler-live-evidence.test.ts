@@ -2,10 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { requireCleanBuildEvidence } from "../../scripts/lib/build-evidence";
-import { loadCompilerLiveEvidence } from "../../scripts/lib/compiler-live-evidence";
+import {
+  loadCompilerLiveEvidence,
+  requireCompilerLiveEvidence,
+} from "../../scripts/lib/compiler-live-evidence";
 
 describe("paid evaluation build evidence", () => {
   const temporaryDirectories: string[] = [];
@@ -152,5 +155,22 @@ describe("paid evaluation build evidence", () => {
         workingTreeClean: false,
       }),
     ).toThrow(/clean working tree/u);
+  });
+
+  it("blocks provider work when compiler evidence fails preflight", async () => {
+    const providerRequest = vi.fn(async () => undefined);
+    const missingPath = path.join(tmpdir(), "missing-compiler-report.json");
+
+    await expect(
+      (async () => {
+        await requireCompilerLiveEvidence(
+          missingPath,
+          currentBuild,
+          paidEntries(),
+        );
+        await providerRequest();
+      })(),
+    ).rejects.toThrow(/before any provider request/u);
+    expect(providerRequest).not.toHaveBeenCalled();
   });
 });

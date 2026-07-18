@@ -33,6 +33,19 @@ const liveEnabled =
   process.env.ENABLE_LIVE_OPENAI_EVALS === "true" &&
   process.env.LIVE_MODEL_KILL_SWITCH !== "true";
 const buildEvidence = captureBuildEvidence();
+const runStartedIso = new Date().toISOString();
+const liveRunId = sha256Hex(
+  canonicalSerialize({ runStartedIso, buildSha: buildEvidence.gitSha }),
+).slice(0, 16);
+const reportPath = path.resolve(
+  argument("--output") ??
+    (liveEnabled
+      ? path.join(
+          "artifacts/evals/live",
+          `compiler-${buildEvidence.gitSha}-${liveRunId}.json`,
+        )
+      : "artifacts/evals/compiler.json"),
+);
 const integerArgument = (name: string, fallback: number): number => {
   const value = Number(argument(name) ?? fallback);
   if (!Number.isInteger(value)) {
@@ -323,8 +336,8 @@ const report = {
     : paidUsage?.haltedReason
       ? "budget-halted"
       : "run",
-  approvedMaximumCostUsd: 4,
-  enforcedMaximumCostUsd: paidUsage?.budgetUsd ?? null,
+  builderAuthorizedBudgetUsd: 4,
+  preRequestReservationCeilingUsd: paidUsage?.budgetUsd ?? null,
   live,
   liveGates,
   paidUsage,
@@ -336,11 +349,11 @@ const report = {
 };
 const passed = offlinePassed && livePassed;
 
-await mkdir(path.resolve("artifacts/evals"), { recursive: true });
+await mkdir(path.dirname(reportPath), { recursive: true });
 await writeFile(
-  path.resolve("artifacts/evals/compiler.json"),
+  reportPath,
   `${JSON.stringify({ ...report, passed }, null, 2)}\n`,
-  "utf8",
+  liveEnabled ? { encoding: "utf8", flag: "wx" } : "utf8",
 );
 process.stdout.write(`${JSON.stringify({ ...report, passed })}\n`);
 if (!offlinePassed || (liveEnabled && !livePassed)) process.exitCode = 1;

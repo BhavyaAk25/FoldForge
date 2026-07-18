@@ -730,6 +730,54 @@ export const ProgramBlueprintV1Schema = z
     }
   }) satisfies z.ZodType<Contracts.ProgramBlueprintV1>;
 
+export const PlannedPanelBlueprintV1Schema =
+  PanelBlueprintV1Schema satisfies z.ZodType<Contracts.PlannedPanelBlueprintV1>;
+
+export const PlannedRigidBodyV1Schema =
+  RigidBodyV1Schema satisfies z.ZodType<Contracts.PlannedRigidBodyV1>;
+
+export const FabricationPlanV1Schema = z
+  .object({
+    version: z.literal(FABRICATION_CONTRACT_VERSIONS.plan),
+    candidateLabel: boundedText(120),
+    topologyId: identifier,
+    panels: z
+      .array(PlannedPanelBlueprintV1Schema)
+      .min(1)
+      .max(FABRICATION_LIMITS.maximumPanelCount),
+    bodies: z
+      .array(PlannedRigidBodyV1Schema)
+      .min(1)
+      .max(FABRICATION_LIMITS.maximumPanelCount),
+    joints: z.array(JointV1Schema).max(FABRICATION_LIMITS.maximumJointCount),
+    connectors: z
+      .array(ConnectorV1Schema)
+      .max(FABRICATION_LIMITS.maximumConnectorCount),
+    driver: DriverV1Schema.nullable(),
+    outputs: z
+      .array(MotionOutputV1Schema)
+      .max(FABRICATION_LIMITS.maximumOutputCount),
+    couplings: z
+      .array(CouplingV1Schema)
+      .max(FABRICATION_LIMITS.maximumJointAndConnectorCount),
+    semanticParts: z.array(SemanticPartV1Schema).max(64),
+    assemblyStrategy: z.enum(["fold_only", "tab_slot", "articulated_tab_slot"]),
+    designSummary: boundedText(1_000),
+  })
+  .strict()
+  .superRefine((plan, context) => {
+    if (
+      plan.joints.length + plan.connectors.length >
+      FABRICATION_LIMITS.maximumJointAndConnectorCount
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["connectors"],
+        message: `Joints and connectors together may not exceed ${FABRICATION_LIMITS.maximumJointAndConnectorCount}.`,
+      });
+    }
+  }) satisfies z.ZodType<Contracts.FabricationPlanV1>;
+
 export const FabricationProgramV1Schema = z
   .object({
     version: z.literal(FABRICATION_CONTRACT_VERSIONS.program),
@@ -1083,6 +1131,8 @@ export const CandidateProvenanceV2Schema = z
     irHash: sha256,
     modelId: boundedText(120).nullable(),
     modelResponseId: boundedText(200).nullable(),
+    modelPlanHash: sha256.nullable(),
+    planExpanderVersion: boundedText(40).nullable(),
     generatedAtIso: z.iso.datetime({ offset: true }),
     deterministicSeed: z.number().int().min(0).max(4_294_967_295),
     parentCandidateId: identifier.nullable(),

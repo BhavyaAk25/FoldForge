@@ -378,6 +378,8 @@ const provenance = {
   irHash: sourceIrHash(mainIr),
   modelId: null,
   modelResponseId: null,
+  modelPlanHash: null,
+  planExpanderVersion: null,
   generatedAtIso: "2026-07-14T12:00:00.000Z",
   deterministicSeed: 20260714,
   parentCandidateId: null,

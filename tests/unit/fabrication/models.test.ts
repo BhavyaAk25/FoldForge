@@ -6,7 +6,13 @@ import type { ResponseUsage } from "openai/resources/responses/responses";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { canonicalSerialize } from "@/core/canonical";
 import { createOfflineFabricationShowcases } from "@/core/fabrication/examples";
+import {
+  fabricationPlanFromProgram,
+  FABRICATION_PLAN_EXPANDER_VERSION,
+} from "@/core/fabrication/planning";
+import { sha256Hex } from "@/core/sha256";
 import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
 import {
   FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
@@ -41,6 +47,17 @@ const usage: ResponseUsage = {
   output_tokens_details: { reasoning_tokens: 60 },
   total_tokens: 1_100,
 };
+
+const planFunctionOutput = (diversityClaim: string) => [
+  {
+    type: "function_call",
+    name: "submit_fabrication_plan",
+    arguments: JSON.stringify({
+      diversityClaim,
+      plan: fabricationPlanFromProgram(fixtureProgram()),
+    }),
+  },
+];
 
 vi.mock("@/server/ai/client", () => ({
   getOpenAIClient: getClient,
@@ -127,10 +144,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     createResponse.mockResolvedValue({
       id: "resp-program",
       status: "completed",
-      output_text: JSON.stringify({
-        diversityClaim: "Use one direct fold with a grounded base.",
-        program: fixtureProgram(),
-      }),
+      output: planFunctionOutput("Use one direct fold with a grounded base."),
     });
     const result = await new OpenAIFabricationProgramModel().generateProgram(
       fixtureIntent(),
@@ -139,7 +153,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       "ff_subject",
     );
 
-    expect(result.program.programId).toBe("program-winged-display");
+    expect(result.program).toMatchObject({
+      intentId: "intent-winged-display",
+      topologyId: "two-panel-fold",
+    });
+    expect(result.provenance).toEqual({
+      modelId: FOLDFORGE_MODEL,
+      modelResponseId: "resp-program",
+      planHash: sha256Hex(
+        canonicalSerialize(fabricationPlanFromProgram(fixtureProgram())),
+      ),
+      expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+    });
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
@@ -149,6 +174,17 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         store: false,
         safety_identifier: "ff_subject",
         service_tier: "default",
+        tool_choice: {
+          type: "function",
+          name: "submit_fabrication_plan",
+        },
+        tools: [
+          expect.objectContaining({
+            type: "function",
+            name: "submit_fabrication_plan",
+            strict: true,
+          }),
+        ],
       }),
       { maxRetries: 0, timeout: 15_000 },
     );
@@ -161,7 +197,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
           Buffer.byteLength(
             JSON.stringify({
               diversityClaim: "A concise topology-specific proposal.",
-              program: showcase.program,
+              plan: fabricationPlanFromProgram(showcase.program),
             }),
             "utf8",
           ) / 3,
@@ -184,10 +220,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     retrieveResponse.mockResolvedValue({
       id: "resp-background-program",
       status: "completed",
-      output_text: JSON.stringify({
-        diversityClaim: "Use a polled background response.",
-        program: fixtureProgram(),
-      }),
+      output: planFunctionOutput("Use a polled background response."),
     });
 
     const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
@@ -199,7 +232,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).resolves.toMatchObject({
-      program: { programId: "program-winged-display" },
+      program: { intentId: "intent-winged-display" },
     });
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(retrieveResponse).toHaveBeenCalledTimes(1);
@@ -222,10 +255,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       .mockResolvedValue({
         id: "resp-background-retry",
         status: "completed",
-        output_text: JSON.stringify({
-          diversityClaim: "Retrieve the existing generation again.",
-          program: fixtureProgram(),
-        }),
+        output: planFunctionOutput("Retrieve the existing generation again."),
       });
 
     const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
@@ -237,7 +267,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).resolves.toMatchObject({
-      program: { programId: "program-winged-display" },
+      program: { intentId: "intent-winged-display" },
     });
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(retrieveResponse).toHaveBeenCalledTimes(2);
@@ -257,9 +287,84 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         [],
         "ff_subject",
       ),
-    ).rejects.toThrow("no parsed fabrication program");
+    ).rejects.toMatchObject({ code: "model_incomplete" });
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(retrieveResponse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "a missing tool call",
+      output: [],
+      code: "missing_plan_call",
+    },
+    {
+      label: "the wrong tool call",
+      output: [
+        {
+          type: "function_call",
+          name: "unrelated_tool",
+          arguments: "{}",
+        },
+      ],
+      code: "missing_plan_call",
+    },
+    {
+      label: "malformed arguments",
+      output: [
+        {
+          type: "function_call",
+          name: "submit_fabrication_plan",
+          arguments: "{",
+        },
+      ],
+      code: "invalid_plan",
+    },
+    {
+      label: "duplicate plan calls",
+      output: [
+        ...planFunctionOutput("First plan."),
+        ...planFunctionOutput("Second plan."),
+      ],
+      code: "duplicate_plan_call",
+    },
+    {
+      label: "an unresolved plan",
+      output: [
+        {
+          type: "function_call",
+          name: "submit_fabrication_plan",
+          arguments: JSON.stringify({
+            diversityClaim: "Use a missing sheet.",
+            plan: {
+              ...fabricationPlanFromProgram(fixtureProgram()),
+              panels: fabricationPlanFromProgram(fixtureProgram()).panels.map(
+                (panel) => ({
+                  ...panel,
+                  sheetId: "sheet-missing",
+                }),
+              ),
+            },
+          }),
+        },
+      ],
+      code: "invalid_plan",
+    },
+  ])("fails closed for $label", async ({ output, code }) => {
+    createResponse.mockResolvedValue({
+      id: "resp-invalid-plan-call",
+      status: "completed",
+      output,
+    });
+
+    await expect(
+      new OpenAIFabricationProgramModel().generateProgram(
+        fixtureIntent(),
+        1,
+        [],
+        "ff_subject",
+      ),
+    ).rejects.toMatchObject({ code });
   });
 
   it("cancels program polling at the route-safe deadline", async () => {
@@ -286,9 +391,9 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       [],
       "ff_subject",
     );
-    const assertion = expect(resultPromise).rejects.toThrow(
-      "no parsed fabrication program",
-    );
+    const assertion = expect(resultPromise).rejects.toMatchObject({
+      code: "model_incomplete",
+    });
     await vi.runAllTimersAsync();
 
     await assertion;
@@ -301,13 +406,8 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     });
   });
 
-  it("joins split program output returned by a cancellation race", async () => {
+  it("accepts a completed plan call returned by a cancellation race", async () => {
     vi.useFakeTimers();
-    const outputText = JSON.stringify({
-      diversityClaim: "Completion won the cancellation race.",
-      program: fixtureProgram(),
-    });
-    const splitIndex = Math.floor(outputText.length / 2);
     createResponse.mockResolvedValue({
       id: "resp-background-race",
       status: "queued",
@@ -321,21 +421,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     cancelResponse.mockResolvedValue({
       id: "resp-background-race",
       status: "completed",
-      output: [
-        {
-          type: "message",
-          content: [
-            {
-              type: "output_text",
-              text: outputText.slice(0, splitIndex),
-            },
-            {
-              type: "output_text",
-              text: outputText.slice(splitIndex),
-            },
-          ],
-        },
-      ],
+      output: planFunctionOutput("Completion won the cancellation race."),
     });
 
     const resultPromise = new OpenAIFabricationProgramModel().generateProgram(
@@ -347,7 +433,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     await vi.runAllTimersAsync();
 
     await expect(resultPromise).resolves.toMatchObject({
-      program: { programId: "program-winged-display" },
+      program: { intentId: "intent-winged-display" },
     });
   });
 
@@ -500,10 +586,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     retrieveResponse.mockResolvedValue({
       id: "resp-metered-background",
       status: "completed",
-      output_text: JSON.stringify({
-        diversityClaim: "Settle after background polling.",
-        program: fixtureProgram(),
-      }),
+      output: planFunctionOutput("Settle after background polling."),
       usage,
     });
 
@@ -512,7 +595,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     ).generateProgram(fixtureIntent(), 1, [], "ff_subject");
 
     await expect(resultPromise).resolves.toMatchObject({
-      program: { programId: "program-winged-display" },
+      program: { intentId: "intent-winged-display" },
     });
     expect(budget.snapshot()).toMatchObject({
       requestCount: 1,

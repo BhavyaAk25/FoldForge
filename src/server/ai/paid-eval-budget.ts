@@ -315,10 +315,18 @@ const readLedger = async (
       "LIVE_EVAL_BUDGET_USD must match the existing cumulative ledger limit.",
     );
   }
-  if (parsed.data.chargedNanodollars > parsed.data.budgetNanodollars) {
+  const providerOverageIsSealed =
+    parsed.data.chargedNanodollars > parsed.data.budgetNanodollars &&
+    parsed.data.haltedReason === "usage_invalid" &&
+    parsed.data.pendingReservation === null &&
+    parsed.data.entries.at(-1)?.outcome === "usage_invalid";
+  if (
+    parsed.data.chargedNanodollars > parsed.data.budgetNanodollars &&
+    !providerOverageIsSealed
+  ) {
     throw new PaidEvalBudgetError(
       "ledger_invalid",
-      "The paid-evaluation ledger exceeds its authorized limit.",
+      "The paid-evaluation ledger exceeds its authorized limit without a sealed provider-usage overage.",
     );
   }
   const entryTotal = parsed.data.entries.reduce(
@@ -646,6 +654,12 @@ export class PaidEvalBudget {
           "Only a settled, sealed ledger can be continued.",
         );
       }
+      if (sourceLedger.chargedNanodollars >= sourceLedger.budgetNanodollars) {
+        throw new PaidEvalBudgetError(
+          "invalid_request",
+          "A sealed ledger with no remaining authorized budget cannot be continued.",
+        );
+      }
       const sourceLedgerSha256 = createHash("sha256")
         .update(sourceContents)
         .digest("hex");
@@ -847,20 +861,10 @@ export class PaidEvalBudget {
     }
 
     let usage: ValidatedUsage;
-    let chargedNanodollars: number;
+    let actualCostNanodollars: number;
     try {
       usage = validateUsage(response.usage);
-      chargedNanodollars = usageCostNanodollars(usage);
-      if (
-        usage.inputTokens > reservation.inputTokenCeiling ||
-        usage.outputTokens > reservation.outputTokenCeiling ||
-        chargedNanodollars > reservation.reservedNanodollars
-      ) {
-        throw new PaidEvalBudgetError(
-          "usage_invalid",
-          "Actual usage exceeded the conservative request reservation.",
-        );
-      }
+      actualCostNanodollars = usageCostNanodollars(usage);
     } catch {
       await this.settleUnknown(reservation, response.id, "usage_invalid", null);
       throw new PaidEvalBudgetError(
@@ -868,6 +872,23 @@ export class PaidEvalBudget {
         "Provider usage was invalid; the full reservation was charged and the budget was halted.",
       );
     }
+    if (
+      usage.inputTokens > reservation.inputTokenCeiling ||
+      usage.outputTokens > reservation.outputTokenCeiling ||
+      actualCostNanodollars > reservation.reservedNanodollars
+    ) {
+      await this.settleUsageExceededReservation(
+        reservation,
+        response.id,
+        usage,
+        actualCostNanodollars,
+      );
+      throw new PaidEvalBudgetError(
+        "usage_invalid",
+        "Provider usage exceeded the request reservation; safe usage metadata was recorded and the budget was halted.",
+      );
+    }
+    const chargedNanodollars = actualCostNanodollars;
 
     const entry: PaidEvalLedgerEntry = {
       sequence: reservation.sequence,
@@ -995,6 +1016,36 @@ export class PaidEvalBudget {
       chargedNanodollars:
         this.ledger.chargedNanodollars + reservation.reservedNanodollars,
       haltedReason: outcome,
+      pendingReservation: null,
+      entries: [...this.ledger.entries, entry],
+    };
+    await this.persist();
+  }
+
+  private async settleUsageExceededReservation(
+    reservation: PaidEvalReservation,
+    responseId: string,
+    usage: ValidatedUsage,
+    chargedNanodollars: number,
+  ): Promise<void> {
+    const entry: PaidEvalLedgerEntry = {
+      sequence: reservation.sequence,
+      operation: reservation.operation,
+      responseId,
+      outcome: "usage_invalid",
+      inputTokens: usage.inputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      outputTokens: usage.outputTokens,
+      reasoningTokens: usage.reasoningTokens,
+      providerFailureCategory: null,
+      chargedNanodollars,
+      reservedNanodollars: reservation.reservedNanodollars,
+    };
+    this.ledger = {
+      ...this.ledger,
+      chargedNanodollars: this.ledger.chargedNanodollars + chargedNanodollars,
+      haltedReason: "usage_invalid",
       pendingReservation: null,
       entries: [...this.ledger.entries, entry],
     };

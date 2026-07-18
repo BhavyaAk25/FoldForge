@@ -231,6 +231,12 @@ const installStudioMocks = async (
         proposal: {
           diversityClaim: `Topology ${body.candidateOrdinal} uses a distinct panel program.`,
           program: programFor(body.candidateOrdinal),
+          provenance: {
+            modelId: "gpt-5.6-sol",
+            modelResponseId: `resp-e2e-program-${body.candidateOrdinal}`,
+            planHash: String(body.candidateOrdinal).repeat(64),
+            expanderVersion: "1",
+          },
         },
         programStructureFingerprint: String(fingerprintOrdinal).repeat(64),
       });
@@ -517,6 +523,12 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     expect(request.candidate.provenance.appliedPatchIds).toEqual([
       "patch-wing-width-1",
     ]);
+    expect(request.candidate.provenance).toMatchObject({
+      modelId: "gpt-5.6-sol",
+      modelResponseId: "resp-e2e-program-2",
+      modelPlanHash: "2".repeat(64),
+      planExpanderVersion: "1",
+    });
   }
 
   await expect
@@ -587,7 +599,9 @@ test("keeps prompt examples honest and provides a saved result when live generat
   await expect(
     page.getByText("Prompt inspiration", { exact: true }),
   ).toHaveCount(3);
-  await flowerExample.getByRole("button", { name: "Use this prompt" }).click();
+  await flowerExample
+    .getByRole("button", { name: "Load future prompt" })
+    .click();
   await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
     "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",

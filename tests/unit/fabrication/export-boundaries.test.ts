@@ -92,6 +92,8 @@ describe("fabrication export source boundaries", () => {
           irHash: "0".repeat(64),
           modelId: null,
           modelResponseId: null,
+          modelPlanHash: null,
+          planExpanderVersion: null,
           generatedAtIso: "2026-07-14T12:00:00.000Z",
           deterministicSeed: 0,
           parentCandidateId: null,
