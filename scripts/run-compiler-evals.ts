@@ -336,7 +336,7 @@ const report = {
     : paidUsage?.haltedReason
       ? "budget-halted"
       : "run",
-  builderAuthorizedBudgetUsd: 4,
+  builderAuthorizedBudgetUsd: paidUsage?.budgetUsd ?? null,
   preRequestReservationCeilingUsd: paidUsage?.budgetUsd ?? null,
   live,
   liveGates,

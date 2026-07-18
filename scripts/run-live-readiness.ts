@@ -686,7 +686,7 @@ if (!liveEnabled) {
     runId,
     buildEvidence,
     completionBuildEvidence,
-    builderAuthorizedBudgetUsd: 4,
+    builderAuthorizedBudgetUsd: paidUsage.budgetUsd,
     preRequestReservationCeilingUsd: paidUsage.budgetUsd,
     caseCount: selectedCases.length,
     ...gate,
