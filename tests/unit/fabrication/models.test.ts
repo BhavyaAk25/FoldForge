@@ -170,6 +170,9 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
+        instructions: expect.stringContaining(
+          "choose the simplest verification-friendly construction",
+        ),
         reasoning: { effort: "low" },
         max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
         background: true,

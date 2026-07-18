@@ -2,8 +2,9 @@
 
 ## 2026-07-18 — Single-design live forge
 
-- Diagnosed the first production playing-card-box run from Vercel request metadata: intent compilation succeeded, candidate one generated, compiled, and reached repair successfully, then candidate two returned a controlled program-response error and caused the client to discard the usable first result.
+- Diagnosed the first production playing-card-box run from Vercel request metadata: intent compilation succeeded, candidate one generated, compiled, and reached a repair response, then candidate two returned a controlled program-response error before the client committed any result. Production metadata does not retain the repair body, so it does not prove that candidate one passed.
 - Revised the public live workflow to request exactly one Sol plan, run the unchanged deterministic compile and bounded repair path, and show that design immediately after every hard check passes.
+- Removed the leftover multi-candidate novelty pressure from the first-plan instruction: with no prior topology, Sol is now told to choose the simplest verification-friendly construction.
 - Replaced compare/three-design copy with **Create design** and **Inspect your design**, removed multi-result instructions from the starter prompts, and bumped the browser checkpoint key so an older three-candidate checkpoint cannot reappear.
 - Reduced the live session quota to the one-design workflow: one active request per session, five repair calls per hour, two finalizations per hour, ten total live calls, and 140,000 conservatively reserved tokens per hour.
 - Updated rendered tests to prove one program request, real repair evidence, exact candidate-bound exports, checkpoint restore, responsive layout, keyboard/reduced-motion behavior, and accessibility.
