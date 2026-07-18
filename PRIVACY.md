@@ -70,7 +70,7 @@ Exact live limits per random session subject:
 
 Public deterministic compile and export routes are separately limited to 30 requests per 10-minute process-local subject bucket, one concurrent request per subject, and four concurrent requests process-wide. The verifier also rejects estimated motion/collision work above 2,000,000 sampled triangle-pair units before expensive traversal. These are best-effort instance-local controls suitable for the bounded demo; a horizontally scaled public service requires an upstream/shared atomic limiter.
 
-Per-call output ceilings are 3,000 tokens for intent/compile, 8,000 for a concise complete program proposal, 2,500 reserved for repair, and 2,000 for final comparison/instructions. Program synthesis uses medium reasoning; representative program JSON stays below half of that combined reasoning-and-visible-output ceiling under a conservative size estimate. The constraint compiler and report-grounded repair use high reasoning. A quota, token, or concurrency rejection returns `429` with a bounded retry hint and makes no model call. The current in-memory gates are explicitly best-effort per deployment instance; a high-traffic multi-instance service would require a shared atomic quota/concurrency store.
+Per-call output ceilings are 3,000 tokens for intent compilation, 8,000 for one compact fabrication-plan tool call, 2,000 for repair, and 2,000 for final comparison/instructions. Plan synthesis uses medium reasoning; pure code expands the validated plan into the canonical program. The constraint compiler and report-grounded repair use high reasoning. A quota, token, or concurrency rejection returns `429` with a bounded retry hint and makes no model call. The current in-memory gates are explicitly best-effort per deployment instance; a high-traffic multi-instance service would require a shared atomic quota/concurrency store.
 
 `ENABLE_LIVE_OPENAI=false` is the default and production kill switch. Live calls fail closed unless the flag, API key, access code, signing secret, origin policy, quota store, and concurrency controls are all valid.
 
@@ -99,7 +99,7 @@ No analytics, advertising tracker, account profile, or cross-device sync is requ
 
 As of 2026-07-17:
 
-- Live AI remains disabled with `ENABLE_LIVE_OPENAI=false`. A paid three-case intent contract passed, but no paid program, repair, artifact, or end-to-end success is claimed. The sanitized public record is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
+- Live AI remains disabled with `ENABLE_LIVE_OPENAI=false`. On exact paid build `1041e13`, a three-case intent contract passed and the guarded readiness intent passed 18/18 explicit checks, but the first program response was incomplete with `max_output_tokens` and rejected as `budget_usage_invalid`. No paid program, repair, artifact, or end-to-end success is claimed. The sanitized public record is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 - Every live route uses the signed two-hour session subject, same-origin/Fetch Metadata guard, route body cap, request/token quota, concurrency lease, strict schema, safety identifier, and fail-closed live state.
 - OpenAI calls set `store:false`, bind budget reservations to the exact request output ceiling, disable model-generation retries, and never log production prompt or response bodies. Program synthesis uses one background response with bounded retrieval-only retries and a 210-second poll limit.
 - Export routes rebuild and verify the submitted selected candidate instead of trusting client export bytes.
@@ -107,7 +107,7 @@ As of 2026-07-17:
 - Health exposes only bounded public state and build provenance.
 - Automated route tests cover origin, access, caps, quotas, concurrency, kill-switch state, strict malformed data, and exact selected-candidate export behavior.
 
-The remaining live gate is operational and evidentiary: the builder has authorized one more attempt within the unchanged cap, using an immutable chained continuation of the sealed `$2.722365` ledger. It still needs a passing background program-generation stage and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
+The live gate remains evidentiary, but paid testing under the authorized budget is finished. The final immutable 24-entry ledger is sealed at `$3.6134275`; its remaining `$0.0865725` cannot satisfy another conservative reservation under the `$3.70` pre-request ceiling. That guard does not replace provider-side account billing controls. No ledger may be reset, branched, relabelled, or bypassed. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
 
 ## Reporting a concern
 

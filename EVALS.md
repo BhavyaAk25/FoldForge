@@ -2,9 +2,9 @@
 
 ## Evidence status
 
-The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. The usage-backed GPT-5.6 Sol intent contract passed 3/3 cases on the latest paid build. Its guarded complex intent recalled all 18 explicit constraints; the background program proposal was cancelled at the guarded deadline without usable completion usage. No live program, repair, artifact, or end-to-end success is claimed. The second chained continuation is sealed at a conservative cumulative **$2.722365** against the **$3.70** internal ceiling and the builder's **$4.00** authorization.
+The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. On exact paid build `1041e13`, the retained GPT-5.6 Sol intent summary records 3/3 cases for **$0.11435875**, and the guarded readiness intent recalled all 18 explicit constraints for **$0.08897875**. The compiler raw source report was later overwritten by an offline run, so the 3/3 result is now summary-only; the cumulative ledger remains preserved. The first program response was incomplete with `max_output_tokens`; the budget layer rejected it as `budget_usage_invalid`, and no program reached validation. No live program, repair, artifact, or end-to-end success is claimed. The third chained continuation is sealed at a conservative cumulative **$3.6134275** against the **$3.70** pre-request reservation ceiling and the builder's **$4.00** authorization. Its remaining **$0.0865725** cannot satisfy another conservative paid-request reservation.
 
-Detailed generated reports are written under ignored `artifacts/evals/`. A sanitized, response-ID-free summary with source-report hashes is committed at [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json). Offline evidence never counts as live model evidence.
+Detailed generated reports are written under ignored `artifacts/evals/`. A sanitized, response-ID-free summary with retained source-artifact hashes is committed at [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json). Offline evidence never counts as live model evidence.
 
 ## Release rule
 
@@ -29,9 +29,9 @@ A one-case or budget-truncated run is a **live smoke**, not the sealed release s
 | Correct fail-fast verifier stage    | 560/560                                 |      100% | Pass   |
 | Export source equivalence           | 120/120                                 |      100% | Pass   |
 | Canonical repeatability             | 50 programs × 10 repeats; 0 differences |      100% | Pass   |
-| Compile + verify p95                | 200.439 ms                              | ≤2,000 ms | Pass   |
+| Compile + verify p95                | 140.813 ms                              | ≤2,000 ms | Pass   |
 | Offline crashes                     | 0                                       |         0 | Pass   |
-| Strict coverage                     | 96.72% statements / 90.17% branches     | 95% / 90% | Pass   |
+| Strict coverage                     | 96.72% statements / 90.13% branches     | 95% / 90% | Pass   |
 
 The 560 mutations cover schema, topology, panel geometry, connections, sheet packing, rigid transforms, motion, collision, semantics, and export equivalence with 56 cases per phase.
 
@@ -73,7 +73,7 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 | Keyboard focus and reduced motion                       | 1/1                            | Pass   |
 | Axe serious or critical violations, before/after result | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, conditional 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 338 passing tests across 49 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
+The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, conditional 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 352 passing tests across 50 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
 
 ### External export-consumer checks
 
@@ -95,15 +95,15 @@ The committed `validate:consumers` command regenerates the three canonical showc
 | Explicit constraint recall and unit normalization                     | Pass — 18/18 on the guarded complex intent         |
 | Unsupported request is refused or clarified without schema escape     | Pass — 1/1 unsupported request refused             |
 | Prompt-injection attempt cannot escape the strict contract            | Pass — 1/1 remained an unsupported strict response |
-| Three generated programs are structurally distinct and all verified   | Blocked — background proposal did not settle       |
+| Three generated programs are structurally distinct and all verified   | Blocked — first response incomplete at token limit |
 | Real measured failure receives a grounded patch and full revalidation | Not reached                                        |
 | Exact live SVG/DXF/GLB/JSON and conditional FOLD pass consumer checks | Not reached                                        |
-| Usage ledger proves model, response IDs, tokens, and cost             | Pass — 19 entries, $2.722365, sealed               |
+| Usage ledger proves model, response IDs, tokens, and cost             | Pass — 24 entries, $3.6134275, sealed              |
 | Production logs contain no prompt, response, or secret content        | Not run in production                              |
 
 #### Paid-run budget contract
 
-The user authorization is a hard external maximum of **$4.00**. The executable evaluation limit is deliberately lower:
+The user authorization is a hard external maximum of **$4.00**. The executable evaluation limit was deliberately lower. This is the historical run configuration; do not run it against the sealed final ledger:
 
 ```bash
 LIVE_EVAL_BUDGET_USD=3.70 \
@@ -113,9 +113,11 @@ LIVE_MODEL_KILL_SWITCH=false \
 pnpm run eval:live
 ```
 
-Paid requests run sequentially with model-generation retries disabled. Before each request, the budget guard reserves a conservative maximum derived from the serialized request and that exact request object's `max_output_tokens`; the same object is then passed to the provider callback. After a response, it charges the provider-reported input, cached-input, cache-write, output, and reasoning usage. Missing or invalid usage and unsettled request failures seal the budget and prevent another request. Both paid evaluation commands share the ignored persistent ledger selected by `LIVE_EVAL_LEDGER_PATH`, defaulting to `artifacts/evals/live-cost-ledger.json`; the companion `.lock` prevents concurrent paid runs. The ledger retains only response identifiers, token counts, calculated cost, operation names, and bounded evidence metadata; it does not retain prompt or response bodies. A crash with a pending reservation is charged at that reservation's conservative maximum and seals subsequent paid calls.
+Paid requests run sequentially with model-generation retries disabled. Before each request, the budget guard reserves a conservative maximum derived from the serialized request and that exact request object's `max_output_tokens`; the same object is then passed to the provider callback. After a response, it charges the provider-reported input, cached-input, cache-write, output, and reasoning usage. Missing or malformed usage and unsettled request failures charge the reservation, seal the budget, and prevent another request. Structurally valid usage that exceeds its reservation is recorded at the actual calculated cost, even if that puts the read-only sealed ledger above the authorized ceiling; it can never authorize a continuation or another call. Both paid evaluation commands share the ignored persistent ledger selected by `LIVE_EVAL_LEDGER_PATH`, defaulting to `artifacts/evals/live-cost-ledger.json`; the companion `.lock` prevents concurrent paid runs. The ledger retains only response identifiers, token counts, calculated cost, operation names, and bounded evidence metadata; it does not retain prompt or response bodies. A crash with a pending reservation is charged at that reservation's conservative maximum and seals subsequent paid calls.
 
-After the synchronous program boundary failed twice, program synthesis moved to OpenAI's [background mode](https://developers.openai.com/api/docs/guides/background): one generation is started with `background:true`, then response retrieval is polled to a terminal state for at most 210 seconds. Retrieval-only retries cannot create duplicate model work. Requests still set `store:false`; OpenAI temporarily retains background response state for polling. The first paid background attempt reached the guard without usable completion usage, so the budget guard charged its conservative maximum and sealed the ledger. Program reasoning is now medium while the 8,000-token combined reasoning/output ceiling is retained to avoid truncating strict JSON; representative programs remain below half that ceiling under a conservative size estimate. This configuration is offline-tested but not yet paid-verified.
+After the synchronous program boundary failed twice, program synthesis moved to OpenAI's [background mode](https://developers.openai.com/api/docs/guides/background): one generation is started with `background:true`, then response retrieval is polled to a terminal state for at most 210 seconds. Retrieval-only retries cannot create duplicate model work. Requests still set `store:false`; OpenAI temporarily retains background response state for polling. A previous paid background attempt reached its guard without usable completion usage. The final paid attempt used medium reasoning and an 8,000-token combined reasoning/output ceiling; the provider returned an incomplete response with reason `max_output_tokens`. FoldForge accepted neither partial text nor coordinates. The budget layer classified the unusable response as `budget_usage_invalid`, charged the full **$0.687725** reservation, and sealed the ledger before schema validation, compilation, candidate construction, repair, or export.
+
+After that failure, the model-facing contract was reduced without narrowing the fabrication grammar. Sol now submits one strict `FabricationPlanV1` function call containing only design judgment: panels, contours, transforms, bodies, joints, connectors, motion, semantic parts, and assembly strategy. Pure code deterministically supplies intent-owned fields, referenced stock, stable identifiers, administrative arrays, and ordered assembly operations before validating the unchanged canonical `FabricationProgramV1`. All three offline showcases preserve their kinematics, compile, verify, and serialize byte-stably through this lowering. Malformed, missing, duplicate, wrong-tool, unresolved-sheet, and token-overage cases fail closed. This is an offline-tested mitigation, not new paid evidence; the sealed live result above remains the only truthful live-program status.
 
 A sealed ledger is never edited or reset. After explicit authorization, `eval:continue-ledger` creates a new ledger that copies the complete charged history, records the SHA-256 of the sealed source, atomically claims that source against branching, clears only the new ledger's run halt, and keeps the original cumulative cap:
 
@@ -127,7 +129,7 @@ pnpm run eval:continue-ledger -- \
   --target artifacts/evals/live-cost-ledger-continuation-1.json
 ```
 
-Two authorized, non-branching continuations were created and sealed in sequence. The second preserves all 19 entries and records `$2.722365` cumulatively, leaving `$0.977635` below the executable ceiling. The builder has authorized one more chained attempt under that same ceiling. It must originate from the second continuation, preserve every entry and charge, and pass the pre-request reservation check. Creating a continuation does not itself make a provider request.
+Three authorized, non-branching continuations were created and sealed in sequence. The third preserves all 24 entries and records `$3.6134275` cumulatively, leaving `$0.0865725` below the pre-request reservation ceiling. No further paid request is allowed under that ledger because the remainder cannot satisfy the conservative reservation guard. Every source ledger and continuation claim remains immutable; creating another continuation would neither create budget nor authorize a provider request. The final raw compiler report was not preserved: a later offline evaluation overwrote the shared path. The public packet marks that gap explicitly, and current runners write paid compiler and readiness reports to exclusive run-specific paths and require readiness to name the exact compiler source.
 
 The five-case sealed readiness suite requires at least four complete successes. Each success requires three structurally distinct verified candidates, deterministic compile and verification, bounded repair when needed, exact selected-candidate exports, source equivalence, and a strict final narrative. The full report must also include:
 
@@ -139,7 +141,7 @@ The five-case sealed readiness suite requires at least four complete successes. 
 
 Prompt hashes and bounded metrics may be stored, but production reports and logs must not retain prompt or model-response content. `eval:compiler` remains the focused intent-contract evaluation for supported, refusal/clarification, and prompt-injection behavior.
 
-Run the focused paid intent contract against the same ledger before or alongside the readiness suite:
+The following focused command documents the historical paid-intent procedure. Do not run it against the sealed final ledger:
 
 ```bash
 LIVE_EVAL_BUDGET_USD=3.70 \
@@ -163,7 +165,7 @@ Prepared showcase validation remains useful regression evidence, but it does not
 
 - SVG: millimetre scale, fabrication layers, printable bounds, and the 50 mm calibration line;
 - DXF: parse successfully with millimetre units and CUT/SCORE/PERFORATION/ENGRAVE layer semantics, then open the same file in LibreCAD;
-- GLB: pass the Khronos glTF Validator with zero errors and warnings, then play `FoldForge Open Close` in an animation-capable viewer when motion exists;
+- GLB: pass the Khronos glTF Validator with zero errors and warnings, then play the included animation clip in an animation-capable viewer when motion exists;
 - JSON: contain the selected intent, program, IR, report, score, provenance, export hashes, and the same selected IR hash; and
 - FOLD: parse with the official FOLD library and open in compatible software only when the topology is losslessly representable; otherwise preserve and show the exact omission reason.
 
@@ -180,7 +182,7 @@ pnpm run eval:compiler
 pnpm run eval:repair
 pnpm run eval:e2e
 pnpm run eval:ablation
-LIVE_EVAL_BUDGET_USD=3.70 ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true LIVE_MODEL_KILL_SWITCH=false pnpm run eval:live
+# No further paid command is permitted under the sealed $3.70 ledger.
 pnpm run test:e2e
 pnpm run validate:consumers
 pnpm audit --prod

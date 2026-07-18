@@ -1,6 +1,6 @@
 # FoldForge skeptical scorecard
 
-Snapshot: 2026-07-17, paid Sol intent contract passed, program proposals did not settle inside the guarded response windows.
+Snapshot: 2026-07-17, paid Sol intent contract passed; the final first-program response was incomplete at `max_output_tokens` and rejected before validation.
 
 This is not a prediction of the judges. It applies the four equally weighted criteria on the [OpenAI Build Week page](https://openai.devpost.com/) and awards points only for reproducible evidence. The official requirements also ask the README and video to distinguish Codex acceleration, human decisions, and GPT-5.6 use.
 
@@ -13,7 +13,7 @@ This is not a prediction of the judges. It applies the four equally weighted cri
 | Potential Impact             | 16/25 | Specific flat-sheet handoff problem; inspectable geometry and standard files replace model prose                                           | No live task, exact live artifact in a downstream GUI, user trial, or workflow evidence |
 | Quality of the Idea          | 22/25 | Clear prompt → typed program → proof thesis; bounded breadth; topology-aware exploration; honest refusal                                   | Claimed breadth still relies mainly on prepared examples and mocked/offline programs    |
 
-The paid intent contract is meaningful technical evidence, but **76 is not winning-ready**. The program-generation failure leaves the product's central live prompt-to-artifact claim unproven, and the deployed product cannot currently perform its headline action.
+The retained paid intent summary is useful but no longer fully reproducible because its raw report was overwritten by a later offline run. **76 is not winning-ready.** On exact paid build `1041e13`, the summary records 3/3 and the preserved readiness report records 18/18 explicit checks, but the first program response was incomplete at the output ceiling. Zero programs, candidates, repairs, or exports were produced. A later compact-plan contract and deterministic expander materially reduce response size and pass offline round-trip tests, but no score is awarded for unverified live quality. The product's central live prompt-to-artifact claim remains unproven, and the deployed product cannot currently perform its headline action.
 
 The current report proves GPT-5.6 intent handling, but not the working prompt-to-fabrication journey judges expect. Therefore the current build should not be submitted as complete.
 
@@ -32,7 +32,7 @@ Total: **92/100**. Competitive is not guaranteed. A real target-user or fabricat
 
 ## Paid evidence gate
 
-The user authorized no more than **$4.00** of API spend. FoldForge must enforce `LIVE_EVAL_BUDGET_USD=3.70`, leaving a $0.30 reserve. The ledger must be cumulative across the paid evaluation, record provider usage and response IDs without prompt/response bodies, and stop before a request whose conservative maximum could cross the cap. Missing usage or an uncertain provider failure seals the run.
+The user authorized **$4.00** of API spend. FoldForge applied `LIVE_EVAL_BUDGET_USD=3.70` as a pre-request reservation ceiling, leaving a $0.30 planning reserve. The final 24-entry ledger is sealed at **$3.6134275** with **$0.0865725** remaining; no further conservative request reservation can fit. This client guard is not a provider-side hard billing cap: anomalous reported usage is recorded truthfully even above the reservation, then the ledger seals. The ledger is cumulative, records provider usage and response IDs without prompt/response bodies, and may not be reset, branched, or bypassed.
 
 Evidence is classified strictly:
 

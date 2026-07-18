@@ -1,6 +1,6 @@
 # FoldForge
 
-> FoldForge is designed to turn a bounded flat-sheet brief into typed GPT-5.6 Sol build programs, then make deterministic code prove the geometry and motion before exporting fabrication files.
+> FoldForge is designed to turn a bounded flat-sheet brief into typed GPT-5.6 Sol design plans, then make deterministic code expand, verify, and export the fabrication program.
 
 **Track:** Work & Productivity · **Live app:** [foldforge.vercel.app](https://foldforge.vercel.app)
 
@@ -8,7 +8,7 @@
 
 ## What you can try now
 
-The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On the latest paid build, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. Its background program proposal did not settle inside the guarded response window, so there is still no claim of a live prompt-to-artifact success.
+The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On exact paid build `1041e13`, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. The first program response was incomplete after reaching the combined reasoning/output ceiling, so it was rejected before validation. There is still no claim of a live prompt-to-artifact success.
 
 To understand the product in under a minute:
 
@@ -20,21 +20,22 @@ To understand the product in under a minute:
 
 The photorealistic concept renders are labelled as prompt inspiration, and the inspectable examples are labelled as prepared. Opening one never pretends that the text box was interpreted or that a concept render is its verified geometry.
 
-| Playing-card box                                                                       | Vertical-lift flower study                                                                     | Static duck crease pattern                                                                                     |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| ![A paper playing-card box with its tray open](./public/examples/playing-card-box.jpg) | ![A paper card with a flower rising from the center](./public/examples/pop-up-flower-card.jpg) | ![A yellow paper duck gift-box concept used as prompt inspiration](./public/examples/duck-shaped-gift-box.jpg) |
-| Slide-out packaging                                                                    | Prepared direct-lift motion study                                                              | Static fold-only FOLD demo                                                                                     |
+| Playing-card box                                                                                                            | Vertical-lift flower study                                                                                                          | Static duck crease pattern                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| ![Prompt-inspiration concept render of a paper playing-card box with its tray open](./public/examples/playing-card-box.jpg) | ![Prompt-inspiration concept render of a paper card with a flower rising from the center](./public/examples/pop-up-flower-card.jpg) | ![A yellow paper duck gift-box concept used as prompt inspiration](./public/examples/duck-shaped-gift-box.jpg) |
+| Slide-out packaging                                                                                                         | Prepared direct-lift motion study                                                                                                   | Static fold-only FOLD demo                                                                                     |
 
 ## The ten-second explanation
 
 A product brief normally moves through separate sketching, geometry, mechanism, checking, and file-preparation tools. A language model can suggest a plausible design, but plausible coordinates are not proof.
 
-FoldForge turns the brief into a typed fabrication program, compiles one canonical model, measures every hard constraint, repairs only bounded parameters, and exports the exact verified candidate. Product, packaging, exhibit, operations, and prototyping teams get an inspectable handoff instead of model prose.
+FoldForge is built to turn the brief into a typed fabrication plan, expand one canonical program, measure every hard constraint, repair only bounded parameters, and export the exact verified candidate. Product, packaging, exhibit, operations, and prototyping teams get an inspectable handoff instead of model prose.
 
 ```mermaid
 flowchart LR
-    U["USER: brief and constraints"] --> A["AI: strict intent and programs"]
-    A --> C["CODE: canonical geometry and motion"]
+    U["USER: brief and constraints"] --> A["AI: strict intent and compact plans"]
+    A --> E["CODE: deterministic program expansion"]
+    E --> C["CODE: canonical geometry and motion"]
     C --> V["CODE: ordered verification"]
     V -->|measured failure| R["AI: grounded typed patch"]
     R --> C
@@ -47,13 +48,13 @@ This is not text-to-image and it is not unrestricted text-to-CAD. Its deliberate
 
 ### AI explores; code owns truth
 
-| Owner                  | Responsible for                                                                                                                  | Forbidden from doing                                                                 |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **USER**               | Object, size, material, motion, and fabrication limits                                                                           | —                                                                                    |
-| **GPT-5.6 Sol**        | Normalized intent, bounded programs, semantic critique, report-grounded diagnosis, typed parameter patches, concise instructions | Declaring validity, editing trusted coordinates, selecting a winner, exporting bytes |
-| **Deterministic code** | Units, geometry, kinematics, verification, patch application, ranking, canonical serialization, hashes, previews, and exports    | Inventing missing essential measurements                                             |
+| Owner                  | Responsible for                                                                                                                         | Forbidden from doing                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **USER**               | Object, size, material, motion, and fabrication limits                                                                                  | —                                                                                     |
+| **GPT-5.6 Sol**        | Normalized intent, compact geometric plans, semantic critique, report-grounded diagnosis, typed parameter patches, concise instructions | Declaring validity, editing compiled coordinates, selecting a winner, exporting bytes |
+| **Deterministic code** | Units, geometry, kinematics, verification, patch application, ranking, canonical serialization, hashes, previews, and exports           | Inventing missing essential measurements                                              |
 
-Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, and no model-generation retries. Large program synthesis uses OpenAI background mode with a bounded 210-second poll inside a 240-second route; only retrievals may retry. The first paid background attempt was cancelled at its guard without usable completion metadata. The current configuration keeps an 8,000-token combined reasoning/output ceiling but lowers program reasoning from high to medium; representative program JSON remains below half that ceiling under a conservative size estimate. This configuration passes offline contract tests but has not yet been paid-verified. A failed candidate cannot be ranked, finalized, or exported as valid.
+Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, and no model-generation retries. Large planning calls use OpenAI background mode with a bounded 210-second poll inside a 240-second route; only retrievals may retry. Sol now calls one strict compact-plan tool; pure code copies intent-owned fields, selects referenced stock, derives bookkeeping and assembly order, and validates the expanded canonical program. This reduced the model-facing schema from about 25.9 KB to 14.5 KB and representative payloads from 5.9–8.0 KB to 3.1–4.5 KB without using object presets. The compact path passes offline contract and showcase round-trip tests but has not been paid-verified. The final paid attempt on the older full-program contract ended incomplete with `max_output_tokens`; FoldForge rejected it before schema validation, compilation, or export. A failed candidate cannot be ranked, finalized, or exported as valid.
 
 ### Verification is ordered and fail-fast
 
@@ -97,8 +98,8 @@ The eval plan was derived from the four official judging criteria: **Technologic
 
 Current deterministic evidence:
 
-- **338/338 tests** passing across 49 files;
-- **96.72% statements, 90.17% branches, 97.72% functions, 97.65% lines** covered;
+- **352/352 tests** passing across 50 files;
+- **96.72% statements, 90.13% branches, 97.75% functions, 97.66% lines** covered;
 - **120/120** varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;
 - **50 programs × 10 runs** with zero canonical differences;
@@ -110,9 +111,9 @@ These results prove deterministic and mocked-contract behavior. They do not prov
 
 ## Billing safety and live-Sol status
 
-The builder authorized a hard maximum of **$4.00** for paid API evaluation. FoldForge uses a lower executable ceiling of **$3.70**, preserving a $0.30 reserve.
+The builder authorized **$4.00** for paid API evaluation. FoldForge uses a lower **$3.70 pre-request reservation ceiling**, preserving a $0.30 planning reserve.
 
-Before each paid request, code reserves the conservative worst-case cost from the exact request's token limit. The same request object is sent to the provider. Reported usage replaces the reservation after success; missing usage or an uncertain request failure charges the reservation, seals the immutable cumulative ledger, and blocks silent retries. The public evidence stores costs, bounded metadata, and hashes—not prompts, model bodies, credentials, or production reasoning.
+Before each paid request, code reserves the conservative worst-case cost from the exact request's token limit. The same request object is sent to the provider. Reported usage replaces the reservation after success; missing usage or an uncertain request failure charges the reservation, seals the immutable cumulative ledger, and blocks silent retries. If provider-reported usage exceeds its reservation, the ledger records the actual calculated cost—even above $3.70—then seals with no remaining runnable budget. This is a client-side pre-request guard, not a provider-side hard spend cap; a true account-level cap must be configured in provider billing controls. The public evidence stores costs, bounded metadata, and hashes—not prompts, model bodies, credentials, or production reasoning.
 
 Current paid evidence:
 
@@ -120,12 +121,14 @@ Current paid evidence:
 - unsupported request: strict refusal;
 - prompt-injection attempt: remained inside the strict contract;
 - latest guarded complex intent: **18/18** explicit constraints recalled;
-- first background program proposal: cancelled at the guarded deadline without usable completion usage; and
-- two immutable chained continuations used and sealed at a conservative cumulative **$2.722365**, leaving **$0.977635** under the executable cap.
+- retained final paid compiler summary: **3/3**, charged **$0.11435875**; its raw source report was later overwritten by an offline run, so this item is summary-only rather than independently raw-report reproducible;
+- final guarded readiness intent: **18/18** explicit constraints, charged **$0.08897875**;
+- first program response: incomplete with `max_output_tokens`, rejected as `budget_usage_invalid`, with zero programs, candidates, repairs, or exports; and
+- three immutable chained continuations sealed at a conservative cumulative **$3.6134275**, leaving **$0.0865725** under the pre-request reservation ceiling.
 
-That failure is evidence that the budget control worked, not evidence that live generation works. Production therefore remains live-disabled. The sanitized packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
+That failure is evidence that strict output and budget boundaries worked, not evidence that live generation works. Production therefore remains live-disabled. The sanitized packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 
-The builder has authorized one further non-branching attempt within the unchanged $3.70 executable cap. It must carry the complete `$2.722365` history forward; no sealed ledger may be edited, reset, or bypassed. A final live claim still requires at least four complete successes from a five-case sealed suite on the exact submission build, including strict programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes.
+No further paid request is permitted under the sealed $3.70 reservation ledger: the remaining **$0.0865725** cannot satisfy the conservative reservation guard. No sealed ledger may be edited, reset, or bypassed. Future paid compiler and readiness reports use exclusive run-specific paths so offline evaluation cannot overwrite them again. A final live claim would still require at least four complete successes from a five-case sealed suite on the exact submission build, including strict plans and expanded programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes; the current evidence does not meet that gate.
 
 ## How Codex and GPT-5.6 contributed
 
@@ -141,7 +144,7 @@ Codex then accelerated the work by:
 
 The builder repeatedly made the consequential calls: broaden beyond one object, compete in Work & Productivity, simplify the language, require exact downloads, cap paid testing, and use a harsh judge-derived release threshold.
 
-Runtime GPT-5.6 Sol has a separate role from Codex: interpret a previously unseen brief, propose multiple typed fabrication programs, diagnose measured verifier failures, and suggest bounded patches. Deterministic code remains the authority for geometry, validity, ranking, and files.
+Runtime GPT-5.6 Sol has a separate role from Codex: interpret a previously unseen brief, propose multiple compact typed fabrication plans, diagnose measured verifier failures, and suggest bounded patches. Deterministic code expands each plan into a canonical program and remains the authority for geometry, validity, ranking, and files.
 
 This README, the commit history, and the required `/feedback` session ID document that collaboration as required by the [official rules](https://openai.devpost.com/rules) and [submission guidance](https://openai.devpost.com/updates/45282-openai-build-week-submissions-are-open-plugin-launch).
 
@@ -154,8 +157,8 @@ It refuses arbitrary smooth solids, deformable surfaces, electronics, motors, fo
 ## Architecture
 
 ```text
-src/core/fabrication/          pure schemas, compiler, geometry, motion,
-                               verifier, scoring, repair, and exporters
+src/core/fabrication/          pure plan expansion, schemas, compiler, geometry,
+                               motion, verifier, scoring, repair, and exporters
 src/server/fabrication-ai/     Responses API prompts, adapters, contracts,
                                and bounded orchestration
 src/server/api/                HTTP security policy, live authorization, and responses

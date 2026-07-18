@@ -28,13 +28,14 @@ Reject honestly when a request requires arbitrary smooth solids, deformable surf
 - API routes authenticate, enforce origin/body/quota/concurrency controls, call typed services, and translate typed results to HTTP responses.
 - The UI renders typed application state. It never invents a successful result, mutates canonical geometry, or exports a different candidate from the one selected.
 
-GPT-5.6 Sol may author a normalized intent, bounded fabrication programs, semantic critiques, causal diagnoses, and typed patches. Every response is validated before use. The model may not declare a design valid, edit compiled coordinates or export bytes, suppress a verifier failure, override deterministic ranking, or expose chain-of-thought.
+GPT-5.6 Sol may author a normalized intent, compact bounded fabrication plans, semantic critiques, causal diagnoses, and typed patches. Pure code expands each plan into the canonical fabrication program before compilation. Every response is validated before use. The model may not declare a design valid, edit compiled coordinates or export bytes, suppress a verifier failure, override deterministic ranking, or expose chain-of-thought.
 
 ## Canonical contracts
 
 Keep versioned Zod and TypeScript definitions for:
 
 - `FabricationIntentV1`
+- `FabricationPlanV1`
 - `FabricationProgramV1`
 - `FabricationIRV1`
 - `VerificationReportV2`

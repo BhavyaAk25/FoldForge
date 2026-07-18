@@ -12,7 +12,9 @@ Do not record the final live-prompt version until all of these are true on the e
 - the deployed build SHA equals the repository commit, the eval report records that same build SHA, and the video visibly shows it; and
 - the final ledger remains below the builder's $4.00 authorization.
 
-Current evidence does **not** meet that gate: the paid intent contract passed 3/3 and the guarded complex intent passed 18/18 explicit checks, but the background program proposal did not settle. Two chained ledgers preserve a conservative cumulative $2.722365 charge, leaving $0.977635 under the executable cap, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
+Current evidence does **not** meet that gate: on exact paid build `1041e13`, the retained intent summary records 3/3, though its raw report was later overwritten; the preserved guarded readiness report records 18/18 explicit checks. The first program response was incomplete with `max_output_tokens` and rejected as `budget_usage_invalid`. Zero programs, candidates, repairs, or exports were produced. Three chained ledgers preserve a conservative cumulative $3.6134275 charge, leaving only $0.0865725 under the pre-request reservation ceiling; no further paid request is permitted under that ledger, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
+
+For the current submission, skip the live-prompt setup and final script below. Record only the disclosed prepared-example path under **Practice the current deployed build**.
 
 ## Set up the recording
 
@@ -39,7 +41,7 @@ Use an unseen supported prompt, not a starter or saved example:
 
 **Screen:** Type the prompt. Keep **Live generation ready** visible and select **Create 3 designs**.
 
-**Say:** “GPT-5.6 Sol interprets this unseen brief and proposes strict fabrication programs. It explores panels, joints, tabs, slots, and motion, but it cannot declare validity, edit trusted coordinates, choose the winner, or write export bytes.”
+**Say:** “GPT-5.6 Sol interprets this unseen brief and proposes compact typed fabrication plans. Deterministic code expands each plan into the canonical program. Sol can explore panels, joints, tabs, slots, and motion, but it cannot declare validity, edit trusted coordinates, choose the winner, or write export bytes.”
 
 ### 0:34–0:57 — deterministic proof
 
@@ -69,7 +71,7 @@ Use an unseen supported prompt, not a starter or saved example:
 
 **Screen:** Show the four judging criteria mapped to evidence in `README.md`, the current `EVALS.md` results, then the sanitized ledger summary. Never show prompts, model bodies, response IDs, environment files, or credentials.
 
-**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Code rejected all 560 hard-invalid mutations, repaired 40 measured failures, and passed 338 tests plus seven browser flows. Paid Sol testing has a $3.70 executable cap: worst-case cost is reserved before each call, and uncertain usage seals an immutable ledger instead of silently retrying.”
+**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Code rejected all 560 hard-invalid mutations, repaired 40 measured failures, and passed 352 tests plus seven browser flows. Paid Sol testing uses a $3.70 pre-request reservation ceiling: worst-case cost is reserved before each call, actual usage is recorded, and uncertain usage seals the ledger instead of silently retrying.”
 
 ### 2:28–2:50 — Codex, human decisions, and close
 

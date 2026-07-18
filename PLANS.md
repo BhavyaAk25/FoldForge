@@ -2,38 +2,33 @@
 
 ## Current state
 
-The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. The latest paid Sol intent contract passed 3/3 cases, and the guarded complex intent preserved all 18 explicit requirements. Its background program proposal did not settle before the guarded deadline; the second chained continuation is sealed at **$2.722365**. No live program, repair, artifact, or end-to-end success is claimed.
+The prompt-to-fabrication pivot is implemented. The deterministic software, offline/model-contract evaluations, browser experience, exports, and live security boundary are complete. On exact paid build `1041e13`, the retained Sol intent summary records 3/3 cases, and the guarded readiness intent preserved all 18 explicit requirements. The raw compiler report was later overwritten by an offline run, so that result is summary-only; future paid reports use immutable run-specific paths. The first program response was incomplete with `max_output_tokens` and rejected as `budget_usage_invalid`; the third chained continuation is sealed at **$3.6134275**. No live program, repair, artifact, or end-to-end success is claimed, and no further paid request is permitted under the $3.70 pre-request reservation ceiling.
 
-| Milestone                                                           | Status     | Evidence                                                               |
-| ------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------- |
-| Versioned intent, program, IR, report, patch, and candidate schemas | Complete   | Strict Zod contracts and canonical round-trip tests                    |
-| Pure deterministic compiler and geometry kernel                     | Complete   | 120/120 valid controls; 0 crashes                                      |
-| Ordered verifier and kinematic sampler                              | Complete   | 0/560 hard-invalid mutations accepted                                  |
-| Candidate ranking and bounded repair                                | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted           |
-| GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                | Complete   | 0/120 export-equivalence failures; independent consumer parsers        |
-| Interactive 3D and flat-pattern controls                            | Complete   | Real motion/orbit/pan/zoom; pattern-only controls; browser-tested      |
-| Describe → Compare → Download product experience                    | Complete   | Plain-language first screen; 7/7 Chromium flows at required widths     |
-| Saved examples and understandable prompt gallery                    | Complete   | Prepared vertical-lift flower and fold-only duck plus editable prompts |
-| Hardened GPT-5.6 Sol route boundary                                 | Complete   | Strict contracts, auth, origin, caps, quotas, background, kill switch  |
-| Independent geometry/security hardening                             | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work     |
-| Live GPT-5.6 Sol behavior                                           | Partial    | Intent 3/3 and 18/18 recall; program blocked; ledger $2.722365         |
-| Submission script and documentation                                 | Complete   | Devpost-ready README, concise video script, rubric, eval evidence      |
-| Public video and `/feedback` session ID                             | User-owned | Record/upload after the live gate, then enter the primary task ID      |
+| Milestone                                                                 | Status     | Evidence                                                                  |
+| ------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------- |
+| Versioned intent, plan, program, IR, report, patch, and candidate schemas | Complete   | Strict Zod contracts and canonical round-trip tests                       |
+| Pure deterministic compiler and geometry kernel                           | Complete   | 120/120 valid controls; 0 crashes                                         |
+| Ordered verifier and kinematic sampler                                    | Complete   | 0/560 hard-invalid mutations accepted                                     |
+| Candidate ranking and bounded repair                                      | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted              |
+| GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                      | Complete   | 0/120 export-equivalence failures; independent consumer parsers           |
+| Interactive 3D and flat-pattern controls                                  | Complete   | Real motion/orbit/pan/zoom; pattern-only controls; browser-tested         |
+| Describe → Compare → Download product experience                          | Complete   | Plain-language first screen; 7/7 Chromium flows at required widths        |
+| Saved examples and understandable prompt gallery                          | Complete   | Prepared vertical-lift flower and fold-only duck plus editable prompts    |
+| Hardened GPT-5.6 Sol route boundary                                       | Complete   | Strict contracts, auth, origin, caps, quotas, background, kill switch     |
+| Independent geometry/security hardening                                   | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work        |
+| Live GPT-5.6 Sol behavior                                                 | Partial    | Intent passed; compact-plan mitigation is offline-tested, not live-proven |
+| Submission script and documentation                                       | Complete   | Devpost-ready README, concise video script, rubric, eval evidence         |
+| Public video and `/feedback` session ID                                   | User-owned | Record the honest current-state demo and enter the primary task ID        |
 
 ## What remains
 
-The remaining activation and evidence sequence is:
+The remaining release sequence is:
 
-1. Preserve the original ledger, both chained continuations, their claim/hash lineage, and every failed-run report. Do not delete, reset, or relabel the conservative cumulative $2.722365 charge.
-2. Finish offline verification and GitHub CI for the medium-reasoning, 8,000-token background-program configuration. It starts exactly one paid generation, polls only retrieval state, and cancels after 210 seconds inside the 240-second route.
-3. Use the builder's authorization for one further non-branching attempt only within the unchanged $3.70 executable cap.
-4. Create a new immutable continuation from the sealed second continuation ledger. It must carry every prior entry and charge, record the source hash, atomically reject branching, and retain the $3.70 internal cap. Point both paid runners at it with `LIVE_EVAL_LEDGER_PATH`; never edit any source ledger or claim.
-5. On that exact clean build, run the focused compiler contract only if its conservative reservation still leaves enough for a readiness case; then attempt readiness. Stop immediately if program generation fails again or the next reservation would cross the cap.
-6. Run the sealed five-case readiness suite only while the conservative budget reservation allows it. The release gate remains at least four complete end-to-end passes. Fewer attempted cases or an early budget stop is not a sealed pass.
-7. Require at least one real measured failure with a stable failure ID, measured value, limit, repairable path, grounded Sol patch, before/after hashes, and a deterministically passing full recheck. A successful run with no repair does not satisfy the demo's repair claim.
-8. Preserve the exact selected live artifact pack and run consumer checks against those bytes: SVG scale/layers/calibration, DXF units/layers plus LibreCAD, Khronos-valid GLB plus animation playback when applicable, canonical JSON/hash binding, and official-parser/GUI FOLD only when lossless.
-9. If the sealed suite passes, deploy the identical commit with Sol enabled. Verify `Live generation ready`, access, an unseen production prompt, three candidates, repair evidence, controls, downloads, build SHA, console, and metadata-only logs. If it fails, engage the kill switch and report the exact blocked state.
-10. Record and upload the public narrated video only after the deployed evidence exists. Include the private judge access code in Devpost testing instructions, the public repository and video, and the primary Codex task's `/feedback` session ID.
+1. Preserve the original ledger, all three chained continuations, their claim/hash lineage, and every failed-run report. Do not delete, reset, relabel, branch, or bypass the conservative cumulative **$3.6134275** charge.
+2. Make no further paid call under the $3.70 pre-request reservation ceiling. The remaining **$0.0865725** cannot satisfy a conservative request reservation, and the final ledger is halted with `usage_invalid`.
+3. Keep production live-disabled. The compact strict-tool plan and deterministic expander fix the observed full-program output expansion offline, but the sealed five-case gate remains unmet: zero programs, candidates, repairs, or live artifacts were produced in the final paid attempt.
+4. Preserve the deterministic and prepared-example evidence without presenting it as arbitrary-prompt Sol output. Exact live-selected SVG, DXF, GLB, JSON, or conditional FOLD consumer proof does not exist.
+5. Use the practice-only saved-example recording path unless new, separately authorized future evidence satisfies the complete truth gate. Include the public repository, video, and primary Codex task's `/feedback` session ID in the submission.
 
 No partial run is promoted to release evidence. The $4 authorization is a ceiling, not a spending target; testing stops at the $3.70 internal cap even if the five-case gate remains incomplete.
 
@@ -42,6 +37,7 @@ No calendar date blocks implementation.
 ## Completed architecture
 
 - `src/core/fabrication` is pure, deterministic, versioned, and independent of React/OpenAI.
+- GPT-5.6 authors a compact versioned geometric plan. Pure code selects referenced intent stock, supplies stable provenance and assembly bookkeeping, and expands it into the unchanged canonical program without prompt keywords or prepared-object routing.
 - The compiler lowers bounded programs into panels, joints, connectors, transforms, motion, provenance, and exact export inputs.
 - The verifier fails fast across schema, topology, geometry, connections, packing, transforms, motion, collision, semantics, and export equivalence.
 - Static designs use one canonical state. Moving designs use 201 fixed driver states plus bounded deterministic adaptive event samples.
@@ -55,7 +51,7 @@ No calendar date blocks implementation.
 - The first screen explains the outcome in plain language, shows the three-step journey, and uses named examples that describe an understandable object, purpose, material, size, and motion.
 - When live generation is disabled, the studio offers prepared flower and fold-only duck candidates that are explicitly labelled as saved and can be inspected and exported without misrepresenting them as prompt results.
 - The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.
-- Paid evaluations reserve the conservative maximum cost before each sequential request, charge provider-reported usage afterward, and keep response/token/cost metadata in the ignored selected ledger. The companion `.lock` prevents concurrent runs. Missing usage, uncertain provider failure, or a crash with a pending reservation charges the conservative maximum and seals the ledger. Program synthesis uses one background generation plus bounded retrieval polling; retrieval retries cannot create duplicate model work.
+- Paid evaluations reserve the conservative maximum cost before each sequential request, charge provider-reported usage afterward, and keep response/token/cost metadata in the ignored selected ledger. The companion `.lock` prevents concurrent runs. Missing usage, uncertain provider failure, or a crash with a pending reservation charges the conservative maximum and seals the ledger. A provider-reported overage is recorded at actual calculated cost and leaves the ledger sealed, readable, and unable to run or continue even if it exceeds the approved ceiling. Program synthesis uses one background generation plus bounded retrieval polling; retrieval retries cannot create duplicate model work.
 
 ## Deliberate scope
 

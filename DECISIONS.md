@@ -14,13 +14,13 @@ Why: a narrow, explicit language can be compiled, tested, explained, and exporte
 
 ## D-03 — Sol reasons; deterministic code decides
 
-**Accepted.** GPT-5.6 Sol may interpret the brief, propose typed programs, explain alternatives, and propose typed repair patches. Deterministic code owns normalization, geometry, kinematics, verification, ranking, patch application, canonical serialization, and exports.
+**Accepted.** GPT-5.6 Sol may interpret the brief, propose compact typed geometric plans, explain alternatives, and propose typed repair patches. Deterministic code expands plans into canonical programs and owns compilation, kinematics, verification, ranking, patch application, canonical serialization, and exports.
 
 Model output is untrusted. It cannot declare validity, suppress a failure, provide the authoritative score, or directly modify artifact bytes.
 
 ## D-04 — All external data is versioned and canonical
 
-**Accepted.** `FabricationIntentV1`, `FabricationProgramV1`, `FabricationIRV1`, `VerificationReportV2`, `ProgramPatchV1`, and `CandidateV2` are explicit contracts. Unknown versions fail closed. Canonical serialization fixes ordering and numeric representation so hashes, repeatability, cache keys, and export provenance are testable.
+**Accepted.** `FabricationIntentV1`, `FabricationPlanV1`, `FabricationProgramV1`, `FabricationIRV1`, `VerificationReportV2`, `ProgramPatchV1`, and `CandidateV2` are explicit contracts. Unknown versions fail closed. Canonical serialization fixes ordering and numeric representation so hashes, repeatability, cache keys, and export provenance are testable.
 
 ## D-05 — Verification is fail-fast and precedes scoring
 
@@ -46,7 +46,7 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-10 — Live AI is opt-in and fail-closed
 
-**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no model-generation retries, and a statically declared 240-second route duration. Intent and repair remain synchronous. Large program synthesis starts one `background:true` Response with medium reasoning and an 8,000-token combined reasoning/output ceiling, then polls it for at most 210 seconds; only retrieval calls may retry. This follows OpenAI's documented long-running Responses pattern without creating duplicate generations or risking truncated strict JSON. Secrets remain server-only. Exact values and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
+**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no model-generation retries, and a statically declared 240-second route duration. Intent and repair remain synchronous. Large planning starts one `background:true` Response with medium reasoning and an 8,000-token combined reasoning/output ceiling, then polls it for at most 210 seconds; only retrieval calls may retry. Sol must call one strict compact-plan function; missing, duplicate, malformed, incomplete, or invalid calls fail closed. Secrets remain server-only. Exact values, paid evidence, and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
 
 ## D-11 — Privacy claims include provider retention limits
 
@@ -68,10 +68,14 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 **Accepted.** Fold edges cannot also be cut, tab roots remain attached, slots stay inside their source panel, holes need a safe ligament and useful net material, and joint/coupling connectors must be complete reciprocal pairs that physically span the bodies and axes they claim to constrain. Slot width clears tab stock thickness; slot length clears the widest full-tab span along its root tangent; declared pair clearance is exact; insertion axes and assembled-frame tab/slot spans must align. Slot material is removed consistently in verification, scoring, collision meshes, and GLB. GLB embeds the exact canonical fabrication profile, paths, connectors, hierarchy, and code-derived motion; source equivalence regenerates the complete canonical artifact and compares every byte, so caller-authored or mutated geometry and animation are rejected.
 
+## D-16 — Sol authors a compact plan; code expands the canonical program
+
+**Accepted after the final paid truncation.** The full canonical program duplicated intent fields and required verbose deterministic bookkeeping. Sol now authors only the bounded geometry and mechanism choices in `FabricationPlanV1`. Pure code selects referenced intent stock, preserves body transforms and semantic bindings, creates stable program provenance and assembly operations, and validates the expanded `FabricationProgramV1`. The authenticated API returns the provider model ID and response ID plus a canonical plan hash and expander version; candidate provenance binds those fields into the exact JSON/export record while the visible trace keeps plan authorship under `AI` and expansion under `CODE`. The expander does not inspect prompt text or select prepared examples. This reduces output size without hiding a template or weakening the canonical verifier. The mitigation is offline-tested and remains live-unproven.
+
 ## Rejected alternatives
 
 - **Rename the existing stand as a generalized compiler:** dishonest and unsupported by the source or evals.
-- **Model-authored coordinates or export bytes:** breaks the deterministic authority and makes repair/equivalence unverifiable.
+- **Model-authored compiled coordinates or export bytes:** breaks the deterministic authority and makes repair/equivalence unverifiable. Normalized untrusted plan geometry remains allowed and must compile and verify.
 - **General closed-loop mechanism solving:** outside the bounded graph and verification budget.
 - **Soft penalties for collision or closure:** allows invalid designs to rank; hard failures remain disqualifying.
 - **Canned prompt-to-template routing:** undermines unseen-prompt evidence and Quality of the Idea.
