@@ -12,7 +12,7 @@ The prompt-to-fabrication pivot is implemented. The deterministic software, offl
 | Candidate ranking and bounded repair                                      | Complete   | 40/40 repaired; 20/20 infeasible; 0/120 bad patches accepted              |
 | GLB, SVG, DXF, JSON, and profile-scoped FOLD exports                      | Complete   | 0/120 export-equivalence failures; independent consumer parsers           |
 | Interactive 3D and flat-pattern controls                                  | Complete   | Real motion/orbit/pan/zoom; pattern-only controls; browser-tested         |
-| Describe → Compare → Download product experience                          | Complete   | Plain-language first screen; 7/7 Chromium flows at required widths        |
+| Describe → Inspect → Download product experience                          | Complete   | Single-design live flow; rendered Chromium coverage at required widths    |
 | Saved examples and understandable prompt gallery                          | Complete   | Prepared vertical-lift flower and fold-only duck plus editable prompts    |
 | Hardened GPT-5.6 Sol route boundary                                       | Complete   | Strict contracts, auth, origin, caps, quotas, background, kill switch     |
 | Independent geometry/security hardening                                   | Complete   | Source-bound cuts/GLB mesh bytes, connector material, bounded work        |
@@ -48,6 +48,7 @@ No calendar date blocks implementation.
 - Repair accepts one to three allowlisted operations, cites actual report fields and repairable paths, blocks duplicate canonical input, and stops after five cycles.
 - Only valid candidates are scored, displayed, selected, finalized, or exported.
 - The studio keeps the 3D view, flat pattern, program, motion, report, selection, and downloads on the same candidate IR.
+- The public live studio requests one design plan and stops after that design passes deterministic verification; it never discards a valid first result because a later alternative failed.
 - The first screen explains the outcome in plain language, shows the three-step journey, and uses named examples that describe an understandable object, purpose, material, size, and motion.
 - When live generation is disabled, the studio offers prepared flower and fold-only duck candidates that are explicitly labelled as saved and can be inspected and exported without misrepresenting them as prompt results.
 - The live boundary validates same-origin JSON, access, body size, strict schemas, quotas, token reservations, concurrency, and kill-switch state before model use. Public deterministic compile/export work is separately protected by a verifier work budget and best-effort process-local rate/concurrency gates.

@@ -109,19 +109,19 @@ export function FoldForgeResults({
         <p className={styles.eyebrow}>
           {experienceMode === "saved"
             ? "Saved example · prepared in advance"
-            : "All designs passed our checks"}
+            : "Design passed our checks"}
         </p>
         <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
           {experienceMode === "saved"
             ? `Explore the ${selected.label.toLowerCase()}.`
-            : "Compare your designs."}
+            : "Inspect your design."}
         </h2>
         <p className={styles.sectionIntro}>
           {experienceMode === "saved"
             ? hasMotion
               ? "This example is not a response to your current prompt. It is a prepared design you can inspect, move, and export while live generation is off."
               : "This example is not a response to your current prompt. It is a prepared static crease-pattern study you can inspect, rotate, and export; no open-and-close motion is modeled."
-            : "Choose a design, inspect the 3D result and flat pattern, then download the one you want to make."}
+            : "Inspect the 3D result and flat pattern, then download the files you need."}
         </p>
       </div>
 
@@ -305,8 +305,8 @@ export function FoldForgeResults({
                     ? `Expanded the plan with deterministic expander ${selected.provenance.planExpanderVersion}, compiled the geometry, and ran `
                     : "Compiled the geometry and ran "}
                   {selected.verification.checks.length}
-                  {" checks"}, applied any allowed patch, and ranked only valid
-                  candidates.
+                  {" checks"}, applied any allowed patch, and accepted the
+                  design only after every hard check passed.
                 </span>
               </li>
             </ol>

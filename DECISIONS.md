@@ -28,9 +28,9 @@ Model output is untrusted. It cannot declare validity, suppress a failure, provi
 
 No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.1 mm closure, zero collision, 0.5 mm requested moving clearance, 2 degrees requested angle error, and 1 mm requested travel error, with no branch jump or dead driver state.
 
-## D-06 — Candidate variety is program-level, not cosmetic
+## D-06 — The public forge returns one verified design
 
-**Accepted.** Show at most three verified candidates oriented toward fabrication efficiency, mechanical simplicity, and visual expression. When the feasible set permits it, at least two must differ in topology or coupling structure rather than color, labels, or tiny dimensions. “When feasible” is reported, never fabricated.
+**Accepted, revised after the first production box run.** The public live workflow requests one Sol plan, compiles it, applies at most five grounded repair cycles, and shows it only after every hard check passes. It does not request alternatives after a valid design is available. This bounds latency and paid usage and prevents a later malformed alternative from erasing an already verified result. The core contracts retain candidate ordinals for deterministic fixtures and evaluation tooling, but the user-facing forge is intentionally single-design.
 
 ## D-07 — Repair is typed, local, bounded, and fully rechecked
 
@@ -46,7 +46,7 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-10 — Live AI is opt-in and fail-closed
 
-**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no model-generation retries, and a statically declared 240-second route duration. Intent and repair remain synchronous. Large planning starts one `background:true` Response with medium reasoning and an 8,000-token combined reasoning/output ceiling, then polls it for at most 210 seconds; only retrieval calls may retry. Sol must call one strict compact-plan function; missing, duplicate, malformed, incomplete, or invalid calls fail closed. Secrets remain server-only. Exact values, paid evidence, and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
+**Accepted, revised after live evidence.** `ENABLE_LIVE_OPENAI` defaults to `false`. Live routes require a valid short-lived `__Host-` HttpOnly access cookie, same-origin or Fetch Metadata checks, route-specific body caps, per-session request and token quotas, bounded concurrency, no model-generation retries, and a statically declared 240-second route duration. Intent and repair remain synchronous. Large planning starts one `background:true` Response with low reasoning and an 8,000-token combined reasoning/output ceiling, then polls it for at most 210 seconds; only retrieval calls may retry. Sol must call one strict compact-plan function; missing, duplicate, malformed, incomplete, or invalid calls fail closed. Secrets remain server-only. Exact values, paid evidence, and current implementation gaps are in [PRIVACY.md](./PRIVACY.md).
 
 ## D-11 — Privacy claims include provider retention limits
 

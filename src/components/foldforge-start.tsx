@@ -19,7 +19,7 @@ export interface ExamplePrompt {
 }
 
 export const DUCK_CREASE_PATTERN_PROMPT =
-  "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only, avoid glue, and show me three different layouts.";
+  "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.";
 
 const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   {
@@ -31,7 +31,7 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     imageAlt:
       "Prompt-inspiration concept render of a paper playing-card box with its tray partly open",
     prompt:
-      "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible. Show me three ways to build it.",
+      "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible.",
   },
   {
     id: "pop-up-flower-card",
@@ -43,7 +43,7 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     imageAlt:
       "Prompt-inspiration concept render of an open paper card with a pink flower rising from its center",
     prompt:
-      "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+      "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope.",
     savedActionLabel: "Open vertical-lift study",
     savedExampleId: "flower",
   },
@@ -112,7 +112,7 @@ export function FoldForgeStart({
           </h1>
           <p>
             {liveGenerationAvailable
-              ? "Describe something made from paper or thin cardboard. FoldForge creates three checked designs, shows how they assemble, and gives you the cutting pattern."
+              ? "Describe something made from paper or thin cardboard. FoldForge creates one checked design, shows how it assembles, and gives you the cutting pattern."
               : "Live AI generation is off. Open a prepared study to inspect its motion, cutting pattern, checks, and fabrication files."}
           </p>
           <ol className={styles.processSteps} aria-label="How FoldForge works">
@@ -122,7 +122,7 @@ export function FoldForgeStart({
             </li>
             <li>
               <span>2</span>
-              Compare designs
+              Inspect the design
             </li>
             <li>
               <span>3</span>
@@ -157,7 +157,7 @@ export function FoldForgeStart({
               }
               onClick={onCreate}
             >
-              {busy ? "Creating designs…" : "Create 3 designs"}
+              {busy ? "Creating design…" : "Create design"}
             </button>
             <button
               className={styles.secondaryAction}

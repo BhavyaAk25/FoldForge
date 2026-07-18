@@ -8,15 +8,15 @@
 
 ## What you can try now
 
-The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On exact paid build `1041e13`, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. The first program response was incomplete after reaching the combined reasoning/output ceiling, so it was rejected before validation. There is still no claim of a live prompt-to-artifact success.
+The deployed build accepts a bounded paper-design prompt through GPT-5.6 Sol, requests one compact design plan, verifies or repairs it with deterministic code, and shows the result only after every hard check passes. Prepared deterministic examples remain available for immediate inspection without a model call.
 
 To understand the product in under a minute:
 
 1. Open the [live app](https://foldforge.vercel.app).
-2. Select **Explore a prepared vertical-lift study**.
-3. Use **Lowered** and **Raised**, drag the 3D view, and switch to **Cut-and-fold pattern**.
-4. Download SVG, DXF, GLB, or JSON and compare the selected candidate hash.
-5. Open **Static duck crease pattern** to see why a static fold-only design has no motion controls and can offer FOLD.
+2. Enter the demo code supplied with the judge instructions.
+3. Describe one bounded paper object and select **Create design**.
+4. Inspect the checked 3D result and cut-and-fold pattern, then download SVG, DXF, GLB, or JSON.
+5. For an instant offline path, open the prepared vertical-lift or static duck study.
 
 The photorealistic concept renders are labelled as prompt inspiration, and the inspectable examples are labelled as prepared. Opening one never pretends that the text box was interpreted or that a concept render is its verified geometry.
 

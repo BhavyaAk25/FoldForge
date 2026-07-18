@@ -19,7 +19,6 @@ import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
 
 interface StudioMockOptions {
-  readonly duplicateSecondFingerprint?: boolean;
   readonly liveAiEnabled?: boolean;
   readonly malformedIntent?: boolean;
   readonly requireAccessOnce?: boolean;
@@ -90,7 +89,7 @@ const respondJson = (
 
 const programFor = (ordinal: number): FabricationProgramV1 => {
   const base = fixtureProgram();
-  const labels = ["Direct fold", "Repaired narrow wing", "Wide fold"];
+  const labels = ["Repaired narrow wing", "Direct fold", "Wide fold"];
   const suffixes = ["a", "b", "c"];
   const panels = base.blueprint.panels.map((panel) => {
     if (panel.panelId === "panel-base") {
@@ -108,7 +107,7 @@ const programFor = (ordinal: number): FabricationProgramV1 => {
         ],
       };
     }
-    return ordinal === 2 && panel.panelId === "panel-wing"
+    return ordinal === 1 && panel.panelId === "panel-wing"
       ? { ...panel, widthMm: 0.5 }
       : panel;
   });
@@ -223,10 +222,6 @@ const installStudioMocks = async (
       const body = request.postDataJSON() as ProgramRequestBody;
       state.programRequests.push(body);
       state.endpointOrder.push(`programs:${body.candidateOrdinal}`);
-      const fingerprintOrdinal =
-        options.duplicateSecondFingerprint && body.candidateOrdinal === 2
-          ? 1
-          : body.candidateOrdinal;
       await respondJson(route, {
         proposal: {
           diversityClaim: `Topology ${body.candidateOrdinal} uses a distinct panel program.`,
@@ -238,7 +233,7 @@ const installStudioMocks = async (
             expanderVersion: "2",
           },
         },
-        programStructureFingerprint: String(fingerprintOrdinal).repeat(64),
+        programStructureFingerprint: String(body.candidateOrdinal).repeat(64),
       });
       return;
     }
@@ -352,7 +347,7 @@ const installStudioMocks = async (
   return state;
 };
 
-test("runs access, sequential forge, real repair evidence, checkpoint, and exact exports", async ({
+test("runs access, single-design forge, real repair evidence, checkpoint, and exact exports", async ({
   page,
 }) => {
   const state = await installStudioMocks(page, { requireAccessOnce: true });
@@ -365,7 +360,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await prompt.fill(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
 
   const access = page.getByLabel("Demo access code");
   await expect(access).toBeVisible();
@@ -375,36 +370,29 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await expect(
     page.getByText("Access granted.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Compare your designs." }),
+    page.getByRole("heading", { name: "Inspect your design." }),
   ).toBeFocused();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   await expect(page.getByTestId("fabrication-3d-preview")).toBeVisible();
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
-    ["two-panel-fold-a"],
-    ["two-panel-fold-a", "two-panel-fold-b"],
   ]);
-  expect(state.endpointOrder.slice(0, 11)).toEqual([
+  expect(state.endpointOrder.slice(0, 7)).toEqual([
     "health",
     "intent:access-required",
     "access",
     "intent",
     "programs:1",
     "compile:candidate-1-two-panel-fold-a",
-    "programs:2",
-    "compile:candidate-2-two-panel-fold-b",
-    "repair:candidate-2-two-panel-fold-b:1",
-    "programs:3",
-    "compile:candidate-3-two-panel-fold-c",
+    "repair:candidate-1-two-panel-fold-a:1",
   ]);
   expect(state.intentPrompts.at(-1)).toBe(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
 
-  await page.getByTestId("candidate-card").nth(1).click();
   await expect(
     page.getByText("What FoldForge fixed", { exact: true }),
   ).toBeVisible();
@@ -515,18 +503,18 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     "json",
   ]);
   for (const request of state.exportRequests) {
-    expect(request.candidate.candidateId).toBe("candidate-2-two-panel-fold-b");
+    expect(request.candidate.candidateId).toBe("candidate-1-two-panel-fold-a");
     expect(request.candidate.selectionStatus).toBe("selected");
     expect(request.candidate.program.programId).toBe(
-      "program-winged-display-b",
+      "program-winged-display-a",
     );
     expect(request.candidate.provenance.appliedPatchIds).toEqual([
       "patch-wing-width-1",
     ]);
     expect(request.candidate.provenance).toMatchObject({
       modelId: "gpt-5.6-sol",
-      modelResponseId: "resp-e2e-program-2",
-      modelPlanHash: "2".repeat(64),
+      modelResponseId: "resp-e2e-program-1",
+      modelPlanHash: "1".repeat(64),
       planExpanderVersion: "2",
     });
   }
@@ -534,18 +522,18 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v5"),
       ),
     )
     .not.toBeNull();
   const checkpoint = await page.evaluate(() =>
-    window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
+    window.localStorage.getItem("foldforge.studio.checkpoint.v5"),
   );
   expect(checkpoint).not.toContain("e2e-secret");
 
   await page.reload();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
-  await expect(page.getByTestId("candidate-card").nth(1)).toHaveAttribute(
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
+  await expect(page.getByTestId("candidate-card")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -556,22 +544,6 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   ).toBeVisible();
   expect(state.accessCodes).toEqual(["e2e-secret"]);
   expect(state.unexpectedPaths).toEqual([]);
-});
-
-test("rejects duplicate program fingerprints before compile", async ({
-  page,
-}) => {
-  const state = await installStudioMocks(page, {
-    duplicateSecondFingerprint: true,
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(2);
-  expect(state.compileRequests.map((request) => request.candidateId)).toEqual([
-    "candidate-1-two-panel-fold-a",
-    "candidate-3-two-panel-fold-c",
-  ]);
-  expect(state.repairRequests).toEqual([]);
 });
 
 test("keeps prompt examples honest and provides a saved result when live generation is off", async ({
@@ -604,10 +576,10 @@ test("keeps prompt examples honest and provides a saved result when live generat
     .click();
   await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
-    "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+    "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope.",
   );
   await expect(
-    page.getByRole("button", { name: "Create 3 designs" }),
+    page.getByRole("button", { name: "Create design" }),
   ).toBeDisabled();
   await expect(
     page.getByText(
@@ -709,7 +681,7 @@ test("keeps prompt examples honest and provides a saved result when live generat
 test("fails safely on malformed strict API data", async ({ page }) => {
   await installStudioMocks(page, { malformedIntent: true });
   await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
   await expect(
     page.getByRole("alert").filter({
       hasText: "could not be checked safely",
@@ -729,8 +701,8 @@ test("has no horizontal overflow with results at required widths", async ({
   await installStudioMocks(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
 
   for (const width of [390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -773,7 +745,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
   await duckPromptButton.focus();
   await page.keyboard.press("Enter");
   await expect(prompt).toHaveValue(
-    "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only, avoid glue, and show me three different layouts.",
+    "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.",
   );
 
   const styles = await page.evaluate(() => {
@@ -808,7 +780,7 @@ test("has no serious accessibility violations before or after forging", async ({
 
   expect(await seriousViolations()).toEqual([]);
 
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   expect(await seriousViolations()).toEqual([]);
 });

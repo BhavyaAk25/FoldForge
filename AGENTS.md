@@ -64,7 +64,7 @@ Hard kinematic limits are a closure residual of at most 0.1 mm, no collision, at
 
 ## Candidate and repair rules
 
-Generate at most three visible candidates, aimed at fabrication efficiency, mechanical simplicity, and visual expression. At least two must be topology-distinct when the intent admits more than one topology. Rank only verified candidates.
+The public live forge generates one visible candidate per prompt. This keeps the paid path short and prevents a later alternative from discarding an already verified design. The candidate is shown only after deterministic verification passes; a hard-invalid candidate can never be displayed, recommended, finalized, or exported as valid.
 
 The repair loop permits five cycles and at most three typed patch operations per cycle. Reject unknown paths, unrelated changes, invalid references, out-of-range values, repeated canonical tool inputs, and patches that change the user intent. Recompile and rerun every hard check after each patch. Exhaustion returns a clear infeasible result.
 

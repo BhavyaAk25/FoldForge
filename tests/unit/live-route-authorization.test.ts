@@ -116,17 +116,17 @@ describe("live route security policy", () => {
     });
     expect(LIVE_OPERATION_POLICIES.repair).toMatchObject({
       maximumOutputTokens: 2_500,
-      maximumRequestsPerHour: 15,
+      maximumRequestsPerHour: 5,
     });
     expect(LIVE_OPERATION_POLICIES.finalize).toMatchObject({
       maximumOutputTokens: 2_000,
-      maximumRequestsPerHour: 20,
+      maximumRequestsPerHour: 2,
     });
     expect(LIVE_SESSION_LIMITS).toEqual({
       windowMs: 60 * 60 * 1_000,
-      maximumRequests: 30,
-      maximumReservedTokens: 360_000,
-      maximumConcurrentPerSession: 2,
+      maximumRequests: 10,
+      maximumReservedTokens: 140_000,
+      maximumConcurrentPerSession: 1,
       maximumConcurrentGlobal: 8,
     });
   });
@@ -195,7 +195,7 @@ describe("live route security policy", () => {
   it("enforces repair and combined hourly request ceilings", async () => {
     const repairAuthorizer = new LiveRouteAuthorizer();
     const repairToken = createAccessToken();
-    for (let index = 0; index < 15; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const context = await expectAuthorized(
         authorize(repairAuthorizer, repairToken, "repair"),
       );
@@ -209,20 +209,14 @@ describe("live route security policy", () => {
 
     const combinedAuthorizer = new LiveRouteAuthorizer();
     const combinedToken = createAccessToken();
-    for (let index = 0; index < 20; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       const context = await expectAuthorized(
         authorize(combinedAuthorizer, combinedToken, "compile"),
       );
       context.lease.release();
     }
-    for (let index = 0; index < 10; index += 1) {
-      const context = await expectAuthorized(
-        authorize(combinedAuthorizer, combinedToken, "finalize"),
-      );
-      context.lease.release();
-    }
     await expectDenied(
-      authorize(combinedAuthorizer, combinedToken, "finalize"),
+      authorize(combinedAuthorizer, combinedToken, "compile"),
       429,
       "REQUEST_QUOTA_EXCEEDED",
     );
@@ -232,7 +226,7 @@ describe("live route security policy", () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     const context = await expectAuthorized(
-      authorize(authorizer, token, "compile", 357_000, 3_000),
+      authorize(authorizer, token, "compile", 137_000, 3_000),
     );
     context.lease.release();
     await expectDenied(
@@ -242,7 +236,7 @@ describe("live route security policy", () => {
     );
   });
 
-  it("admits one complete three-candidate repair workflow", async () => {
+  it("admits one complete single-design repair workflow", async () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     const reservation = (
@@ -257,10 +251,8 @@ describe("live route security policy", () => {
     const reservations: readonly (readonly [LiveOperation, number, number])[] =
       [
         reservation("intent", 4_000, 3_000),
-        ...Array.from({ length: 3 }, () =>
-          reservation("programs", 8_192, 8_000),
-        ),
-        ...Array.from({ length: 15 }, () =>
+        reservation("programs", 8_192, 8_000),
+        ...Array.from({ length: 5 }, () =>
           reservation("repair", 16_384, 2_500),
         ),
         reservation("finalize", 12_000, 2_000),
@@ -274,18 +266,16 @@ describe("live route security policy", () => {
     }
   });
 
-  it("bounds active work to two per session and eight globally", async () => {
+  it("bounds active work to one per session and eight globally", async () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     const first = await expectAuthorized(authorize(authorizer, token));
-    const second = await expectAuthorized(authorize(authorizer, token));
     await expectDenied(
       authorize(authorizer, token),
       429,
       "TOO_MANY_ACTIVE_REQUESTS",
     );
     first.lease.release();
-    second.lease.release();
 
     const contexts = [];
     for (let index = 0; index < 8; index += 1) {
@@ -320,9 +310,7 @@ describe("live route security policy", () => {
     ).rejects.toThrow("model call failed");
 
     const first = await expectAuthorized(authorize(authorizer, token));
-    const second = await expectAuthorized(authorize(authorizer, token));
     first.lease.release();
-    second.lease.release();
   });
 
   it("fails closed without disclosing why live service is unavailable", async () => {

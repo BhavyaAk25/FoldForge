@@ -73,7 +73,7 @@ Repair fixtures cover packing, connector clearance, and motion. Adversarial patc
 | Keyboard focus and reduced motion                       | 1/1                            | Pass   |
 | Axe serious or critical violations, before/after result | 0                              | Pass   |
 
-The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, conditional 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 352 passing tests across 50 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
+The browser suite has six passing Chromium tests. It includes the single-design live flow, the three named prompts, live-off disclosure, prepared flower and duck results, conditional 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The rendered review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
 
 ### External export-consumer checks
 

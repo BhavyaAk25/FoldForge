@@ -51,7 +51,7 @@ import styles from "./foldforge-app.module.css";
 type StudioPhase = "idle" | "intent" | "programs" | "repair" | "ready";
 type ExperienceMode = "live" | "saved";
 
-const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v4";
+const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v5";
 const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const COMPILER_VERSION = "foldforge-fabrication-v1";
 const BASE_SEED = 20_260_714;
@@ -327,123 +327,110 @@ export function FoldForgeApp() {
         return;
       }
 
-      const usedTopologyIds: string[] = [];
-      const fingerprints = new Set<string>();
-      const accepted: CandidateV2[] = [];
       const evidenceByCandidate: Record<string, RepairEvidence[]> = {};
+      const ordinal = 1;
+      setPhase("programs");
+      setStatusMessage("Creating your design…");
+      const generated = await postJson(
+        "/api/programs",
+        {
+          intent: nextIntent,
+          candidateOrdinal: ordinal,
+          usedTopologyIds: [],
+        },
+        ProgramsApiResponseSchema,
+      );
 
-      for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
-        setPhase("programs");
-        setStatusMessage(`Creating design ${ordinal} of 3…`);
-        const generated = await postJson(
-          "/api/programs",
+      const candidateId = candidateIdFor(ordinal, generated.proposal.program);
+      let currentProgram = generated.proposal.program;
+      let evaluation = await postJson(
+        "/api/compile",
+        { intent: nextIntent, program: currentProgram, candidateId },
+        CompileApiResponseSchema,
+      );
+      const evidence: RepairEvidence[] = [];
+      const appliedPatchIds: string[] = [];
+      let repairCycle = 0;
+      let passed = evaluation.status === "passed";
+
+      for (
+        let cycle = 1;
+        evaluation.status === "invalid" && cycle <= 5;
+        cycle += 1
+      ) {
+        setPhase("repair");
+        setStatusMessage("Checking and improving your design…");
+        const failure =
+          evaluation.report.failures.find(
+            (entry) => entry.severity === "hard",
+          ) ?? evaluation.report.failures[0];
+        const repaired = await postJson(
+          "/api/repair",
           {
             intent: nextIntent,
-            candidateOrdinal: ordinal,
-            usedTopologyIds,
-          },
-          ProgramsApiResponseSchema,
-        );
-        usedTopologyIds.push(generated.proposal.program.topologyId);
-        if (fingerprints.has(generated.programStructureFingerprint)) continue;
-        fingerprints.add(generated.programStructureFingerprint);
-
-        const candidateId = candidateIdFor(ordinal, generated.proposal.program);
-        let currentProgram = generated.proposal.program;
-        let evaluation = await postJson(
-          "/api/compile",
-          { intent: nextIntent, program: currentProgram, candidateId },
-          CompileApiResponseSchema,
-        );
-        const evidence: RepairEvidence[] = [];
-        const appliedPatchIds: string[] = [];
-        let repairCycle = 0;
-        let passed = evaluation.status === "passed";
-
-        for (
-          let cycle = 1;
-          evaluation.status === "invalid" && cycle <= 5;
-          cycle += 1
-        ) {
-          setPhase("repair");
-          setStatusMessage(`Checking and improving design ${ordinal}…`);
-          const failure =
-            evaluation.report.failures.find(
-              (entry) => entry.severity === "hard",
-            ) ?? evaluation.report.failures[0];
-          const repaired = await postJson(
-            "/api/repair",
-            {
-              intent: nextIntent,
-              program: currentProgram,
-              candidateId,
-              repairCycle: cycle,
-            },
-            RepairApiResponseSchema,
-          );
-          if (
-            repaired.patch &&
-            (repaired.status === "passed" ||
-              repaired.status === "still_invalid")
-          ) {
-            evidence.push({
-              cycle,
-              beforeFailureId: failure?.failureId ?? "verification.failure",
-              beforeFailureMessage:
-                failure?.message ?? "A hard verifier check failed.",
-              patch: repaired.patch,
-              result: repaired.status,
-            });
-            appliedPatchIds.push(repaired.patch.patchId);
-          }
-          if (repaired.status === "infeasible") break;
-          currentProgram = repaired.program;
-          repairCycle = cycle;
-          if (repaired.status === "passed") {
-            passed = true;
-            break;
-          }
-          if (!repaired.ir || !repaired.report || !repaired.score) break;
-          evaluation = {
-            status: "invalid",
+            program: currentProgram,
             candidateId,
-            ir: repaired.ir,
-            report: repaired.report,
-            score: repaired.score,
-          };
-        }
-
-        if (!passed) continue;
-        const candidate = buildCandidate(
-          candidateId,
-          nextIntent,
-          currentProgram,
-          ordinal,
-          generatedAtIso,
-          appliedPatchIds,
-          repairCycle,
-          generated.proposal.provenance,
+            repairCycle: cycle,
+          },
+          RepairApiResponseSchema,
         );
-        if (!candidate) continue;
-        accepted.push(candidate);
-        if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
+        if (
+          repaired.patch &&
+          (repaired.status === "passed" || repaired.status === "still_invalid")
+        ) {
+          evidence.push({
+            cycle,
+            beforeFailureId: failure?.failureId ?? "verification.failure",
+            beforeFailureMessage:
+              failure?.message ?? "A hard verifier check failed.",
+            patch: repaired.patch,
+            result: repaired.status,
+          });
+          appliedPatchIds.push(repaired.patch.patchId);
+        }
+        if (repaired.status === "infeasible") break;
+        currentProgram = repaired.program;
+        repairCycle = cycle;
+        if (repaired.status === "passed") {
+          passed = true;
+          break;
+        }
+        if (!repaired.ir || !repaired.report || !repaired.score) break;
+        evaluation = {
+          status: "invalid",
+          candidateId,
+          ir: repaired.ir,
+          report: repaired.report,
+          score: repaired.score,
+        };
       }
 
-      const ranked = rankedCandidates(accepted).slice(0, 3);
-      if (ranked.length === 0) {
-        throw new Error("No checked designs were produced.");
-      }
+      if (!passed) throw new Error("No checked design was produced.");
+      const candidate = buildCandidate(
+        candidateId,
+        nextIntent,
+        currentProgram,
+        ordinal,
+        generatedAtIso,
+        appliedPatchIds,
+        repairCycle,
+        generated.proposal.provenance,
+      );
+      if (!candidate) throw new Error("No checked design was produced.");
+      if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
+
+      const ranked = rankedCandidates([candidate]);
+      const checkedDesign = ranked[0];
+      if (!checkedDesign) throw new Error("No checked design was produced.");
       setIntent(nextIntent);
-      setCandidates(ranked);
-      setSelectedId(ranked[0]?.candidateId ?? "");
+      setCandidates([checkedDesign]);
+      setSelectedId(checkedDesign.candidateId);
       setRepairEvidence(evidenceByCandidate);
       setNarrative(null);
       shouldFocusResultsRef.current = true;
       setPhase("ready");
       setAccessState("granted");
-      setStatusMessage(
-        `${ranked.length} checked design${ranked.length === 1 ? " is" : "s are"} ready.`,
-      );
+      setStatusMessage("Your checked design is ready.");
     } catch (forgeError) {
       setPhase(candidates.length > 0 ? "ready" : "idle");
       if (!requireAccess(forgeError)) setError(formatFailure(forgeError));
