@@ -44,7 +44,7 @@ export const LIVE_OPERATION_POLICIES: Readonly<
   repair: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.repair,
     maximumOutputTokens: 2_500,
-    maximumRequestsPerHour: 6,
+    maximumRequestsPerHour: 15,
     quotaGroup: "repair",
   },
   finalize: {
@@ -58,7 +58,10 @@ export const LIVE_OPERATION_POLICIES: Readonly<
 export const LIVE_SESSION_LIMITS = {
   windowMs: 60 * 60 * 1_000,
   maximumRequests: 30,
-  maximumReservedTokens: 70_000,
+  // One complete bounded forge uses one intent, three programs, at most five
+  // repairs for each program, and one final narrative. The ceiling admits
+  // that exact workflow while the request cap prevents additional work.
+  maximumReservedTokens: 360_000,
   maximumConcurrentPerSession: 2,
   maximumConcurrentGlobal: 8,
 } as const;

@@ -116,7 +116,7 @@ describe("live route security policy", () => {
     });
     expect(LIVE_OPERATION_POLICIES.repair).toMatchObject({
       maximumOutputTokens: 2_500,
-      maximumRequestsPerHour: 6,
+      maximumRequestsPerHour: 15,
     });
     expect(LIVE_OPERATION_POLICIES.finalize).toMatchObject({
       maximumOutputTokens: 2_000,
@@ -125,7 +125,7 @@ describe("live route security policy", () => {
     expect(LIVE_SESSION_LIMITS).toEqual({
       windowMs: 60 * 60 * 1_000,
       maximumRequests: 30,
-      maximumReservedTokens: 70_000,
+      maximumReservedTokens: 360_000,
       maximumConcurrentPerSession: 2,
       maximumConcurrentGlobal: 8,
     });
@@ -195,7 +195,7 @@ describe("live route security policy", () => {
   it("enforces repair and combined hourly request ceilings", async () => {
     const repairAuthorizer = new LiveRouteAuthorizer();
     const repairToken = createAccessToken();
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 15; index += 1) {
       const context = await expectAuthorized(
         authorize(repairAuthorizer, repairToken, "repair"),
       );
@@ -232,7 +232,7 @@ describe("live route security policy", () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     const context = await expectAuthorized(
-      authorize(authorizer, token, "compile", 67_000, 3_000),
+      authorize(authorizer, token, "compile", 357_000, 3_000),
     );
     context.lease.release();
     await expectDenied(
@@ -240,6 +240,38 @@ describe("live route security policy", () => {
       429,
       "TOKEN_BUDGET_EXCEEDED",
     );
+  });
+
+  it("admits one complete three-candidate repair workflow", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const token = createAccessToken();
+    const reservation = (
+      operation: LiveOperation,
+      inputTokens: number,
+      outputTokens: number,
+    ): readonly [LiveOperation, number, number] => [
+      operation,
+      inputTokens,
+      outputTokens,
+    ];
+    const reservations: readonly (readonly [LiveOperation, number, number])[] =
+      [
+        reservation("intent", 4_000, 3_000),
+        ...Array.from({ length: 3 }, () =>
+          reservation("programs", 8_192, 8_000),
+        ),
+        ...Array.from({ length: 15 }, () =>
+          reservation("repair", 16_384, 2_500),
+        ),
+        reservation("finalize", 12_000, 2_000),
+      ];
+
+    for (const [operation, inputTokens, outputTokens] of reservations) {
+      const context = await expectAuthorized(
+        authorize(authorizer, token, operation, inputTokens, outputTokens),
+      );
+      context.lease.release();
+    }
   });
 
   it("bounds active work to two per session and eight globally", async () => {

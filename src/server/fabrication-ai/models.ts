@@ -281,7 +281,10 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
           }),
         },
       ],
-      reasoning: { effort: "medium" },
+      // Deterministic expansion and verification own correctness. Low effort
+      // leaves the model enough planning capacity while avoiding the large
+      // hidden-token overhead observed with medium-effort Sol responses.
+      reasoning: { effort: "low" },
       tools: [
         zodResponsesFunction({
           name: "submit_fabrication_plan",
