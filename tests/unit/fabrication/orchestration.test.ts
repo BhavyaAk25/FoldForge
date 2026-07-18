@@ -18,7 +18,7 @@ describe("fabrication AI orchestration", () => {
     modelId: "gpt-5.6-sol",
     modelResponseId: "resp-orchestration",
     planHash: "a".repeat(64),
-    expanderVersion: "1",
+    expanderVersion: "2",
   } as const;
 
   it("validates and traces strict prompt compilation", async () => {
@@ -166,6 +166,35 @@ describe("fabrication AI orchestration", () => {
       status: "infeasible",
       ir: null,
       report: null,
+    });
+    expect(model.diagnoseRepair).not.toHaveBeenCalled();
+  });
+
+  it("does not spend a model call on failures with no bounded repair path", async () => {
+    const model: FabricationRepairModel = {
+      diagnoseRepair: vi.fn().mockRejectedValue(new Error("must not run")),
+    };
+    const source = fixtureProgram();
+    const program = {
+      ...source,
+      blueprint: {
+        ...source.blueprint,
+        driver: source.blueprint.driver
+          ? { ...source.blueprint.driver, control: "rotate" as const }
+          : null,
+      },
+    };
+    const result = await runFabricationRepairLoop(
+      fixtureIntent(),
+      program,
+      "candidate-nonrepairable",
+      "ff_test_subject",
+      model,
+    );
+
+    expect(result).toMatchObject({
+      status: "infeasible",
+      reason: "No hard verifier failure exposes a bounded repair path.",
     });
     expect(model.diagnoseRepair).not.toHaveBeenCalled();
   });

@@ -8,10 +8,6 @@ import type {
 
 import { canonicalSerialize } from "@/core/canonical";
 import {
-  expandFabricationPlan,
-  FABRICATION_PLAN_EXPANDER_VERSION,
-} from "@/core/fabrication/planning";
-import {
   FabricationIntentV1Schema,
   ProgramPatchV1Schema,
 } from "@/core/fabrication/schemas";
@@ -22,7 +18,6 @@ import type {
   ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
-import { sha256Hex } from "@/core/sha256";
 import { getOpenAIClient } from "@/server/ai/client";
 import type {
   PaidEvalBudget,
@@ -32,11 +27,10 @@ import type {
 import {
   FabricationPlanProposalV1Schema,
   FabricationNarrativeV1Schema,
-  ProgramProposalV1Schema,
-  type FabricationPlanProposalV1,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
 } from "./contracts";
+import { fabricationProgramProposalFromResponse } from "./plan-response";
 import {
   FABRICATION_INTENT_PROMPT,
   FABRICATION_NARRATIVE_PROMPT,
@@ -161,20 +155,6 @@ class LiveEvaluationBudgetRequiredError extends Error {
   }
 }
 
-class FabricationProgramModelError extends Error {
-  constructor(
-    readonly code:
-      | "model_incomplete"
-      | "missing_plan_call"
-      | "duplicate_plan_call"
-      | "invalid_plan",
-    message: string,
-  ) {
-    super(message);
-    this.name = "FabricationProgramModelError";
-  }
-}
-
 const assertEvaluationBudget = (budget: PaidEvalBudget | null): void => {
   if (process.env.ENABLE_LIVE_OPENAI_EVALS === "true" && !budget) {
     throw new LiveEvaluationBudgetRequiredError();
@@ -212,6 +192,43 @@ export interface FabricationNarrativeModel {
     safetyIdentifier: string,
   ): Promise<FabricationNarrativeV1>;
 }
+
+export const fabricationNarrativeInput = (candidate: CandidateV2) => ({
+  candidateId: candidate.candidateId,
+  selectionStatus: candidate.selectionStatus,
+  intent: {
+    title: candidate.intent.title,
+    objectLabel: candidate.intent.objectLabel,
+    functionalGoal: candidate.intent.functionalGoal,
+    visualDescription: candidate.intent.visualDescription,
+    behavior: candidate.intent.behavior,
+    requestedSize: candidate.intent.requestedSize,
+    semanticConstraints: candidate.intent.semanticConstraints,
+  },
+  design: {
+    label: candidate.label,
+    summary: candidate.program.designSummary,
+    assemblyStrategy: candidate.program.assemblyStrategy,
+    assemblyOperations: candidate.program.blueprint.assemblyOperations,
+  },
+  verification: {
+    valid: candidate.verification.valid,
+    reportId: candidate.verification.reportId,
+    irHash: candidate.verification.irHash,
+    failedAtStage: candidate.verification.failedAtStage,
+  },
+  score: candidate.score,
+  exportMetadata: candidate.exportMetadata,
+  provenance: {
+    compilerVersion: candidate.provenance.compilerVersion,
+    modelId: candidate.provenance.modelId,
+    modelResponseId: candidate.provenance.modelResponseId,
+    modelPlanHash: candidate.provenance.modelPlanHash,
+    planExpanderVersion: candidate.provenance.planExpanderVersion,
+    appliedPatchIds: candidate.provenance.appliedPatchIds,
+    repairCycle: candidate.provenance.repairCycle,
+  },
+});
 
 export class OpenAIFabricationIntentModel implements FabricationIntentModel {
   constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
@@ -257,8 +274,20 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
 }
 
 export class OpenAIFabricationProgramModel implements FabricationProgramModel {
-  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+  constructor(
+    private readonly usageBudget: PaidEvalBudget | null = null,
+    private readonly maximumOutputTokens: number = FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
+  ) {
     assertEvaluationBudget(usageBudget);
+    if (
+      !Number.isSafeInteger(maximumOutputTokens) ||
+      maximumOutputTokens < 1_000 ||
+      maximumOutputTokens > FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS
+    ) {
+      throw new Error(
+        `Program output tokens must be an integer between 1000 and ${FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS}.`,
+      );
+    }
   }
 
   async generateProgram(
@@ -267,7 +296,7 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
     usedTopologyIds: readonly string[],
     safetyIdentifier: string,
   ): Promise<ProgramProposalV1> {
-    const maxOutputTokens = FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS;
+    const maxOutputTokens = this.maximumOutputTokens;
     const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_PROGRAM_PROMPT,
@@ -311,61 +340,11 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
       execute: (meteredRequest) =>
         runBackgroundResponse(openAI, meteredRequest),
     });
-    if (response.status !== "completed") {
-      throw new FabricationProgramModelError(
-        "model_incomplete",
-        "GPT-5.6 Sol did not complete the fabrication plan.",
-      );
-    }
-    const planCalls = (response.output ?? []).filter(
-      (item) =>
-        item.type === "function_call" &&
-        item.name === "submit_fabrication_plan",
-    );
-    const planCall = planCalls[0];
-    if (!planCall || planCall.type !== "function_call") {
-      throw new FabricationProgramModelError(
-        "missing_plan_call",
-        "GPT-5.6 Sol returned no fabrication plan call.",
-      );
-    }
-    if (planCalls.length !== 1) {
-      throw new FabricationProgramModelError(
-        "duplicate_plan_call",
-        "GPT-5.6 Sol returned more than one fabrication plan call.",
-      );
-    }
-    let proposal: FabricationPlanProposalV1;
-    try {
-      proposal = FabricationPlanProposalV1Schema.parse(
-        JSON.parse(planCall.arguments),
-      );
-    } catch {
-      throw new FabricationProgramModelError(
-        "invalid_plan",
-        "GPT-5.6 Sol returned malformed fabrication plan arguments.",
-      );
-    }
-    const expanded = expandFabricationPlan(
+    return fabricationProgramProposalFromResponse({
+      response,
       intent,
-      proposal.plan,
       candidateOrdinal,
-    );
-    if (!expanded.ok) {
-      throw new FabricationProgramModelError(
-        "invalid_plan",
-        "GPT-5.6 Sol returned an invalid fabrication plan.",
-      );
-    }
-    return ProgramProposalV1Schema.parse({
-      diversityClaim: proposal.diversityClaim,
-      program: expanded.value,
-      provenance: {
-        modelId: FOLDFORGE_MODEL,
-        modelResponseId: response.id,
-        planHash: sha256Hex(canonicalSerialize(proposal.plan)),
-        expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
-      },
+      modelId: FOLDFORGE_MODEL,
     });
   }
 }
@@ -438,7 +417,12 @@ export class OpenAIFabricationNarrativeModel implements FabricationNarrativeMode
     const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_NARRATIVE_PROMPT,
-      input: [{ role: "user", content: canonicalSerialize(candidate) }],
+      input: [
+        {
+          role: "user",
+          content: canonicalSerialize(fabricationNarrativeInput(candidate)),
+        },
+      ],
       reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(

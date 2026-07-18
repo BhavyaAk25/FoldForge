@@ -159,7 +159,7 @@ describe("POST /api/programs", () => {
         modelId: "gpt-5.6-sol",
         modelResponseId: "resp-program-route",
         planHash: "a".repeat(64),
-        expanderVersion: "1",
+        expanderVersion: "2",
       },
     });
     mocks.generateProgram.mockResolvedValueOnce(proposal);

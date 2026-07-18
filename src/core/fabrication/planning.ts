@@ -2,6 +2,7 @@ import { canonicalSerialize } from "@/core/canonical";
 import { sha256Hex } from "@/core/sha256";
 
 import { FABRICATION_LIMITS } from "./limits";
+import { normalizeFoldOnlyPlan } from "./plan-normalization";
 import {
   fabricationErr,
   parseFabricationContract,
@@ -22,16 +23,40 @@ import type {
   FabricationPlanV1,
   FabricationProgramV1,
   GeometryRefV1,
+  DriverV1,
+  JointV1,
   SheetV1,
 } from "./types";
 
-export const FABRICATION_PLAN_EXPANDER_VERSION = "1";
+export const FABRICATION_PLAN_EXPANDER_VERSION = "2";
 
 export type FabricationPlanExpansionError =
   | FabricationContractValidationError
   | FabricationLimitError
   | FabricationReferenceError
   | UnsupportedFabricationError;
+
+const normalizedDriverForJoint = (
+  driver: DriverV1 | null,
+  joints: readonly JointV1[],
+): DriverV1 | null => {
+  if (!driver) return null;
+  const drivenJoint = joints.find((joint) => joint.jointId === driver.jointId);
+  if (!drivenJoint) return driver;
+  const control: DriverV1["control"] =
+    drivenJoint.kind === "fold"
+      ? "fold"
+      : drivenJoint.kind === "revolute"
+        ? "rotate"
+        : driver.control === "pull_tab"
+          ? "pull_tab"
+          : "slide";
+  return {
+    ...driver,
+    control,
+    unit: drivenJoint.kind === "prismatic" ? "mm" : "deg",
+  };
+};
 
 const sequentialAssemblyOperations = (
   plan: FabricationPlanV1,
@@ -223,6 +248,25 @@ export const expandFabricationPlan = (
       maximum: intent.fabricationBudget.maximumSheets,
     });
   }
+  const normalizedPlanResult = normalizeFoldOnlyPlan(
+    plan,
+    intent.stockOptions,
+    intent.requestedSize,
+  );
+  if (!normalizedPlanResult.ok) {
+    return fabricationErr({
+      kind: "contract_validation",
+      contract: "FabricationPlanV1",
+      issues: [
+        {
+          code: "custom",
+          path: [...normalizedPlanResult.path],
+          message: normalizedPlanResult.message,
+        },
+      ],
+    });
+  }
+  const normalizedPlan = normalizedPlanResult.value;
   const program: FabricationProgramV1 = {
     version: "1",
     programId,
@@ -235,15 +279,21 @@ export const expandFabricationPlan = (
     modules: [],
     connections: [],
     blueprint: {
-      panels: plan.panels,
-      bodies: plan.bodies,
-      joints: plan.joints,
-      connectors: plan.connectors,
-      driver: plan.driver,
-      outputs: plan.outputs,
-      couplings: plan.couplings,
-      semanticParts: plan.semanticParts,
-      assemblyOperations: sequentialAssemblyOperations(plan),
+      panels: normalizedPlan.panels,
+      bodies: normalizedPlan.bodies,
+      joints: normalizedPlan.joints,
+      connectors: normalizedPlan.connectors,
+      // Control and unit duplicate information already fixed by the driven
+      // joint. Deriving them here prevents semantic wording such as "rotate a
+      // paper flap" from creating an invalid fold-joint control.
+      driver: normalizedDriverForJoint(
+        normalizedPlan.driver,
+        normalizedPlan.joints,
+      ),
+      outputs: normalizedPlan.outputs,
+      couplings: normalizedPlan.couplings,
+      semanticParts: normalizedPlan.semanticParts,
+      assemblyOperations: sequentialAssemblyOperations(normalizedPlan),
     },
     semanticConstraints: intent.semanticConstraints,
     assemblyStrategy: plan.assemblyStrategy,

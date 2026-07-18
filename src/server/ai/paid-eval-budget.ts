@@ -783,8 +783,10 @@ export class PaidEvalBudget {
       );
     }
     const requestUtf8Bytes = Buffer.byteLength(serializedRequest, "utf8");
-    const inputTokenCeiling =
-      requestUtf8Bytes * 2 + REQUEST_OVERHEAD_TOKEN_CEILING;
+    // A tokenizer cannot emit more tokens than the UTF-8 byte length of the
+    // serialized request. The separate overhead allowance covers provider
+    // wrappers that are not represented in that serialization.
+    const inputTokenCeiling = requestUtf8Bytes + REQUEST_OVERHEAD_TOKEN_CEILING;
     if (
       !Number.isSafeInteger(inputTokenCeiling) ||
       inputTokenCeiling <= 0 ||

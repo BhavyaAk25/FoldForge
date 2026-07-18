@@ -409,7 +409,7 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await expect(
       budget.run({
         operation: "generate_program",
-        request: meteredRequest("x".repeat(140_000), 1),
+        request: meteredRequest("x".repeat(280_000), 1),
         execute,
       }),
     ).rejects.toMatchObject({ code: "invalid_request" });

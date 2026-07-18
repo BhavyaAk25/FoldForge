@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { canonicalSerialize } from "@/core/canonical";
+import { buildFabricationCandidate } from "@/core/fabrication/candidate";
 import { createOfflineFabricationShowcases } from "@/core/fabrication/examples";
 import {
   fabricationPlanFromProgram,
@@ -20,6 +21,7 @@ import {
   OpenAIFabricationIntentModel,
   OpenAIFabricationProgramModel,
   OpenAIFabricationRepairModel,
+  fabricationNarrativeInput,
 } from "@/server/fabrication-ai/models";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
@@ -190,6 +192,29 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
   });
 
+  it("allows a smaller explicit output ceiling for bounded live acceptance", async () => {
+    createResponse.mockResolvedValue({
+      id: "resp-capped-program",
+      status: "completed",
+      output: planFunctionOutput("Use one bounded fold."),
+    });
+
+    await new OpenAIFabricationProgramModel(null, 4_000).generateProgram(
+      fixtureIntent(),
+      1,
+      [],
+      "ff_subject",
+    );
+
+    expect(createResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ max_output_tokens: 4_000 }),
+      expect.anything(),
+    );
+    expect(() => new OpenAIFabricationProgramModel(null, 999)).toThrow(
+      "between 1000",
+    );
+  });
+
   it("leaves conservative reasoning headroom above representative program JSON", () => {
     const largestVisibleTokenEstimate = Math.max(
       ...createOfflineFabricationShowcases().map((showcase) =>
@@ -208,6 +233,37 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(largestVisibleTokenEstimate).toBeLessThanOrEqual(
       FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS / 2,
     );
+  });
+
+  it("builds narrative input without resending compiled coordinates", () => {
+    const candidate = buildFabricationCandidate({
+      candidateId: "candidate-narrative-input",
+      intent: fixtureIntent(),
+      program: fixtureProgram(),
+      selectionStatus: "selected",
+      provenance: {
+        compilerVersion: "foldforge-test",
+        generatedAtIso: "2026-07-18T00:00:00.000Z",
+        deterministicSeed: 2_026_071_8,
+        modelId: FOLDFORGE_MODEL,
+        modelResponseId: "resp-narrative-input",
+        modelPlanHash: "a".repeat(64),
+        planExpanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+        parentCandidateId: null,
+        appliedPatchIds: [],
+        repairCycle: 0,
+      },
+    });
+    expect(candidate.ok).toBe(true);
+    if (!candidate.ok) return;
+
+    const compact = canonicalSerialize(
+      fabricationNarrativeInput(candidate.value),
+    );
+    const complete = canonicalSerialize(candidate.value);
+    expect(compact).not.toContain('"vertices"');
+    expect(compact).not.toContain('"paths"');
+    expect(compact.length).toBeLessThan(complete.length / 2);
   });
 
   it("polls a background program without retrying model generation", async () => {
@@ -325,6 +381,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       output: [
         ...planFunctionOutput("First plan."),
         ...planFunctionOutput("Second plan."),
+      ],
+      code: "duplicate_plan_call",
+    },
+    {
+      label: "one valid and one malformed duplicate plan call",
+      output: [
+        ...planFunctionOutput("First plan."),
+        {
+          type: "function_call",
+          name: "submit_fabrication_plan",
+          arguments: null,
+        },
       ],
       code: "duplicate_plan_call",
     },

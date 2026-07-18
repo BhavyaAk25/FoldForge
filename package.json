@@ -25,6 +25,7 @@
     "eval:e2e": "tsx scripts/run-e2e-evals.ts",
     "eval:ablation": "tsx scripts/run-ablation.ts",
     "eval:live": "tsx scripts/run-live-readiness.ts",
+    "eval:live:replay": "tsx scripts/run-live-response-replay.ts",
     "eval:continue-ledger": "tsx scripts/prepare-paid-eval-continuation.ts",
     "test:e2e": "playwright test",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test && pnpm run validate:consumers && pnpm run build"

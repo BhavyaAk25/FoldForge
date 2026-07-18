@@ -195,11 +195,37 @@ describe("compact fabrication planning", () => {
     );
     expect(expanded.ok).toBe(true);
     if (expanded.ok) {
+      expect(expanded.value.blueprint.driver).toMatchObject({
+        control: "rotate",
+        unit: "deg",
+      });
       expect(expanded.value.blueprint.assemblyOperations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ kind: "join_hinge" }),
         ]),
       );
+    }
+  });
+
+  it("derives a fold driver's redundant control and unit from its joint", () => {
+    const plan = fabricationPlanFromProgram(fixtureProgram());
+    const expanded = expandFabricationPlan(
+      fixtureIntent(),
+      {
+        ...plan,
+        driver: plan.driver
+          ? { ...plan.driver, control: "rotate", unit: "mm" }
+          : null,
+      },
+      1,
+    );
+
+    expect(expanded.ok).toBe(true);
+    if (expanded.ok) {
+      expect(expanded.value.blueprint.driver).toMatchObject({
+        control: "fold",
+        unit: "deg",
+      });
     }
   });
 

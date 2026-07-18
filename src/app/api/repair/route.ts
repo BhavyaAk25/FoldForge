@@ -99,6 +99,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       if (before.report.valid) {
         return outcome("passed", candidateId, null, program, before);
       }
+      if (
+        !before.report.failures.some(
+          (failure) =>
+            failure.severity === "hard" &&
+            failure.repairableProgramPaths.length > 0,
+        )
+      ) {
+        return outcome("infeasible", candidateId, null, program, before);
+      }
 
       try {
         const proposedPatch =

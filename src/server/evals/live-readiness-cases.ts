@@ -5,6 +5,7 @@ export interface LiveReadinessCaseDefinition {
   readonly prompt: string;
   readonly expected: ExpectedLiveIntentConstraints;
   readonly requiresRepairEvidence: boolean;
+  readonly requiredCandidateCount: 1 | 3;
 }
 
 const A3_SHEET_SIZE_MM = { widthMm: 297, heightMm: 420 } as const;
@@ -31,6 +32,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
       requiredDescriptionTerms: ["display", "flap"],
     },
     requiresRepairEvidence: true,
+    requiredCandidateCount: 3,
   },
   {
     caseId: "live-organizer",
@@ -53,6 +55,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
       requiredDescriptionTerms: ["tray", "wing"],
     },
     requiresRepairEvidence: false,
+    requiredCandidateCount: 3,
   },
   {
     caseId: "live-sample-sorter",
@@ -75,6 +78,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
       requiredDescriptionTerms: ["sorter", "tray"],
     },
     requiresRepairEvidence: false,
+    requiredCandidateCount: 3,
   },
   {
     caseId: "live-tabbed-box",
@@ -97,6 +101,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
       requiredDescriptionTerms: ["box", "tab"],
     },
     requiresRepairEvidence: false,
+    requiredCandidateCount: 3,
   },
   {
     caseId: "live-expanding-display",
@@ -119,5 +124,34 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
       requiredDescriptionTerms: ["display", "panel"],
     },
     requiresRepairEvidence: false,
+    requiredCandidateCount: 3,
   },
 ];
+
+/**
+ * A deliberately small acceptance case for proving the complete live path
+ * without relabeling a one-case run as the sealed release evaluation.
+ */
+export const LIVE_SOL_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
+  caseId: "live-sol-two-panel-acceptance",
+  prompt:
+    "Make a one-sheet hinged counter display from 0.3 mm cardstock. Use one fixed rectangular panel 80 mm wide by 60 mm high and one rectangular wing 30 mm wide by 60 mm high. Join their full 60 mm outer edges so the wing opens like a flap from 0 to 90 degrees. The complete motion envelope is 110 mm wide, 60 mm high, and 30 mm deep. Use one 300 by 240 mm sheet with 5 mm printable margins, allow cuts, use no glue. Keep the design to exactly those two panels, one fold joint, and no tabs or slots.",
+  expected: {
+    widthMm: 110,
+    heightMm: 60,
+    depthMm: 30,
+    materialThicknessMm: 0.3,
+    requiredMaterialTerms: ["cardstock"],
+    sheetSizeMm: { widthMm: 300, heightMm: 240 },
+    maximumSheets: 1,
+    behavior: "flap",
+    cutsAllowed: true,
+    glueAllowed: false,
+    motion: { unit: "deg", maximumValue: 90, tolerance: 1 },
+    requiredSemanticKinds: [],
+    requiredDimensionTargetsMm: [80, 60, 30],
+    requiredDescriptionTerms: ["display", "wing"],
+  },
+  requiresRepairEvidence: false,
+  requiredCandidateCount: 1,
+};

@@ -341,6 +341,23 @@ export const runFabricationRepairLoop = async (
   }
 
   for (let cycle = 1; cycle <= cycleLimit; cycle += 1) {
+    const hasRepairableHardFailure = evaluation.report.failures.some(
+      (failure) =>
+        failure.severity === "hard" &&
+        failure.repairableProgramPaths.length > 0,
+    );
+    if (!hasRepairableHardFailure) {
+      return {
+        status: "infeasible",
+        candidateId,
+        program,
+        ir: evaluation.ir,
+        report: evaluation.report,
+        cycles,
+        trace,
+        reason: "No hard verifier failure exposes a bounded repair path.",
+      };
+    }
     const inputHash = repairInputHash(program, evaluation.report);
     if (seenInputs.has(inputHash)) {
       return {

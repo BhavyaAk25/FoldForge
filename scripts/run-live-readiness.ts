@@ -19,6 +19,7 @@ import {
 } from "../src/server/evals/live-constraint-evidence";
 import {
   LIVE_READINESS_CASES,
+  LIVE_SOL_ACCEPTANCE_CASE,
   type LiveReadinessCaseDefinition,
 } from "../src/server/evals/live-readiness-cases";
 import {
@@ -83,7 +84,10 @@ const requestedCount = Math.max(
   1,
   Math.min(LIVE_READINESS_CASES.length, requestedCountValue),
 );
-const selectedCases = LIVE_READINESS_CASES.slice(0, requestedCount);
+const acceptanceMode = process.argv.includes("--acceptance");
+const selectedCases = acceptanceMode
+  ? [LIVE_SOL_ACCEPTANCE_CASE]
+  : LIVE_READINESS_CASES.slice(0, requestedCount);
 const artifactRoot = path.resolve("artifacts/evals/live-readiness");
 const runStartedIso = new Date().toISOString();
 const buildEvidence = captureBuildEvidence();
@@ -272,7 +276,10 @@ if (!liveEnabled) {
   try {
     const safetyIdentifier = `ff_live_eval_${randomBytes(16).toString("hex")}`;
     const intentModel = new OpenAIFabricationIntentModel(budget);
-    const programModel = new OpenAIFabricationProgramModel(budget);
+    const programModel = new OpenAIFabricationProgramModel(
+      budget,
+      acceptanceMode ? 4_000 : undefined,
+    );
     const repairModel = new OpenAIFabricationRepairModel(budget);
     const narrativeModel = new OpenAIFabricationNarrativeModel(budget);
     for (const [caseIndex, liveCase] of selectedCases.entries()) {
@@ -317,7 +324,7 @@ if (!liveEnabled) {
           intent,
           safetyIdentifier,
           programModel,
-          3,
+          liveCase.requiredCandidateCount,
           (outcome) => {
             const observedFingerprints = [
               ...partialResult.topologyFingerprints,
@@ -431,15 +438,15 @@ if (!liveEnabled) {
         const winner = verified[0];
         if (
           !winner ||
-          verified.length !== 3 ||
-          generated.length !== 3 ||
-          programResponseIds.length !== 3
+          verified.length !== liveCase.requiredCandidateCount ||
+          generated.length !== liveCase.requiredCandidateCount ||
+          programResponseIds.length !== liveCase.requiredCandidateCount
         ) {
           results.push({
             ...emptyResult(
               liveCase,
               "failed",
-              "three_verified_distinct_candidates_required",
+              `${liveCase.requiredCandidateCount}_verified_distinct_candidates_required`,
               Number((performance.now() - startedAt).toFixed(3)),
             ),
             constraintEvidence,
@@ -675,6 +682,12 @@ if (!liveEnabled) {
     measuredRepairPassed &&
     exactArtifactConsumerChecksPassed &&
     !budgetStopped;
+  const acceptancePassed =
+    acceptanceMode &&
+    gate.selectedRunPassed &&
+    compilerContractEvidence.passed &&
+    exactArtifactConsumerChecksPassed &&
+    !budgetStopped;
   await writeReport({
     reportVersion: 2,
     mode: "gpt-5.6-sol-live-readiness",
@@ -689,6 +702,8 @@ if (!liveEnabled) {
     builderAuthorizedBudgetUsd: paidUsage.budgetUsd,
     preRequestReservationCeilingUsd: paidUsage.budgetUsd,
     caseCount: selectedCases.length,
+    acceptanceMode,
+    acceptancePassed,
     ...gate,
     measuredRepairPassed,
     exactArtifactConsumerChecksPassed,
@@ -699,5 +714,7 @@ if (!liveEnabled) {
     results,
     passed: releaseEvidencePassed,
   });
-  if (!releaseEvidencePassed) process.exitCode = 1;
+  if (acceptanceMode ? !acceptancePassed : !releaseEvidencePassed) {
+    process.exitCode = 1;
+  }
 }
