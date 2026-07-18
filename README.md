@@ -1,6 +1,6 @@
 # FoldForge
 
-> Describe a bounded flat-sheet object. GPT-5.6 Sol proposes typed build programs; deterministic code proves the geometry and motion before exporting fabrication files.
+> FoldForge is designed to turn a bounded flat-sheet brief into typed GPT-5.6 Sol build programs, then make deterministic code prove the geometry and motion before exporting fabrication files.
 
 **Track:** Work & Productivity · **Live app:** [foldforge.vercel.app](https://foldforge.vercel.app)
 
@@ -8,22 +8,22 @@
 
 ## What you can try now
 
-The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On the latest paid build, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. Its first program proposal then failed to settle inside the synchronous request window, so there is still no claim of a live prompt-to-artifact success.
+The deployed build is honest about its current state: prepared deterministic examples and their exports work, but arbitrary-prompt generation is intentionally off. On the latest paid build, the Sol intent contract passed 3/3 cases and the guarded complex intent preserved all 18 explicit requirements. Its background program proposal did not settle inside the guarded response window, so there is still no claim of a live prompt-to-artifact success.
 
 To understand the product in under a minute:
 
 1. Open the [live app](https://foldforge.vercel.app).
-2. Select **Explore a prepared motion study**.
-3. Use **Closed** and **Open**, drag the 3D view, and switch to **Cut-and-fold pattern**.
+2. Select **Explore a prepared vertical-lift study**.
+3. Use **Lowered** and **Raised**, drag the 3D view, and switch to **Cut-and-fold pattern**.
 4. Download SVG, DXF, GLB, or JSON and compare the selected candidate hash.
 5. Open **Static duck crease pattern** to see why a static fold-only design has no motion controls and can offer FOLD.
 
-The examples are labelled as prepared. Opening one never pretends that the text box was interpreted.
+The photorealistic concept renders are labelled as prompt inspiration, and the inspectable examples are labelled as prepared. Opening one never pretends that the text box was interpreted or that a concept render is its verified geometry.
 
-| Playing-card box                                                                       | Pop-up flower card                                                                             | Static duck crease pattern                                                               |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| ![A paper playing-card box with its tray open](./public/examples/playing-card-box.svg) | ![A paper card with a flower rising from the center](./public/examples/pop-up-flower-card.svg) | ![A faceted duck paper crease-pattern study](./public/examples/duck-shaped-gift-box.svg) |
-| Slide-out packaging                                                                    | Articulated prepared demo                                                                      | Static fold-only FOLD demo                                                               |
+| Playing-card box                                                                       | Vertical-lift flower study                                                                     | Static duck crease pattern                                                                                     |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| ![A paper playing-card box with its tray open](./public/examples/playing-card-box.jpg) | ![A paper card with a flower rising from the center](./public/examples/pop-up-flower-card.jpg) | ![A yellow paper duck gift-box concept used as prompt inspiration](./public/examples/duck-shaped-gift-box.jpg) |
+| Slide-out packaging                                                                    | Prepared direct-lift motion study                                                              | Static fold-only FOLD demo                                                                                     |
 
 ## The ten-second explanation
 
@@ -53,7 +53,7 @@ This is not text-to-image and it is not unrestricted text-to-CAD. Its deliberate
 | **GPT-5.6 Sol**        | Normalized intent, bounded programs, semantic critique, report-grounded diagnosis, typed parameter patches, concise instructions | Declaring validity, editing trusted coordinates, selecting a winner, exporting bytes |
 | **Deterministic code** | Units, geometry, kinematics, verification, patch application, ranking, canonical serialization, hashes, previews, and exports    | Inventing missing essential measurements                                             |
 
-Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, and no model-generation retries. Large program synthesis now uses OpenAI background mode with a bounded 210-second poll inside a 240-second route; only retrievals may retry. This correction has passed offline tests but has not been paid-verified. A failed candidate cannot be ranked, finalized, or exported as valid.
+Every model response must pass a versioned Zod contract. OpenAI code is server-only. Responses use `store:false`, bounded output, a random hashed safety identifier, and no model-generation retries. Large program synthesis uses OpenAI background mode with a bounded 210-second poll inside a 240-second route; only retrievals may retry. The first paid background attempt was cancelled at its guard without usable completion metadata. The current configuration keeps an 8,000-token combined reasoning/output ceiling but lowers program reasoning from high to medium; representative program JSON remains below half that ceiling under a conservative size estimate. This configuration passes offline contract tests but has not yet been paid-verified. A failed candidate cannot be ranked, finalized, or exported as valid.
 
 ### Verification is ordered and fail-fast
 
@@ -97,7 +97,7 @@ The eval plan was derived from the four official judging criteria: **Technologic
 
 Current deterministic evidence:
 
-- **337/337 tests** passing across 49 files;
+- **338/338 tests** passing across 49 files;
 - **96.72% statements, 90.17% branches, 97.72% functions, 97.65% lines** covered;
 - **120/120** varied valid controls accepted;
 - **0/560** hard-invalid mutations accepted, with the correct fail-fast stage in 560/560;
@@ -120,12 +120,12 @@ Current paid evidence:
 - unsupported request: strict refusal;
 - prompt-injection attempt: remained inside the strict contract;
 - latest guarded complex intent: **18/18** explicit constraints recalled;
-- first program proposal: no settled response inside the synchronous request window; and
-- one immutable continuation used and sealed at a conservative cumulative **$1.888625**, leaving **$1.811375** under the executable cap.
+- first background program proposal: cancelled at the guarded deadline without usable completion usage; and
+- two immutable chained continuations used and sealed at a conservative cumulative **$2.722365**, leaving **$0.977635** under the executable cap.
 
 That failure is evidence that the budget control worked, not evidence that live generation works. Production therefore remains live-disabled. The sanitized packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 
-The one explicitly authorized non-branching continuation has been used and remains immutable. Any further paid run requires new explicit authorization and must carry the complete `$1.888625` history forward under the same cumulative cap. A final live claim still requires at least four complete successes from a five-case sealed suite on the exact submission build, including strict programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes.
+The builder has authorized one further non-branching attempt within the unchanged $3.70 executable cap. It must carry the complete `$2.722365` history forward; no sealed ledger may be edited, reset, or bypassed. A final live claim still requires at least four complete successes from a five-case sealed suite on the exact submission build, including strict programs, deterministic verification or repair, ranking, exact exports, and independent checks of the selected bytes.
 
 ## How Codex and GPT-5.6 contributed
 
@@ -189,6 +189,8 @@ Server-only variables:
 - `ACCESS_COOKIE_SECRET` (at least 32 random bytes)
 
 Never use a `NEXT_PUBLIC_` prefix for secrets. Do not print, commit, or place them in browser storage. See [PRIVACY.md](./PRIVACY.md).
+
+For judge testing, put `DEMO_ACCESS_CODE` only in the private Devpost testing instructions. A clean browser asks for it on the first live request; the code must never appear in this repository, a public video, or browser storage.
 
 ### Verify the release
 

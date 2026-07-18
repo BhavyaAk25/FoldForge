@@ -57,6 +57,31 @@ interface StudioMockState {
   readonly unexpectedPaths: string[];
 }
 
+const consoleMessagesByPage = new WeakMap<Page, string[]>();
+
+const isAllowedBrowserDiagnostic = (entry: string): boolean =>
+  entry.includes("401") ||
+  /^\[\.WebGL-[^\]]+\]GL Driver Message .*GPU stall due to ReadPixels/.test(
+    entry,
+  );
+
+test.beforeEach(({ page }) => {
+  const messages: string[] = [];
+  consoleMessagesByPage.set(page, messages);
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      messages.push(message.text());
+    }
+  });
+});
+
+test.afterEach(({ page }) => {
+  const unexpectedMessages = (consoleMessagesByPage.get(page) ?? []).filter(
+    (entry) => !isAllowedBrowserDiagnostic(entry),
+  );
+  expect(unexpectedMessages).toEqual([]);
+});
+
 const respondJson = (
   route: Route,
   json: unknown,
@@ -325,10 +350,6 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   page,
 }) => {
   const state = await installStudioMocks(page, { requireAccessOnce: true });
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
 
   await page.goto("/");
   await expect(
@@ -523,7 +544,6 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   ).toBeVisible();
   expect(state.accessCodes).toEqual(["e2e-secret"]);
   expect(state.unexpectedPaths).toEqual([]);
-  expect(consoleErrors.filter((entry) => !entry.includes("401"))).toEqual([]);
 });
 
 test("rejects duplicate program fingerprints before compile", async ({
@@ -562,8 +582,11 @@ test("keeps prompt examples honest and provides a saved result when live generat
   const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill("A completely arbitrary paper mechanism.");
   const flowerExample = page.locator("article").filter({
-    hasText: "Pop-up flower card",
+    hasText: "Flower mechanisms",
   });
+  await expect(
+    page.getByText("Prompt inspiration", { exact: true }),
+  ).toHaveCount(3);
   await flowerExample.getByRole("button", { name: "Use this prompt" }).click();
   await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
@@ -580,11 +603,11 @@ test("keeps prompt examples honest and provides a saved result when live generat
   ).toBeVisible();
 
   await page
-    .getByRole("button", { name: "Explore a prepared motion study" })
+    .getByRole("button", { name: "Explore a prepared vertical-lift study" })
     .click();
   await expect(
     page.getByRole("heading", {
-      name: "Explore the pull-tab flower motion study.",
+      name: "Explore the vertical-lift flower study.",
     }),
   ).toBeFocused();
   await expect(page.getByTestId("candidate-card")).toHaveCount(1);
@@ -594,13 +617,13 @@ test("keeps prompt examples honest and provides a saved result when live generat
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("horizontal-to-vertical paper linkage", { exact: false }),
+    page.getByText("directly driven vertical tab", { exact: false }),
   ).toBeVisible();
   const savedAssembledPreview = page.getByTestId("fabrication-3d-preview");
   const savedInitialSignature = await savedAssembledPreview.getAttribute(
     "data-state-signature",
   );
-  await page.getByLabel("Open and close the design").fill("0.4");
+  await page.getByLabel("Lower and lift the design").fill("0.4");
   await expect(page.getByText("40%", { exact: true })).toBeVisible();
   await expect
     .poll(() => savedAssembledPreview.getAttribute("data-state-signature"))
@@ -612,7 +635,7 @@ test("keeps prompt examples honest and provides a saved result when live generat
   );
   await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
   const savedPatternPreview = page.getByRole("img", {
-    name: /Pull-tab flower motion study pattern preview/iu,
+    name: /Vertical-lift flower study pattern preview/iu,
   });
   await expect(savedPatternPreview).toBeVisible();
   await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
@@ -642,7 +665,7 @@ test("keeps prompt examples honest and provides a saved result when live generat
     hasText: "Static duck crease pattern",
   });
   await duckExample
-    .getByRole("button", { name: "Open finished design" })
+    .getByRole("button", { name: "Open prepared crease study" })
     .click();
   await expect(
     page.getByRole("heading", {

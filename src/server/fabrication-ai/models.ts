@@ -38,6 +38,7 @@ import {
 } from "./prompts";
 
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
+export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 8_000;
 
 const PROGRAM_BACKGROUND_POLL_INTERVAL_MS = 2_000;
 const PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS = 3;
@@ -262,7 +263,7 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
     usedTopologyIds: readonly string[],
     safetyIdentifier: string,
   ): Promise<ProgramProposalV1> {
-    const maxOutputTokens = 8_000;
+    const maxOutputTokens = FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS;
     const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_PROGRAM_PROMPT,
@@ -276,7 +277,7 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
           }),
         },
       ],
-      reasoning: { effort: "high" },
+      reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(
           ProgramProposalV1Schema,

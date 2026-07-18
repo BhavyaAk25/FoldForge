@@ -479,10 +479,10 @@ export function FoldForgeApp() {
       ...showcase.program,
       candidateLabel: isDuck
         ? "Static duck crease pattern"
-        : "Pull-tab flower motion study",
+        : "Vertical-lift flower study",
       designSummary: isDuck
         ? "A prepared static crease-pattern study with a faceted duck silhouette. The verified file contains cut and score geometry only; no lid motion or open-and-close animation is modeled."
-        : "A prepared motion study: a rigid flower crown moves 30 mm on a vertical guide. The paper linkage that would turn a card opening or horizontal pull into lift is not modeled.",
+        : "A prepared motion study: a directly driven vertical tab moves a rigid flower crown 30 mm along its guide.",
     };
     const candidate = buildCandidate(
       `saved-example-${exampleId}`,
@@ -514,7 +514,7 @@ export function FoldForgeApp() {
     shouldFocusResultsRef.current = true;
     setPhase("ready");
     setStatusMessage(
-      `Saved ${isDuck ? "static duck crease-pattern" : "pull-tab flower motion-study"} example opened.`,
+      `Saved ${isDuck ? "static duck crease-pattern" : "vertical-lift flower"} example opened.`,
     );
   };
 

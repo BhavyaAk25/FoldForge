@@ -1,15 +1,17 @@
 {
-  "version": 2,
+  "version": 3,
   "evidenceStatus": "partial_live_failure",
   "model": "gpt-5.6-sol",
-  "paidBuildSha": "20b60cdd69373db428c543fb00452ec39f387d5f",
+  "paidBuildSha": "48b179101b15d6fa1f16e0d50a70f0b815a81cd7",
   "workingTreeWasClean": true,
   "sourceReportHashes": {
-    "compilerSha256": "e73e58cd1b39d9b9693119676c4d800c99172e497ed5e7f634433b9e5a73445b",
-    "readinessSha256": "1059d679901f8ed4f354e5f1ee780aa765bea683eaa48ed8721d262365ab6770",
+    "compilerSha256": "d85a017e91ab931906c16dfe388bef1187a6facbc3b25b52f21fdc4bebe21421",
+    "readinessSha256": "c2ff5382fe6c4cf4faedbb92ef2186fc7c49be1f1d41632c9e4bcd5847ce6a60",
     "originalSealedLedgerSha256": "7992cf2258b3b67501a7019d11d44d6fa7eb2b6af502f4f2f951605f1564bfa7",
-    "continuationLedgerSha256": "fd463647ee8e49028b7c18fdf443dadb329f45e4fcb7bbe30397296d026b6d4f",
-    "continuationClaimSha256": "1dcf54e6b58bc301aff8397390148c34bff8046d67be82e7dca57cbdd5e90682"
+    "firstContinuationLedgerSha256": "fd463647ee8e49028b7c18fdf443dadb329f45e4fcb7bbe30397296d026b6d4f",
+    "secondContinuationLedgerSha256": "2c74d880f342cf8ebb30f5a5e36a356813e0e3ba5a58ab02429a50ad2cbf55f2",
+    "originalToFirstContinuationClaimSha256": "1dcf54e6b58bc301aff8397390148c34bff8046d67be82e7dca57cbdd5e90682",
+    "firstToSecondContinuationClaimSha256": "6fc587f16e05a6648d774c0c6fefb1cb4e0aa4bbd85084910e989da9b7c3ee5a"
   },
   "compilerContract": {
     "passed": true,
@@ -22,17 +24,17 @@
     "unitNormalizationAccuracyRate": 1,
     "correctStatusRate": 1,
     "correctRefusalOrClarificationRate": 1,
-    "chargedCostUsd": 0.11069875
+    "chargedCostUsd": 0.12035875
   },
   "readinessAttempt": {
-    "startedAtIso": "2026-07-17T23:12:42.139Z",
+    "startedAtIso": "2026-07-17T23:50:29.315Z",
     "selectedCaseCount": 1,
     "passedCount": 0,
     "releaseGatePassed": false,
     "failedCaseId": "live-hinged-counter-display",
     "failureStage": "first_program_proposal",
-    "failureCode": "budget_unsettled_request_failure",
-    "durationMs": 235989.833,
+    "failureCode": "budget_missing_usage",
+    "durationMs": 223952.932,
     "explicitConstraintChecksPassed": 18,
     "explicitConstraintCheckCount": 18,
     "generatedCandidateCount": 0,
@@ -44,13 +46,13 @@
     "authorizedMaximumUsd": 4,
     "enforcedMaximumUsd": 3.7,
     "originalCarriedCostUsd": 0.8307225,
-    "conservativeChargedCostUsd": 1.888625,
-    "remainingUnderEnforcedMaximumUsd": 1.811375,
-    "requestCount": 14,
-    "successfulIntentRequestCount": 12,
-    "unsettledProgramRequestCount": 2,
-    "continuationCount": 1,
-    "haltedReason": "unsettled_request_failure"
+    "conservativeChargedCostUsd": 2.722365,
+    "remainingUnderEnforcedMaximumUsd": 0.977635,
+    "requestCount": 19,
+    "successfulIntentRequestCount": 16,
+    "failedOrUnsettledProgramRequestCount": 3,
+    "continuationCount": 2,
+    "haltedReason": "missing_usage"
   },
   "privacy": {
     "containsPrompts": false,

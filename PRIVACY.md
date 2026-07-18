@@ -70,7 +70,7 @@ Exact live limits per random session subject:
 
 Public deterministic compile and export routes are separately limited to 30 requests per 10-minute process-local subject bucket, one concurrent request per subject, and four concurrent requests process-wide. The verifier also rejects estimated motion/collision work above 2,000,000 sampled triangle-pair units before expensive traversal. These are best-effort instance-local controls suitable for the bounded demo; a horizontally scaled public service requires an upstream/shared atomic limiter.
 
-Per-call output ceilings are 3,000 tokens for intent/compile, 8,000 for a complete program proposal, 2,500 reserved for repair, and 2,000 for final comparison/instructions. A quota, token, or concurrency rejection returns `429` with a bounded retry hint and makes no model call. The current in-memory gates are explicitly best-effort per deployment instance; a high-traffic multi-instance service would require a shared atomic quota/concurrency store.
+Per-call output ceilings are 3,000 tokens for intent/compile, 8,000 for a concise complete program proposal, 2,500 reserved for repair, and 2,000 for final comparison/instructions. Program synthesis uses medium reasoning; representative program JSON stays below half of that combined reasoning-and-visible-output ceiling under a conservative size estimate. The constraint compiler and report-grounded repair use high reasoning. A quota, token, or concurrency rejection returns `429` with a bounded retry hint and makes no model call. The current in-memory gates are explicitly best-effort per deployment instance; a high-traffic multi-instance service would require a shared atomic quota/concurrency store.
 
 `ENABLE_LIVE_OPENAI=false` is the default and production kill switch. Live calls fail closed unless the flag, API key, access code, signing secret, origin policy, quota store, and concurrency controls are all valid.
 
@@ -107,7 +107,7 @@ As of 2026-07-17:
 - Health exposes only bounded public state and build provenance.
 - Automated route tests cover origin, access, caps, quotas, concurrency, kill-switch state, strict malformed data, and exact selected-candidate export behavior.
 
-The remaining live gate is operational and evidentiary: a new paid run needs fresh builder authorization, an immutable chained continuation of the sealed `$1.888625` ledger, a passing background program-generation stage, and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
+The remaining live gate is operational and evidentiary: the builder has authorized one more attempt within the unchanged cap, using an immutable chained continuation of the sealed `$2.722365` ledger. It still needs a passing background program-generation stage and the sealed live suite. The best-effort in-memory quota boundary is appropriate for the limited submission demo, not a claim of globally atomic enforcement across an unbounded multi-instance service.
 
 ## Reporting a concern
 

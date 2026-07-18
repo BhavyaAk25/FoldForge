@@ -45,7 +45,7 @@ describe("offline fabrication showcases", () => {
     expect(showcases.map((showcase) => showcase.prompt)).toEqual([
       expect.stringContaining("faceted duck gift box"),
       expect.stringContaining("modular cable organizer"),
-      expect.stringContaining("pull-tab pop-up flower"),
+      expect.stringContaining("vertical tab"),
     ]);
   });
 

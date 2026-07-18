@@ -12,13 +12,13 @@ Do not record the final live-prompt version until all of these are true on the e
 - the deployed build SHA equals the repository commit, the eval report records that same build SHA, and the video visibly shows it; and
 - the final ledger remains below the builder's $4.00 authorization.
 
-Current evidence does **not** meet that gate: the paid intent contract passed 3/3 and the guarded complex intent passed 18/18 explicit checks, but the first program proposal did not settle. The authorized continuation sealed at $1.888625, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
+Current evidence does **not** meet that gate: the paid intent contract passed 3/3 and the guarded complex intent passed 18/18 explicit checks, but the background program proposal did not settle. Two chained ledgers preserve a conservative cumulative $2.722365 charge, leaving $0.977635 under the executable cap, and production remains live-disabled. Practice with the saved examples, but never present one as an unseen Sol result.
 
 ## Set up the recording
 
 Have these ready before pressing Record:
 
-1. A clean browser on [foldforge.vercel.app](https://foldforge.vercel.app), at the empty **Describe** stage.
+1. In a private or otherwise clean browser, open [foldforge.vercel.app](https://foldforge.vercel.app), enter the unseen demo prompt, and select **Create 3 designs** once so the access field appears. Enter the judge access code, continue, verify **Live generation ready**, then clear the prompt and return to the empty **Describe** stage. Only then start recording; the code and access exchange stay off-screen.
 2. The exact downloaded live-selected artifact ready to inspect in a local viewer, with all third-party branding cropped from the recording.
 3. [EVALS.md](../EVALS.md) at the current result table and the sanitized [Sol evidence packet](./evidence/sol-live-evidence.json) at its final ledger total.
 4. The repository page at the exact deployed commit.
@@ -33,7 +33,7 @@ Use an unseen supported prompt, not a starter or saved example:
 
 **Screen:** Empty **Describe** view and the one-line product explanation.
 
-**Say:** “A product brief normally passes through separate sketching, geometry, mechanism, checking, and fabrication-file tools. FoldForge turns that handoff into one inspected flow: describe a flat-sheet object, compare verified designs, and export the exact one you chose.”
+**Say:** “A small packaging or prototyping team can lose an iteration moving one brief through sketches, mechanism decisions, geometry checks, and fabrication files. FoldForge turns that handoff into one inspected flow: describe a flat-sheet object, compare verified designs, and export the exact one you chose.”
 
 ### 0:13–0:34 — unseen prompt and GPT-5.6
 
@@ -65,13 +65,13 @@ Use an unseen supported prompt, not a starter or saved example:
 
 **Say:** “Export produces this exact candidate: animated GLB when motion exists, print-scale SVG and DXF, canonical fabrication JSON, and FOLD only when no source meaning would be lost. The selected hash ties the preview, report, and downloaded files together.”
 
-### 2:05–2:33 — judge-derived evals and budget safety
+### 2:05–2:28 — judge-derived evals and budget safety
 
 **Screen:** Show the four judging criteria mapped to evidence in `README.md`, the current `EVALS.md` results, then the sanitized ledger summary. Never show prompts, model bodies, response IDs, environment files, or credentials.
 
-**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Offline, code rejected all 560 hard-invalid mutations, repaired 40 measured failures, repeated 50 programs byte-for-byte, and passed 337 tests plus seven browser flows. Paid testing has a $4 outer ceiling and a $3.70 executable cap. Code reserves worst-case cost before each call; uncertain usage seals an immutable ledger instead of silently retrying.”
+**Say:** “I turned the four judging criteria—implementation, design, impact, and idea—into adversarial release gates. Code rejected all 560 hard-invalid mutations, repaired 40 measured failures, and passed 338 tests plus seven browser flows. Paid Sol testing has a $3.70 executable cap: worst-case cost is reserved before each call, and uncertain usage seals an immutable ledger instead of silently retrying.”
 
-### 2:33–2:53 — Codex, human decisions, and close
+### 2:28–2:50 — Codex, human decisions, and close
 
 **Screen:** Show the exact repository commit, then return to the live-selected moving result and its downloads.
 
@@ -81,8 +81,8 @@ Use an unseen supported prompt, not a starter or saved example:
 
 Until the truth gate passes, rehearse the controls without implying live generation:
 
-1. Select **Explore a prepared motion study**.
-2. Use **Closed** and **Open**, orbit the 3D view, and inspect the cut-and-fold pattern.
+1. Select **Explore a prepared vertical-lift study**.
+2. Use **Lowered** and **Raised**, orbit the 3D view, and inspect the cut-and-fold pattern.
 3. Download SVG, DXF, GLB, and JSON and locate the selected hash and FOLD omission reason.
 4. Open **Static duck crease pattern** and point out that it is static, has no false motion controls, and offers FOLD because its semantics are representable.
 5. End on the banner that identifies examples as prepared and live AI as unavailable.

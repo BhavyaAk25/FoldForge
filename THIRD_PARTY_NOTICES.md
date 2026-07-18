@@ -1,12 +1,12 @@
 # Third-party notices
 
-## Original interface illustrations
+## Original interface images
 
-The three vector illustrations under `public/examples/` and the FoldForge app
-icon were created specifically for this repository. They contain no external
-images, fonts, scripts, or trademarks and are distributed under the repository's
-MIT license. The example illustrations explain prepared demonstrations; they are
-not evidence of generated fabrication geometry.
+The three photorealistic concept renders under `public/examples/` and the vector
+FoldForge app icon were created specifically for this repository. They contain no
+external images, fonts, scripts, or trademarks and are distributed under the
+repository's MIT license. The cards label the renders as prompt inspiration; they
+are not renders of the prepared examples or evidence of generated fabrication geometry.
 
 FoldForge source code is MIT licensed. Direct runtime and development dependencies remain under their respective licenses. This inventory describes the current lockfile and must be regenerated when dependencies change.
 
@@ -20,7 +20,7 @@ FoldForge source code is MIT licensed. Direct runtime and development dependenci
 | Vitest / V8 coverage | Tests and coverage    |         4.1.10 | MIT        | https://github.com/vitest-dev/vitest           |
 | fast-check           | Property tests        |          4.9.0 | MIT        | https://github.com/dubzzz/fast-check           |
 | Prettier             | Formatting            |          3.9.5 | MIT        | https://github.com/prettier/prettier           |
-| Three.js             | 3D preview            |        0.185.1 | MIT        | https://github.com/mrdoob/three.js             |
+| Three.js             | 3D preview            |        0.182.0 | MIT        | https://github.com/mrdoob/three.js             |
 | React Three Fiber    | React 3D renderer     |          9.6.1 | MIT        | https://github.com/pmndrs/react-three-fiber    |
 | Playwright           | Browser testing       |         1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright        |
 | earcut               | Polygon triangulation |          3.2.3 | ISC        | https://github.com/mapbox/earcut               |

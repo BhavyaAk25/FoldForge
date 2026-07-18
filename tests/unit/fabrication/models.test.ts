@@ -6,8 +6,10 @@ import type { ResponseUsage } from "openai/resources/responses/responses";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { createOfflineFabricationShowcases } from "@/core/fabrication/examples";
 import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
 import {
+  FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
   FOLDFORGE_MODEL,
   OpenAIFabricationIntentModel,
   OpenAIFabricationProgramModel,
@@ -141,14 +143,34 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
-        reasoning: { effort: "high" },
-        max_output_tokens: 8_000,
+        reasoning: { effort: "medium" },
+        max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
         background: true,
         store: false,
         safety_identifier: "ff_subject",
         service_tier: "default",
       }),
       { maxRetries: 0, timeout: 15_000 },
+    );
+  });
+
+  it("leaves conservative reasoning headroom above representative program JSON", () => {
+    const largestVisibleTokenEstimate = Math.max(
+      ...createOfflineFabricationShowcases().map((showcase) =>
+        Math.ceil(
+          Buffer.byteLength(
+            JSON.stringify({
+              diversityClaim: "A concise topology-specific proposal.",
+              program: showcase.program,
+            }),
+            "utf8",
+          ) / 3,
+        ),
+      ),
+    );
+
+    expect(largestVisibleTokenEstimate).toBeLessThanOrEqual(
+      FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS / 2,
     );
   });
 

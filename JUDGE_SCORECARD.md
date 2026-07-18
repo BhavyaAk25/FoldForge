@@ -1,6 +1,6 @@
 # FoldForge skeptical scorecard
 
-Snapshot: 2026-07-17, paid Sol intent contract passed, first program proposal blocked by provider failure.
+Snapshot: 2026-07-17, paid Sol intent contract passed, program proposals did not settle inside the guarded response windows.
 
 This is not a prediction of the judges. It applies the four equally weighted criteria on the [OpenAI Build Week page](https://openai.devpost.com/) and awards points only for reproducible evidence. The official requirements also ask the README and video to distinguish Codex acceleration, human decisions, and GPT-5.6 use.
 

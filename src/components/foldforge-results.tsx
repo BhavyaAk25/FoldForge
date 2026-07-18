@@ -94,6 +94,9 @@ export function FoldForgeResults({
   selected,
 }: FoldForgeResultsProps) {
   const hasMotion = selected.ir.driver !== null;
+  const isPreparedVerticalLift =
+    experienceMode === "saved" &&
+    selected.intent.intentId === "intent-showcase-popup-flower";
   const foldCompatibility = inspectFabricationFoldCompatibility({
     ir: selected.ir,
     sourceCandidateId: selected.candidateId,
@@ -182,9 +185,13 @@ export function FoldForgeResults({
           {previewMode === "assembled" && hasMotion ? (
             <div className={styles.controls} data-testid="motion-controls">
               <label>
-                Open and close
+                {isPreparedVerticalLift ? "Lower and lift" : "Open and close"}
                 <input
-                  aria-label="Open and close the design"
+                  aria-label={
+                    isPreparedVerticalLift
+                      ? "Lower and lift the design"
+                      : "Open and close the design"
+                  }
                   type="range"
                   min="0"
                   max="1"
@@ -199,10 +206,10 @@ export function FoldForgeResults({
               </label>
               <div className={styles.motionEndpoints}>
                 <button type="button" onClick={() => onMotionPositionChange(0)}>
-                  Closed
+                  {isPreparedVerticalLift ? "Lowered" : "Closed"}
                 </button>
                 <button type="button" onClick={() => onMotionPositionChange(1)}>
-                  Open
+                  {isPreparedVerticalLift ? "Raised" : "Open"}
                 </button>
               </div>
             </div>

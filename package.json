@@ -37,7 +37,7 @@
     "openai": "6.46.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "three": "0.185.1",
+    "three": "0.182.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -46,7 +46,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "0.185.1",
+    "@types/three": "0.182.0",
     "@vitest/coverage-v8": "4.1.10",
     "dxf-parser": "1.1.2",
     "eslint": "^9",

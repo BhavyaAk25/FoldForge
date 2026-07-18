@@ -7,7 +7,7 @@ const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 
 const PublicLiveEvidenceSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     evidenceStatus: z.literal("partial_live_failure"),
     model: z.literal("gpt-5.6-sol"),
     paidBuildSha: z.string().regex(/^[a-f0-9]{40}$/),
@@ -17,8 +17,10 @@ const PublicLiveEvidenceSchema = z
         compilerSha256: Sha256Schema,
         readinessSha256: Sha256Schema,
         originalSealedLedgerSha256: Sha256Schema,
-        continuationLedgerSha256: Sha256Schema,
-        continuationClaimSha256: Sha256Schema,
+        firstContinuationLedgerSha256: Sha256Schema,
+        secondContinuationLedgerSha256: Sha256Schema,
+        originalToFirstContinuationClaimSha256: Sha256Schema,
+        firstToSecondContinuationClaimSha256: Sha256Schema,
       })
       .strict(),
     compilerContract: z
@@ -61,11 +63,11 @@ const PublicLiveEvidenceSchema = z
         originalCarriedCostUsd: z.literal(0.8307225),
         conservativeChargedCostUsd: z.number().positive().max(3.7),
         remainingUnderEnforcedMaximumUsd: z.number().nonnegative(),
-        requestCount: z.literal(14),
-        successfulIntentRequestCount: z.literal(12),
-        unsettledProgramRequestCount: z.literal(2),
-        continuationCount: z.literal(1),
-        haltedReason: z.literal("unsettled_request_failure"),
+        requestCount: z.literal(19),
+        successfulIntentRequestCount: z.literal(16),
+        failedOrUnsettledProgramRequestCount: z.literal(3),
+        continuationCount: z.literal(2),
+        haltedReason: z.literal("missing_usage"),
       })
       .strict(),
     privacy: z

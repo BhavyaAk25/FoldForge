@@ -10,6 +10,7 @@ export interface ExamplePrompt {
   readonly description: string;
   readonly id: string;
   readonly imageAlt: string;
+  readonly imageLabel: string;
   readonly imageSrc: string;
   readonly prompt: string;
   readonly savedActionLabel?: string;
@@ -25,30 +26,35 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     id: "playing-card-box",
     title: "Playing-card box",
     description: "Holds one standard deck in a simple slide-out tray.",
-    imageSrc: "/examples/playing-card-box.svg",
+    imageLabel: "Prompt inspiration",
+    imageSrc: "/examples/playing-card-box.jpg",
     imageAlt: "A paper playing-card box with its tray partly open",
     prompt:
       "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible. Show me three ways to build it.",
   },
   {
     id: "pop-up-flower-card",
-    title: "Pop-up flower card",
+    title: "Flower mechanisms",
     description:
-      "An editable card brief with a prepared pull-tab motion study to inspect.",
-    imageSrc: "/examples/pop-up-flower-card.svg",
+      "Edit a pop-up-card brief or inspect a prepared vertical-lift study.",
+    imageLabel: "Prompt inspiration",
+    imageSrc: "/examples/pop-up-flower-card.jpg",
     imageAlt: "An open paper card with a pink flower rising from its center",
     prompt:
       "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
-    savedActionLabel: "Open motion study",
+    savedActionLabel: "Open vertical-lift study",
     savedExampleId: "flower",
   },
   {
     id: "duck-shaped-gift-box",
     title: "Static duck crease pattern",
     description: "A fold-only duck study with no open-and-close motion.",
-    imageSrc: "/examples/duck-shaped-gift-box.svg",
-    imageAlt: "A faceted yellow paper duck crease-pattern study",
+    imageLabel: "Prompt inspiration",
+    imageSrc: "/examples/duck-shaped-gift-box.jpg",
+    imageAlt:
+      "A yellow paper duck gift-box concept used as inspiration for a static crease-pattern prompt",
     prompt: DUCK_CREASE_PATTERN_PROMPT,
+    savedActionLabel: "Open prepared crease study",
     savedExampleId: "duck",
   },
 ] as const;
@@ -148,7 +154,7 @@ export function FoldForgeStart({
               type="button"
               onClick={() => onOpenSavedExample("flower")}
             >
-              Explore a prepared motion study
+              Explore a prepared vertical-lift study
             </button>
           </div>
           {!liveGenerationAvailable && healthKnown ? (
@@ -190,7 +196,7 @@ export function FoldForgeStart({
           <p>Each prompt is ready to edit.</p>
         </div>
         <div className={styles.exampleGrid}>
-          {EXAMPLE_PROMPTS.map((example) => {
+          {EXAMPLE_PROMPTS.map((example, index) => {
             const savedExampleId = example.savedExampleId;
             return (
               <article className={styles.exampleCard} key={example.id}>
@@ -200,9 +206,13 @@ export function FoldForgeStart({
                   alt={example.imageAlt}
                   width={768}
                   height={576}
+                  loading={index === 0 ? "eager" : "lazy"}
                   sizes="(max-width: 759px) 100vw, (max-width: 1039px) 50vw, 33vw"
                 />
                 <div>
+                  <span className={styles.exampleImageLabel}>
+                    {example.imageLabel}
+                  </span>
                   <h3>{example.title}</h3>
                   <p>{example.description}</p>
                   <div className={styles.exampleActions}>
@@ -217,7 +227,7 @@ export function FoldForgeStart({
                         type="button"
                         onClick={() => onOpenSavedExample(savedExampleId)}
                       >
-                        {example.savedActionLabel ?? "Open finished design"}
+                        {example.savedActionLabel ?? "Open prepared design"}
                       </button>
                     ) : null}
                   </div>
