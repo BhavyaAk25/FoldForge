@@ -26,7 +26,7 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 452/452 passing                     |
+| Vitest           | 453/453 passing                     |
 | Statements       | 96.95%                              |
 | Branches         | 90.37%                              |
 | Functions        | 97.85%                              |
@@ -124,6 +124,10 @@ The builder has authorized a new maximum of **$2.00** for the compact path. This
 On clean commit `659e84b`, the new compiler controls passed 3/3 for $0.13202125. The exact box request then used all 3,000 intent-output tokens, 2,918 of them reasoning tokens, and returned no parsed intent. FoldForge stopped before program generation after charging the completed $0.10198375 request. The new ledger therefore records $0.234005 charged and $1.765995 remaining. This is evidence for an intent-output truncation, not a program-generation result.
 
 The targeted remedy uses medium intent reasoning, a strict 4,000-token ceiling, and a typed `MODEL_INCOMPLETE` diagnostic. It has passed every no-cost gate but must be committed and revalidated by a live response before it changes the evidence boundary.
+
+On clean commit `6537b46`, all three compiler controls passed. The exact intent passed 16/16 requirements, and Sol completed one compact program response in about 71 seconds. Deterministic expansion rejected it as `model_invalid_plan` before compilation, repair, or export. The exact intent and program calls cost $0.19071875; cumulative new-ledger spend is $0.542165 with $1.457835 remaining. This proves the compact program call can complete inside the bounded runtime, but it does not prove a valid program.
+
+The next build records only bounded invalid-plan phase/code/path diagnostics and asks Sol to audit the exact semantic plan against deterministic expansion invariants before its single function call. The failed model body remains unlogged and unrecoverable under `store:false`; no unmodified retry is permitted.
 
 Guardrails:
 

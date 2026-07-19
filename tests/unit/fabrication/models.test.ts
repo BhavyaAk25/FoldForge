@@ -239,6 +239,13 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         ),
       }),
     );
+    expect(createResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "perform a silent deterministic-expansion audit",
+        ),
+      }),
+    );
   });
 
   it("allows a smaller explicit output ceiling for bounded live acceptance", async () => {
@@ -570,6 +577,45 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         "ff_subject",
       ),
     ).rejects.toMatchObject({ code });
+  });
+
+  it("retains only a bounded safe mapping diagnostic for an invalid plan", async () => {
+    createResponse.mockResolvedValue({
+      id: "resp-invalid-plan-detail",
+      status: "completed",
+      output: [
+        {
+          type: "function_call",
+          name: "submit_fabrication_plan",
+          arguments: JSON.stringify({
+            diversityClaim: "Use a missing sheet.",
+            plan: {
+              ...fixtureSemanticPlan(),
+              panels: fixtureSemanticPlan().panels.map((panel) => ({
+                ...panel,
+                sheetIndex: 3,
+              })),
+            },
+          }),
+        },
+      ],
+    });
+
+    await expect(
+      new OpenAIFabricationProgramModel().generateProgram(
+        fixtureIntent(),
+        1,
+        [],
+        "ff_subject",
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_plan",
+      safeDetail: {
+        phase: "expansion",
+        code: "invalid_reference",
+        path: ["panels", expect.any(String), "sheetIndex"],
+      },
+    });
   });
 
   it("cancels program polling at the route-safe deadline", async () => {

@@ -49,6 +49,10 @@ import {
   runFabricationRepairLoop,
 } from "../src/server/fabrication-ai/orchestration";
 import {
+  FabricationProgramModelError,
+  type FabricationProgramFailureDetail,
+} from "../src/server/fabrication-ai/plan-response";
+import {
   validateFinalizedConsumerArtifacts,
   type ConsumerValidationResult,
 } from "./lib/consumer-validation";
@@ -185,6 +189,7 @@ interface LiveCaseResult {
   readonly caseId: string;
   readonly status: LiveReadinessCaseStatus;
   readonly failureCode: string | null;
+  readonly programFailureDetail?: FabricationProgramFailureDetail;
   readonly promptHash: string;
   readonly durationMs: number;
   readonly constraintEvidence: LiveIntentConstraintEvidence | null;
@@ -718,6 +723,10 @@ if (!liveEnabled) {
           status: "failed",
           failureCode: errorCode(error),
           durationMs,
+          ...(error instanceof FabricationProgramModelError &&
+          error.safeDetail !== null
+            ? { programFailureDetail: error.safeDetail }
+            : {}),
         });
       }
     }

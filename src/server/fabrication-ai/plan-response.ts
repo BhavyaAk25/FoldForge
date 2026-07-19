@@ -24,8 +24,18 @@ export interface CompletedFabricationPlanResponse {
   readonly output?: readonly unknown[] | null;
 }
 
+export interface FabricationProgramFailureDetail {
+  readonly phase: "decoding" | "schema" | "expansion";
+  readonly code: string;
+  readonly path: readonly string[];
+}
+
 export class FabricationProgramModelError extends FabricationModelContractError {
-  constructor(code: FabricationModelContractErrorCode, message: string) {
+  constructor(
+    code: FabricationModelContractErrorCode,
+    message: string,
+    readonly safeDetail: FabricationProgramFailureDetail | null = null,
+  ) {
     super(code, message);
     this.name = "FabricationProgramModelError";
   }
@@ -46,6 +56,33 @@ const isFabricationPlanFunctionCallCandidate = (
   item.type === "function_call" &&
   "name" in item &&
   item.name === "submit_fabrication_plan";
+
+const expansionFailureDetail = (
+  error: unknown,
+): FabricationProgramFailureDetail => {
+  if (typeof error !== "object" || error === null) {
+    return { phase: "expansion", code: "unknown", path: [] };
+  }
+  const record = error as Record<string, unknown>;
+  const issues = Array.isArray(record.issues) ? record.issues : [];
+  const firstIssue = issues[0];
+  const issueRecord =
+    typeof firstIssue === "object" && firstIssue !== null
+      ? (firstIssue as Record<string, unknown>)
+      : null;
+  const directPath = Array.isArray(record.path) ? record.path : null;
+  const issuePath = Array.isArray(issueRecord?.path) ? issueRecord.path : null;
+  return {
+    phase: "expansion",
+    code:
+      typeof record.code === "string"
+        ? record.code
+        : typeof record.kind === "string"
+          ? record.kind
+          : "unknown",
+    path: (directPath ?? issuePath ?? []).map(String).slice(0, 12),
+  };
+};
 
 export const fabricationProgramProposalFromResponse = (input: {
   readonly response: CompletedFabricationPlanResponse;
@@ -79,6 +116,7 @@ export const fabricationProgramProposalFromResponse = (input: {
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+      { phase: "decoding", code: "arguments_not_string", path: [] },
     );
   }
   let rawProposal: unknown;
@@ -88,6 +126,7 @@ export const fabricationProgramProposalFromResponse = (input: {
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+      { phase: "decoding", code: "invalid_json", path: [] },
     );
   }
   const semanticProposal =
@@ -116,9 +155,15 @@ export const fabricationProgramProposalFromResponse = (input: {
         ),
       };
     }
+    const issue = semanticProposal.error.issues[0];
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+      {
+        phase: "schema",
+        code: issue?.code ?? "unknown",
+        path: issue?.path.map(String).slice(0, 12) ?? [],
+      },
     );
   })();
   const { proposal, expanded } = parsed;
@@ -126,6 +171,7 @@ export const fabricationProgramProposalFromResponse = (input: {
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned an invalid fabrication plan.",
+      expansionFailureDetail(expanded.error),
     );
   }
   return ProgramProposalV1Schema.parse({
