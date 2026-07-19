@@ -133,6 +133,10 @@ On clean commit `21c82f7`, the compiler controls passed and the exact intent aga
 
 The deterministic packer now evaluates both 0° and 90° orientations for every connected flat component and composes the chosen rotation into every panel transform. A focused regression proves a 110 × 60 mm connected net fits a 62 × 112 mm printable area only after the legal quarter-turn. This is a general compiler fix, not a prompt or object-specific route.
 
+On clean commit `1af1551`, the compiler controls and 16/16 exact intent checks passed. The Sol plan then passed strict schema and deterministic expansion, producing one topology fingerprint. Deterministic verification rejected the candidate before export, and no repair call ran because the failure exposed no bounded program path. These calls cost $0.1715125; cumulative spend is $1.044196 with $0.955804 remaining.
+
+Failed live evidence now retains the initial verifier stage, stable failure IDs, measured actual/expected fields, and repairable paths even when no repair cycle can begin. It still does not retain prompt bodies, model bodies, private reasoning, or arbitrary provider error text.
+
 Guardrails:
 
 - use a fresh exclusive ledger and report path tied to one clean commit;

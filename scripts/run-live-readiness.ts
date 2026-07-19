@@ -412,7 +412,7 @@ if (!liveEnabled) {
             "diagnose_repair",
           );
           const repair =
-            outcome.cycles.length > 0
+            initialReport !== null && !initialReport.valid
               ? createRepairEvidence(
                   initialReport,
                   outcome,
@@ -487,6 +487,10 @@ if (!liveEnabled) {
             verifiedCandidateCount: verified.length,
             repairedCandidateCount: verified.filter((run) => run.repaired)
               .length,
+            repairEvidence:
+              candidateRuns
+                .map((run) => run.repairEvidence)
+                .find((evidence) => evidence !== null) ?? null,
           });
           continue;
         }
