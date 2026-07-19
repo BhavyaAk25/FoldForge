@@ -143,6 +143,13 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         ),
       }),
     );
+    expect(parseResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "Unsupported scope takes precedence over missing dimensions or materials",
+        ),
+      }),
+    );
     expect(getClient).toHaveBeenCalledWith({ paidEvaluation: false });
   });
 

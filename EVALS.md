@@ -145,6 +145,8 @@ On clean commit `f880d20`, the compiler controls passed again and the exact inte
 
 The deterministic mapper now considers an alternative child edge only after the authored angular edge has a physical-length mismatch. It accepts only a same-length boundary edge whose aligned panel lies outside the parent, with deterministic tie-breaking; if none exists, the original typed failure remains. The exact six-panel box regression deliberately supplies Sol's wrong right-panel edge and still passes exact dimensions, ordered verification, SVG/DXF/GLB/JSON finalization, and source-equivalence checks offline. This fix is not a template, prompt-keyword route, or live success claim.
 
+On clean commit `2357c2f`, all three compiler responses were schema-valid and completed. The supported case and prompt-injection refusal passed, but the plain powered-robot request was classified `needs_clarification` instead of `unsupported`. The gate failed and stopped before the exact acceptance prompt. These controls cost $0.11447125, bringing cumulative spend to $1.73164325 and leaving $0.26835675. The intent instructions now make unsupported essential behavior take precedence over absent measurements; clarification is reserved for representable requests missing an essential choice. That contract correction passes offline tests but has not been paid-revalidated.
+
 Guardrails:
 
 - use a fresh exclusive ledger and report path tied to one clean commit;
