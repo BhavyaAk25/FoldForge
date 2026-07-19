@@ -26,6 +26,7 @@ const CACHE_WRITE_NANODOLLARS_PER_TOKEN = 6_250;
 const OUTPUT_NANODOLLARS_PER_TOKEN = 30_000;
 const LONG_CONTEXT_INPUT_TOKEN_THRESHOLD = 272_000;
 const REQUEST_OVERHEAD_TOKEN_CEILING = 8_192;
+const PROVIDER_OUTPUT_ACCOUNTING_TOLERANCE_TOKENS = 32;
 
 export type PaidEvalOperation =
   | "compile_intent"
@@ -797,9 +798,14 @@ export class PaidEvalBudget {
         "The request is too large for the bounded standard-price evaluation path.",
       );
     }
+    // Provider usage can include a small number of response-wrapper tokens
+    // beyond max_output_tokens. Reserve that bounded accounting overhead up
+    // front; the request still sends the exact product ceiling to the model.
+    const outputTokenCeiling =
+      maxOutputTokens + PROVIDER_OUTPUT_ACCOUNTING_TOLERANCE_TOKENS;
     const reservedNanodollars = reservationNanodollars(
       inputTokenCeiling,
-      maxOutputTokens,
+      outputTokenCeiling,
     );
     if (
       this.ledger.chargedNanodollars + reservedNanodollars >
@@ -821,7 +827,7 @@ export class PaidEvalBudget {
       sequence: this.ledger.entries.length + 1,
       operation: input.operation,
       inputTokenCeiling,
-      outputTokenCeiling: maxOutputTokens,
+      outputTokenCeiling,
       reservedNanodollars,
       createdAtIso: new Date().toISOString(),
     };

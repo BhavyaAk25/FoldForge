@@ -2,7 +2,7 @@
 
 ## Current state
 
-The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **454 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
+The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **455 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
 
 Live GPT-5.6 Sol is the remaining product gate. The first separately budgeted compact-path compiler smoke passed, but the exact box intent exhausted its 3,000-token output allowance before returning structured intent, so program generation was never started. Intent now uses medium reasoning and a 4,000-token allowance; that remedy is proven offline, not yet by a paid response. Production therefore has `LIVE_MODEL_KILL_SWITCH=true` and makes no live-success claim.
 

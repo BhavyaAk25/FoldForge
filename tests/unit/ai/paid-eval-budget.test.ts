@@ -124,6 +124,26 @@ describe("persistent paid OpenAI evaluation budget", () => {
     await budget.close();
   });
 
+  it("reserves bounded provider output-accounting overhead without raising the model ceiling", async () => {
+    const budget = await openBudget();
+    const request = meteredRequest("bounded accounting overhead", 3_000);
+    const execute = vi.fn(async (received: typeof request) => ({
+      id: "resp-accounting-overhead",
+      usage: responseUsage({ outputTokens: 3_007, reasoningTokens: 1_000 }),
+      received,
+    }));
+
+    await expect(
+      budget.run({ operation: "generate_program", request, execute }),
+    ).resolves.toMatchObject({ id: "resp-accounting-overhead" });
+    expect(execute.mock.calls[0]?.[0].max_output_tokens).toBe(3_000);
+    expect(budget.snapshot()).toMatchObject({
+      haltedReason: null,
+      entries: [{ outcome: "succeeded", outputTokens: 3_007 }],
+    });
+    await budget.close();
+  });
+
   it("persists cumulative usage across sequential evaluation processes", async () => {
     const first = await openBudget();
     await first.run({

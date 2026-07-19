@@ -26,7 +26,7 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 454/454 passing                     |
+| Vitest           | 455/455 passing                     |
 | Statements       | 96.96%                              |
 | Branches         | 90.40%                              |
 | Functions        | 97.86%                              |
@@ -136,6 +136,10 @@ The deterministic packer now evaluates both 0° and 90° orientations for every 
 On clean commit `1af1551`, the compiler controls and 16/16 exact intent checks passed. The Sol plan then passed strict schema and deterministic expansion, producing one topology fingerprint. Deterministic verification rejected the candidate before export, and no repair call ran because the failure exposed no bounded program path. These calls cost $0.1715125; cumulative spend is $1.044196 with $0.955804 remaining.
 
 Failed live evidence now retains the initial verifier stage, stable failure IDs, measured actual/expected fields, and repairable paths even when no repair cycle can begin. It still does not retain prompt bodies, model bodies, private reasoning, or arbitrary provider error text.
+
+On clean commit `0f78b02`, compiler controls and 16/16 exact intent checks passed, but OpenAI reported 4,007 output tokens against a 4,000-token model request. The guard charged the actual $0.14747 usage, sealed the ledger at $1.360834, and stopped before parsing. The ledger retains $0.639166 under the $2 ceiling but cannot continue in place.
+
+The next build reserves a separate 32-token provider accounting allowance without raising the `max_output_tokens` sent to Sol. Usage inside that allowance is charged normally; larger or structurally invalid usage still halts. Any further call must use the one-time immutable continuation carrying all $1.360834 already spent.
 
 Guardrails:
 
