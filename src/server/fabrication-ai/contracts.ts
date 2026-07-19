@@ -7,6 +7,7 @@ import {
   FabricationProgramV1Schema,
   ProgramPatchV1Schema,
 } from "@/core/fabrication/schemas";
+import { FabricationPlanV2Schema } from "@/core/fabrication/semantic-plan";
 import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 
 export const PROMPT_MAXIMUM_CHARACTERS = 4_000;
@@ -70,6 +71,13 @@ export const FabricationPlanProposalV1Schema = z
   })
   .strict();
 
+export const FabricationPlanProposalV2Schema = z
+  .object({
+    diversityClaim: z.string().min(1).max(500),
+    plan: FabricationPlanV2Schema,
+  })
+  .strict();
+
 export const FabricationNarrativeV1Schema = z
   .object({
     summary: z.string().min(1).max(600),
@@ -93,6 +101,9 @@ export const FabricationNarrativeV1Schema = z
 export type ProgramProposalV1 = z.infer<typeof ProgramProposalV1Schema>;
 export type FabricationPlanProposalV1 = z.infer<
   typeof FabricationPlanProposalV1Schema
+>;
+export type FabricationPlanProposalV2 = z.infer<
+  typeof FabricationPlanProposalV2Schema
 >;
 export type FabricationNarrativeV1 = z.infer<
   typeof FabricationNarrativeV1Schema

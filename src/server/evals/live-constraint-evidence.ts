@@ -14,6 +14,7 @@ export interface ExpectedLiveIntentConstraints {
     readonly widthMm: number;
     readonly heightMm: number;
   } | null;
+  readonly printableMarginMm?: number;
   readonly maximumSheets: number;
   readonly behavior: FabricationBehavior;
   readonly cutsAllowed: boolean;
@@ -73,7 +74,10 @@ export const evaluateLiveIntentConstraints = (
         expected.materialThicknessMm,
         0.001,
       ) && expectedMaterialTerms.every((term) => label.includes(term));
-    if (!expected.sheetSizeMm) return materialMatches;
+    const marginMatches =
+      expected.printableMarginMm === undefined ||
+      closeTo(sheet.printableMarginMm, expected.printableMarginMm, 0.001);
+    if (!expected.sheetSizeMm) return materialMatches && marginMatches;
     const expectedSides = [
       expected.sheetSizeMm.widthMm,
       expected.sheetSizeMm.heightMm,
@@ -83,6 +87,7 @@ export const evaluateLiveIntentConstraints = (
     );
     return (
       materialMatches &&
+      marginMatches &&
       closeTo(observedSides[0] ?? null, expectedSides[0] ?? 0, 0.01) &&
       closeTo(observedSides[1] ?? null, expectedSides[1] ?? 0, 0.01)
     );
@@ -188,6 +193,17 @@ export const evaluateLiveIntentConstraints = (
         "stock.sheet.longSideMm",
         expectedSides[1] ?? 0,
         observedSides[1] ?? null,
+        matchingStock !== undefined,
+      ),
+    );
+  }
+
+  if (expected.printableMarginMm !== undefined) {
+    checks.push(
+      check(
+        "stock.sheet.printableMarginMm",
+        expected.printableMarginMm,
+        matchingStock?.printableMarginMm ?? null,
         matchingStock !== undefined,
       ),
     );

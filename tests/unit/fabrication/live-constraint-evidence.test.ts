@@ -174,6 +174,51 @@ describe("live intent constraint evidence", () => {
     ]);
   });
 
+  it("requires an explicitly requested printable margin on the matching stock", () => {
+    const base = fixtureIntent();
+    const sourceSheet = base.stockOptions[0];
+    if (!sourceSheet) throw new Error("Fixture stock is unavailable.");
+    const intent = {
+      ...base,
+      stockOptions: [
+        {
+          ...sourceSheet,
+          printableMarginMm: 4,
+        },
+      ],
+    };
+
+    const evidence = evaluateLiveIntentConstraints(intent, {
+      widthMm: base.requestedSize.widthMm,
+      heightMm: base.requestedSize.heightMm,
+      depthMm: base.requestedSize.depthMm ?? 1,
+      materialThicknessMm: sourceSheet.material.thicknessMm,
+      requiredMaterialTerms: [],
+      sheetSizeMm: {
+        widthMm: sourceSheet.widthMm,
+        heightMm: sourceSheet.heightMm,
+      },
+      printableMarginMm: 5,
+      maximumSheets: base.fabricationBudget.maximumSheets,
+      behavior: base.behavior,
+      cutsAllowed: base.fabricationBudget.cutsAllowed,
+      glueAllowed: base.fabricationBudget.glueAllowed,
+      motion: null,
+      requiredSemanticKinds: [],
+      requiredDimensionTargetsMm: [],
+      requiredDescriptionTerms: [],
+    });
+
+    expect(evidence.passed).toBe(false);
+    expect(evidence.checks).toContainEqual(
+      expect.objectContaining({
+        field: "stock.sheet.printableMarginMm",
+        expected: 5,
+        passed: false,
+      }),
+    );
+  });
+
   it("rejects size, thickness, and material split across stock options", () => {
     const base = fixtureIntent();
     const sourceSheet = base.stockOptions[0];

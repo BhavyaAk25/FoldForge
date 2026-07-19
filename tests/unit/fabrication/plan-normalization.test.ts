@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
+import { evaluateMotionState } from "@/core/fabrication/kinematics";
 import {
   expandFabricationPlan,
   fabricationPlanFromProgram,
@@ -11,6 +12,107 @@ import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
 describe("fold-only plan normalization", () => {
+  it("derives a non-flat home state for a static 30 mm deep fold", () => {
+    const sourceIntent = fixtureIntent();
+    const intent = {
+      ...sourceIntent,
+      intentId: "intent-static-folded-depth",
+      behavior: "static" as const,
+      requestedSize: { widthMm: 70, heightMm: 95, depthMm: 30 },
+    };
+    const source = fabricationPlanFromProgram(fixtureProgram());
+    const plan = {
+      ...source,
+      candidateLabel: "Static folded depth",
+      topologyId: "static-right-angle-fold",
+      panels: source.panels.map((panel, index) => ({
+        ...panel,
+        widthMm: index === 0 ? 70 : 30,
+        heightMm: 95,
+        flatTransform: {
+          translationMm: { xMm: 5, yMm: 5 },
+          rotationDeg: 17,
+        },
+      })),
+      bodies: source.bodies.map((body) => ({
+        ...body,
+        initialTransform: {
+          translationMm: { xMm: 0, yMm: 0, zMm: 0 },
+          rotation: { x: 0, y: 0, z: 0, w: 1 },
+        },
+      })),
+      joints: source.joints.map((joint) =>
+        joint.kind === "fold"
+          ? {
+              ...joint,
+              axis: {
+                startMm: { xMm: 1, yMm: 2, zMm: 0 },
+                endMm: { xMm: 3, yMm: 4, zMm: 0 },
+              },
+              homeAngleDeg: 90,
+              minAngleDeg: 90,
+              maxAngleDeg: 90,
+            }
+          : joint,
+      ),
+      driver: null,
+      outputs: [],
+      couplings: [],
+    };
+
+    const expanded = expandFabricationPlan(intent, plan, 1);
+    expect(expanded.ok).toBe(true);
+    if (!expanded.ok) return;
+    const movingBody = expanded.value.blueprint.bodies.find(
+      (body) => body.bodyId === "body-wing",
+    );
+    expect(movingBody?.initialTransform.rotation.w).toBeCloseTo(
+      Math.SQRT1_2,
+      9,
+    );
+    const compatiblePlan = fabricationPlanFromProgram(expanded.value);
+    const renormalized = normalizeFoldOnlyPlan(
+      {
+        ...compatiblePlan,
+        bodies: compatiblePlan.bodies.map((body) => ({
+          ...body,
+          initialTransform: {
+            translationMm: { xMm: 0, yMm: 0, zMm: 0 },
+            rotation: { x: 0, y: 0, z: 0, w: 1 },
+          },
+        })),
+      },
+      intent.stockOptions,
+      intent.requestedSize,
+    );
+    expect(renormalized.ok).toBe(true);
+    if (!renormalized.ok) return;
+    expect(
+      renormalized.value.bodies.find((body) => body.bodyId === "body-wing")
+        ?.initialTransform.rotation.w,
+    ).toBeCloseTo(Math.SQRT1_2, 9);
+
+    const compiled = compileFabricationProgram(intent, expanded.value);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const state = evaluateMotionState(compiled.value);
+    expect(state.ok).toBe(true);
+    if (!state.ok) return;
+    const vertices = Object.values(state.value.panelVertices).flat();
+    const depthMm =
+      Math.max(...vertices.map((point) => point.zMm)) -
+      Math.min(...vertices.map((point) => point.zMm));
+    expect(depthMm).toBeCloseTo(30, 6);
+
+    const report = verifyFabricationIr(compiled.value, "candidate-static-fold");
+    expect(report.valid).toBe(true);
+    expect(
+      report.failures.find(
+        (failure) => failure.failureId === "semantics.requested_size#depth",
+      ),
+    ).toBeUndefined();
+  });
+
   it("selects the planar net that matches the requested swept envelope", () => {
     const intent = fixtureIntent();
     const source = fabricationPlanFromProgram(fixtureProgram());
@@ -45,6 +147,24 @@ describe("fold-only plan normalization", () => {
     const compiled = compileFabricationProgram(intent, expanded.value);
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) return;
+    const homeState = evaluateMotionState(compiled.value, 0);
+    expect(homeState.ok).toBe(true);
+    if (!homeState.ok) return;
+    expect(
+      Math.max(
+        ...Object.values(homeState.value.panelVertices)
+          .flat()
+          .map((point) => Math.abs(point.zMm)),
+      ),
+    ).toBeCloseTo(0, 9);
+    const openState = evaluateMotionState(compiled.value, 90);
+    expect(openState.ok).toBe(true);
+    if (!openState.ok) return;
+    const openVertices = Object.values(openState.value.panelVertices).flat();
+    expect(
+      Math.max(...openVertices.map((point) => point.zMm)) -
+        Math.min(...openVertices.map((point) => point.zMm)),
+    ).toBeCloseTo(30, 6);
     const report = verifyFabricationIr(
       compiled.value,
       "candidate-requested-envelope",
@@ -196,13 +316,21 @@ describe("fold-only plan normalization", () => {
       report.failures.filter(
         (failure) =>
           failure.failureId.startsWith("connections.fold_edge") ||
-          failure.failureId.startsWith("connections.connector") ||
+          (failure.failureId.startsWith("connections.connector") &&
+            !failure.failureId.startsWith(
+              "connections.connector_mate_reach",
+            )) ||
           failure.failureId.startsWith("connections.tab_attachment") ||
           failure.failureId.startsWith("connections.slot_clearance") ||
           failure.failureId.startsWith("packing.panel_overlap") ||
           failure.failureId.startsWith("packing.sheet_bounds"),
       ),
     ).toEqual([]);
+    expect(
+      report.failures.some((failure) =>
+        failure.failureId.startsWith("connections.connector_mate_reach"),
+      ),
+    ).toBe(true);
 
     for (const joint of compiled.value.joints) {
       if (joint.kind !== "fold") continue;

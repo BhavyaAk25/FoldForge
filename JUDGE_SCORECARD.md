@@ -1,79 +1,83 @@
 # FoldForge skeptical scorecard
 
-Snapshot: 2026-07-17, paid Sol intent contract passed; the final first-program response was incomplete at `max_output_tokens` and rejected before validation.
+Snapshot: 2026-07-18. The compact semantic-plan path passes every current no-cost gate. Historical paid Sol intent calls passed, but no live Sol program or exact live-selected artifact has succeeded. Production remains kill-switched.
 
-This is not a prediction of the judges. It applies the four equally weighted criteria on the [OpenAI Build Week page](https://openai.devpost.com/) and awards points only for reproducible evidence. The official requirements also ask the README and video to distinguish Codex acceleration, human decisions, and GPT-5.6 use.
+This is an internal adversarial review, not a prediction of the judges. It awards points only for reproducible evidence under the four criteria in the [official OpenAI Build Week rules](https://openai.devpost.com/rules).
 
 ## Current evidence score: 76/100
 
-| Criterion                    | Score | Evidence earned                                                                                                                            | Evidence missing                                                                        |
-| ---------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Technological Implementation | 20/25 | Typed compiler, ordered verifier, bounded repair, source-bound exports, adversarial tests, plus paid strict intent/refusal/injection proof | No live program, model repair, selected artifact, or end-to-end Sol success             |
-| Design                       | 18/25 | Concise and accessible saved-example flow, synchronized controls, honest conditional motion and exports                                    | The primary prompt-to-three-candidates journey is unavailable in production             |
-| Potential Impact             | 16/25 | Specific flat-sheet handoff problem; inspectable geometry and standard files replace model prose                                           | No live task, exact live artifact in a downstream GUI, user trial, or workflow evidence |
-| Quality of the Idea          | 22/25 | Clear prompt → typed program → proof thesis; bounded breadth; topology-aware exploration; honest refusal                                   | Claimed breadth still relies mainly on prepared examples and mocked/offline programs    |
+| Criterion                    | Score | Evidence earned                                                                                                            | Evidence missing                                                                       |
+| ---------------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Technological Implementation | 20/25 | Strict contracts, semantic-plan expander, pure compiler, ordered verifier, bounded repair, source-bound exports, 450 tests | No live compact plan, grounded live repair, or exact live-selected consumer proof      |
+| Design                       | 18/25 | Concise one-design flow, synchronized preview/pattern/files, prompt-result binding, accessibility, 7/7 browser flows       | Headline prompt journey is intentionally unavailable while production is kill-switched |
+| Potential Impact             | 16/25 | Specific flat-sheet handoff for packaging/product/operations teams and inspectable standard files                          | No complete live task, exact external-tool handoff, or user/workflow evidence          |
+| Quality of the Idea          | 22/25 | Clear prompt → typed plan → deterministic proof thesis; broad bounded grammar; honest refusal                              | Claimed breadth still depends mainly on prepared and offline programs                  |
 
-The retained paid intent summary is useful but no longer fully reproducible because its raw report was overwritten by a later offline run. **76 is not winning-ready.** On exact paid build `1041e13`, the summary records 3/3 and the preserved readiness report records 18/18 explicit checks, but the first program response was incomplete at the output ceiling. Zero programs, candidates, repairs, or exports were produced. A later compact-plan contract and deterministic expander materially reduce response size and pass offline round-trip tests, but no score is awarded for unverified live quality. The product's central live prompt-to-artifact claim remains unproven, and the deployed product cannot currently perform its headline action.
+**76 is not winning-ready.** The stronger offline architecture does not earn the missing live points. The central claim still requires one unseen prompt to produce a strict compact plan, a deterministically valid or repaired design, and exact downloadable files on the hosted build.
 
-The current report proves GPT-5.6 intent handling, but not the working prompt-to-fabrication journey judges expect. Therefore the current build should not be submitted as complete.
+## Release target: 92/100 — not earned
 
-## Conditional release score: 92/100
+The internal release threshold is at least 92/100 overall and at least 22/25 in every category. A plausible target after complete evidence is:
 
-This is achievable only if the exact submission build passes the full sealed gate and the video makes the proof understandable. The release rule is both **92/100 overall** and **at least 22/25 in every criterion**; a high total cannot compensate for a weak category.
+| Criterion                    | Target | Evidence required                                                                                                          |
+| ---------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------- |
+| Technological Implementation |  24/25 | Usage-backed live plan, deterministic compile, a measured failure/repair when applicable, and exact source-bound consumers |
+| Design                       |  23/25 | Smooth hosted Describe → Forge → Export run with synchronized controls, trace, and downloads                               |
+| Potential Impact             |  22/25 | One continuous brief-to-handoff demo and the exact live file opened in a real downstream tool                              |
+| Quality of the Idea          |  23/25 | Live proof across the bounded grammar and a clear explanation of why typed plan-to-proof differs from generic CAD chat     |
 
-| Criterion                    | Target | Required evidence                                                                                                                                             |
-| ---------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Technological Implementation |  24/25 | Five-case usage-backed Sol report with ≥4 complete passes, strict intent/programs, a measured failure, grounded patch, deterministic recheck, exact artifacts |
-| Design                       |  23/25 | Smooth deployed journey, visibly different candidates, readable repair, synchronized preview/pattern/downloads, no broken or misleading control               |
-| Potential Impact             |  22/25 | Show one continuous brief-to-handoff workflow and open the exact live artifact in a real downstream tool; make no adoption or time-saving claim               |
-| Quality of the Idea          |  23/25 | Show multiple mechanism/topology types and explain why a bounded typed-program-to-proof compiler is different from generic text-to-CAD                        |
+This target is not the current score and does not guarantee an award.
 
-Total: **92/100**. Competitive is not guaranteed. A real target-user or fabrication-team trial would strengthen Potential Impact further, but the minimum 22/25 requires at least a clearly demonstrated external-tool handoff using the exact live-selected files.
+## Evidence hierarchy
 
-## Paid evidence gate
+1. **Offline fixture:** proves deterministic code or a mocked contract only.
+2. **Prepared example:** proves the inspect/export experience for that saved program only.
+3. **Live acceptance smoke:** proves the exact paid case that completed.
+4. **Multi-case sealed suite:** supports a broader reliability statement only if its declared threshold passes.
+5. **Hosted exact-build demonstration:** proves the judge-facing deployment matches reviewed source and artifacts.
 
-The user authorized **$4.00** of API spend. FoldForge applied `LIVE_EVAL_BUDGET_USD=3.70` as a pre-request reservation ceiling, leaving a $0.30 planning reserve. The final 24-entry ledger is sealed at **$3.6134275** with **$0.0865725** remaining; no further conservative request reservation can fit. This client guard is not a provider-side hard billing cap: anomalous reported usage is recorded truthfully even above the reservation, then the ledger seals. The ledger is cumulative, records provider usage and response IDs without prompt/response bodies, and may not be reset, branched, or bypassed.
+Never promote a lower level to a higher claim.
 
-Evidence is classified strictly:
+## Paid-evidence boundary
 
-- A **live smoke** proves only the paid cases and operations it actually completed.
-- The **sealed release suite** attempts all five cases, completes at least four full prompt → programs → verify/repair → rank → narrative → export journeys, and passes the exact-artifact consumer checks.
-- A budget-truncated run is neither a 4/5 pass nor evidence that arbitrary supported prompts work reliably.
+The historical $3.70 reservation ledger is sealed at $3.6134275. It contains useful intent evidence and failed full-program attempts but zero valid live programs or exports. It remains immutable.
 
-## Severe deductions
+The builder separately authorized at most **$2.00** for the smaller semantic-plan acceptance path. That run must use a fresh ledger, a clean build, sequential calls, conservative reservation, no model-generation retry, and immediate stop on the first failure. A successful exact case is still a smoke; it is not silently renamed as the older 4/5 release suite.
 
-- **−5 or disqualification risk:** a prepared fixture is narrated as an unseen GPT-5.6 result.
-- **−5 or eligibility risk:** a budgeted smoke is narrated as the passing five-case sealed suite.
-- **−5:** candidate coordinates or validity are trusted directly from the model.
-- **−4:** the demo does not show a real measured failure and deterministic recheck.
-- **−4:** downloaded artifacts cannot be tied to the selected candidate.
-- **−3:** only prepared-fixture consumer checks are presented as proof for a live-selected artifact.
-- **−3:** candidates are cosmetic variants rather than different programs/topologies.
+## Automatic severe deductions
+
+- **−5 or eligibility risk:** a prepared program is presented as an unseen Sol result.
+- **−5:** a one-case smoke is described as a passing reliability suite.
+- **−5:** model output is trusted as geometry or validity.
+- **−4:** a measured failure is hidden or a repair is only narration.
+- **−4:** a download cannot be tied to the selected candidate hash.
+- **−3:** prepared-artifact consumer checks are presented as proof for a live-selected file.
 - **−3:** the pitch says “make anything” despite the bounded grammar.
-- **−3:** the project claims strength, force, durability, or fabrication performance it does not measure.
-- **Score cap 10/25 technical:** any hard-invalid candidate is presented as valid.
+- **−3:** the project claims force, strength, durability, manufacturing performance, adoption, or time savings without evidence.
+- **Technical score capped at 10/25:** any hard-invalid candidate is presented as valid.
 
-## Score bands
+## Questions before enabling production
 
-- **65 or lower:** GPT-5.6 repeatedly fails, a saved example is disguised as live, or exports do not work.
-- **70–78:** one live run works, but candidates look canned or repair is only narration.
-- **79–86:** serious engineering, incomplete live proof or weak audience/impact demonstration.
-- **87–91:** polished live product, but novelty or impact remains generic.
-- **92+:** live use is real, proof is visible, artifacts are usable, and the audience/problem are clear in one viewing.
+1. Did the strict live intent preserve the complete prompt and every explicit requirement?
+2. Did Sol return one valid `FabricationPlanV2` tool call inside the token and time limits?
+3. Did deterministic expansion and verification enforce the requested topology, not only outer dimensions?
+4. If a measured failure occurred, did the diagnosis cite its real report field and did code recheck every constraint after the patch?
+5. Do the exact SVG, DXF, GLB, JSON, and conditional FOLD status bind to the selected IR hash?
+6. Did independent consumers inspect those exact live-selected bytes?
+7. Did a clean-browser hosted run complete on the same build SHA with metadata-only logs?
+8. Did the complete new run remain below the separately authorized $2 maximum?
 
-## Questions before recording
+If any answer is no, keep the kill switch on and do not call the product complete.
 
-1. Did the full five-case Sol report run under the persistent $3.70 ledger, with at least four complete passes?
-2. Did supported, unsupported, and prompt-injection cases stay inside their strict contracts?
-3. Did code reject or repair a real measured failure, and does the trace show the exact failure field and patch path?
-4. Are at least two candidate topologies visibly and structurally different?
-5. Does every downloaded artifact match the selected IR hash and compatibility status?
-6. Did independent consumers check the exact live SVG, DXF, GLB, JSON, and conditional FOLD bytes?
-7. Does the deployed build SHA match the repository and recorded evidence?
-8. Can a skeptical judge explain the audience, problem, removed handoffs, and prompt-to-proof idea after one viewing?
+## Questions before submitting
 
-If any answer is no, do not call the build winning-ready.
+1. Can a judge explain the audience, problem, and prompt-to-proof difference within ten seconds?
+2. Does the under-three-minute public video show the working hosted path with audio?
+3. Does the narration clearly separate the builder's decisions, Codex acceleration, and runtime GPT-5.6 work?
+4. Is the primary Codex task's `/feedback` session ID in Devpost?
+5. Do repository `main`, deployment SHA, evidence, video, and downloaded artifacts match?
+6. Has an independent reviewer assigned at least 22/25 in every category and 92/100 overall?
 
 ## Claims the evidence does not support
 
-Even after a passing Sol suite, FoldForge must not claim universal “make anything” generation, certified fabrication, load-bearing performance, material strength, friction, fatigue, durability, manufacturing tolerance beyond explicit geometric clearance, compatibility with every downstream machine, measured adoption, or quantified time savings. FOLD remains conditional. A prepared example remains prepared, and parser validation remains narrower than a user successfully opening the exact live file in an external application.
+FoldForge does not support universal “make anything” generation, certified fabrication, load-bearing performance, material strength, force, friction, fatigue, durability, unrestricted manufacturing tolerances, compatibility with every machine, measured adoption, or quantified time savings. FOLD remains conditional. Parser validation is narrower than opening the exact live file in the target application.

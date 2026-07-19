@@ -8,10 +8,12 @@ import {
 } from "@/server/api/live-authorization";
 import {
   API_BODY_LIMIT_BYTES,
+  LIVE_DEPLOYMENT_LIMITS,
   LIVE_OPERATION_POLICIES,
   LIVE_SESSION_LIMITS,
   type LiveOperation,
 } from "@/server/api/security-policy";
+import { BestEffortProcessUsageControlStore } from "@/server/usage-control";
 
 const ACCESS_SECRET = "0123456789abcdef0123456789abcdef";
 
@@ -20,6 +22,7 @@ const requestFor = (
   token: string | null,
   body: unknown = { value: "ok" },
   origin = "https://foldforge.example",
+  attemptId = crypto.randomUUID(),
 ): NextRequest => {
   const headers = new Headers({
     "Content-Type": "application/json",
@@ -28,6 +31,7 @@ const requestFor = (
   if (token) {
     headers.set("Cookie", `${accessCookieName(false)}=${token}`);
   }
+  headers.set("X-FoldForge-Attempt-Id", attemptId);
   return new NextRequest(`https://foldforge.example/api/${operation}`, {
     method: "POST",
     headers,
@@ -38,14 +42,15 @@ const requestFor = (
 const authorize = (
   authorizer: LiveRouteAuthorizer,
   token: string | null,
-  operation: LiveOperation = "compile",
+  operation: LiveOperation = "intent",
   reservedInputTokens = 1,
   reservedOutputTokens = 1,
   body: unknown = { value: "ok" },
   origin = "https://foldforge.example",
+  attemptId = crypto.randomUUID(),
 ): Promise<LiveRouteAuthorizationResult> =>
   authorizer.authorize({
-    request: requestFor(operation, token, body, origin),
+    request: requestFor(operation, token, body, origin, attemptId),
     operation,
     reservedInputTokens,
     reservedOutputTokens,
@@ -106,12 +111,8 @@ describe("live route security policy", () => {
       finalize: 64 * 1_024,
       exports: 256 * 1_024,
     });
-    expect(LIVE_OPERATION_POLICIES.compile).toMatchObject({
-      maximumOutputTokens: 3_000,
-      maximumRequestsPerHour: 20,
-    });
     expect(LIVE_OPERATION_POLICIES.programs).toMatchObject({
-      maximumOutputTokens: 8_000,
+      maximumOutputTokens: 4_000,
       maximumRequestsPerHour: 20,
     });
     expect(LIVE_OPERATION_POLICIES.repair).toMatchObject({
@@ -129,12 +130,17 @@ describe("live route security policy", () => {
       maximumConcurrentPerSession: 1,
       maximumConcurrentGlobal: 8,
     });
+    expect(LIVE_DEPLOYMENT_LIMITS).toEqual({
+      windowMs: 60 * 60 * 1_000,
+      maximumRequests: 40,
+      maximumReservedTokens: 560_000,
+    });
   });
 
   it("derives the safety identifier only from a verified signed session", async () => {
     const token = createAccessToken();
     const context = await expectAuthorized(
-      authorize(new LiveRouteAuthorizer(), token, "compile", 20, 30, {
+      authorize(new LiveRouteAuthorizer(), token, "intent", 20, 30, {
         prompt: "Fold a stand.",
       }),
     );
@@ -154,7 +160,7 @@ describe("live route security policy", () => {
       authorize(
         authorizer,
         token,
-        "compile",
+        "intent",
         1,
         1,
         { prompt: "ok" },
@@ -167,8 +173,8 @@ describe("live route security policy", () => {
 
     await expectDenied(authorize(authorizer, null), 401, "ACCESS_REQUIRED");
     await expectDenied(
-      authorize(authorizer, token, "compile", 1, 1, {
-        value: "x".repeat(API_BODY_LIMIT_BYTES.compile),
+      authorize(authorizer, token, "intent", 1, 1, {
+        value: "x".repeat(API_BODY_LIMIT_BYTES.intent),
       }),
       413,
       "PAYLOAD_TOO_LARGE",
@@ -179,8 +185,7 @@ describe("live route security policy", () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     for (const [operation, maximum] of [
-      ["programs", 8_000],
-      ["compile", 3_000],
+      ["programs", 4_000],
       ["repair", 2_500],
       ["finalize", 2_000],
     ] as const) {
@@ -211,12 +216,12 @@ describe("live route security policy", () => {
     const combinedToken = createAccessToken();
     for (let index = 0; index < 10; index += 1) {
       const context = await expectAuthorized(
-        authorize(combinedAuthorizer, combinedToken, "compile"),
+        authorize(combinedAuthorizer, combinedToken, "intent"),
       );
       context.lease.release();
     }
     await expectDenied(
-      authorize(combinedAuthorizer, combinedToken, "compile"),
+      authorize(combinedAuthorizer, combinedToken, "intent"),
       429,
       "REQUEST_QUOTA_EXCEEDED",
     );
@@ -226,14 +231,293 @@ describe("live route security policy", () => {
     const authorizer = new LiveRouteAuthorizer();
     const token = createAccessToken();
     const context = await expectAuthorized(
-      authorize(authorizer, token, "compile", 137_000, 3_000),
+      authorize(authorizer, token, "programs", 136_000, 4_000),
     );
     context.lease.release();
     await expectDenied(
-      authorize(authorizer, token, "compile", 1, 0),
+      authorize(authorizer, token, "programs", 1, 0),
       429,
       "TOKEN_BUDGET_EXCEEDED",
     );
+  });
+
+  it("rejects a duplicate paid step within one forge attempt", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const token = createAccessToken();
+    const attemptId = crypto.randomUUID();
+    const first = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "programs",
+        1,
+        1,
+        { candidateOrdinal: 1 },
+        "https://foldforge.example",
+        attemptId,
+      ),
+    );
+    first.lease.release();
+
+    const duplicate = await expectDenied(
+      authorize(
+        authorizer,
+        token,
+        "programs",
+        1,
+        1,
+        { candidateOrdinal: 1 },
+        "https://foldforge.example",
+        attemptId,
+      ),
+      409,
+      "DUPLICATE_LIVE_REQUEST",
+    );
+    await expect(duplicate.clone().json()).resolves.toMatchObject({
+      error: {
+        diagnostic: {
+          stage: "program",
+          modelCall: "not_started",
+          failureIds: [],
+        },
+      },
+    });
+  });
+
+  it("keeps signed access-session quotas independent", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const firstToken = createAccessToken();
+    const secondToken = createAccessToken();
+    for (let index = 0; index < 5; index += 1) {
+      const context = await expectAuthorized(
+        authorize(authorizer, firstToken, "repair"),
+      );
+      context.lease.release();
+    }
+    await expectDenied(
+      authorize(authorizer, firstToken, "repair"),
+      429,
+      "REQUEST_QUOTA_EXCEEDED",
+    );
+
+    const secondContext = await expectAuthorized(
+      authorize(authorizer, secondToken, "repair"),
+    );
+    secondContext.lease.release();
+  });
+
+  it("enforces a separate deployment-wide request ceiling", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    for (let sessionIndex = 0; sessionIndex < 4; sessionIndex += 1) {
+      const token = createAccessToken();
+      for (let requestIndex = 0; requestIndex < 10; requestIndex += 1) {
+        const context = await expectAuthorized(
+          authorize(authorizer, token, "intent"),
+        );
+        context.lease.release();
+      }
+    }
+    await expectDenied(
+      authorize(authorizer, createAccessToken(), "intent"),
+      429,
+      "REQUEST_QUOTA_EXCEEDED",
+    );
+  });
+
+  it("preserves a paid-operation denial across injected authorizers", async () => {
+    const usageStore = new BestEffortProcessUsageControlStore();
+    const firstAuthorizer = new LiveRouteAuthorizer({ usageStore });
+    const secondAuthorizer = new LiveRouteAuthorizer({ usageStore });
+    const attemptId = crypto.randomUUID();
+    const body = { candidateOrdinal: 1 };
+    const token = createAccessToken();
+    const first = await expectAuthorized(
+      authorize(
+        firstAuthorizer,
+        token,
+        "programs",
+        1,
+        1,
+        body,
+        "https://foldforge.example",
+        attemptId,
+      ),
+    );
+    first.lease.release();
+
+    await expectDenied(
+      authorize(
+        secondAuthorizer,
+        token,
+        "programs",
+        1,
+        1,
+        body,
+        "https://foldforge.example",
+        attemptId,
+      ),
+      409,
+      "DUPLICATE_LIVE_REQUEST",
+    );
+  });
+
+  it("deduplicates finalization by candidate hash without charging the duplicate", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const token = createAccessToken();
+    const attemptId = crypto.randomUUID();
+    const first = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "finalize",
+        1,
+        1,
+        { candidate: { candidateId: "candidate-a" } },
+        "https://foldforge.example",
+        crypto.randomUUID(),
+      ),
+    );
+    first.lease.release();
+
+    await expectDenied(
+      authorize(
+        authorizer,
+        token,
+        "finalize",
+        1,
+        1,
+        { candidate: { candidateId: "candidate-a" } },
+        "https://foldforge.example",
+        attemptId,
+      ),
+      409,
+      "DUPLICATE_LIVE_REQUEST",
+    );
+
+    const distinctCandidate = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "finalize",
+        1,
+        1,
+        { candidate: { candidateId: "candidate-b" } },
+        "https://foldforge.example",
+        attemptId,
+      ),
+    );
+    distinctCandidate.lease.release();
+  });
+
+  it("rejects the same repair program across different claimed cycles", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const token = createAccessToken();
+    const attemptId = crypto.randomUUID();
+    const first = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "repair",
+        1,
+        1,
+        { repairCycle: 1, program: { programId: "same-program" } },
+        "https://foldforge.example",
+        attemptId,
+      ),
+    );
+    first.lease.release();
+
+    await expectDenied(
+      authorize(
+        authorizer,
+        token,
+        "repair",
+        1,
+        1,
+        { repairCycle: 2, program: { programId: "same-program" } },
+        "https://foldforge.example",
+        attemptId,
+      ),
+      409,
+      "DUPLICATE_LIVE_REQUEST",
+    );
+  });
+
+  it("does not poison an attempt denied before paid work can start", async () => {
+    const authorizer = new LiveRouteAuthorizer();
+    const token = createAccessToken();
+    const attemptId = crypto.randomUUID();
+
+    await expectDenied(
+      authorize(
+        authorizer,
+        token,
+        "programs",
+        1,
+        LIVE_OPERATION_POLICIES.programs.maximumOutputTokens + 1,
+        { candidateOrdinal: 1 },
+        "https://foldforge.example",
+        attemptId,
+      ),
+      429,
+      "TOKEN_BUDGET_EXCEEDED",
+    );
+    const afterBudgetDenial = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "programs",
+        1,
+        1,
+        { candidateOrdinal: 1 },
+        "https://foldforge.example",
+        attemptId,
+      ),
+    );
+    afterBudgetDenial.lease.release();
+
+    const activeAttemptId = crypto.randomUUID();
+    const active = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "intent",
+        1,
+        1,
+        { prompt: "first" },
+        "https://foldforge.example",
+        activeAttemptId,
+      ),
+    );
+    const queuedAttemptId = crypto.randomUUID();
+    await expectDenied(
+      authorize(
+        authorizer,
+        token,
+        "intent",
+        1,
+        1,
+        { prompt: "second" },
+        "https://foldforge.example",
+        queuedAttemptId,
+      ),
+      429,
+      "TOO_MANY_ACTIVE_REQUESTS",
+    );
+    active.lease.release();
+    const afterConcurrencyDenial = await expectAuthorized(
+      authorize(
+        authorizer,
+        token,
+        "intent",
+        1,
+        1,
+        { prompt: "second" },
+        "https://foldforge.example",
+        queuedAttemptId,
+      ),
+    );
+    afterConcurrencyDenial.lease.release();
   });
 
   it("admits one complete single-design repair workflow", async () => {
@@ -251,16 +535,32 @@ describe("live route security policy", () => {
     const reservations: readonly (readonly [LiveOperation, number, number])[] =
       [
         reservation("intent", 4_000, 3_000),
-        reservation("programs", 8_192, 8_000),
+        reservation("programs", 8_192, 4_000),
         ...Array.from({ length: 5 }, () =>
           reservation("repair", 16_384, 2_500),
         ),
         reservation("finalize", 12_000, 2_000),
       ];
 
+    const attemptId = crypto.randomUUID();
+    let repairCycle = 0;
     for (const [operation, inputTokens, outputTokens] of reservations) {
+      if (operation === "repair") repairCycle += 1;
       const context = await expectAuthorized(
-        authorize(authorizer, token, operation, inputTokens, outputTokens),
+        authorize(
+          authorizer,
+          token,
+          operation,
+          inputTokens,
+          outputTokens,
+          operation === "repair"
+            ? { repairCycle, program: { programId: `program-${repairCycle}` } }
+            : operation === "finalize"
+              ? { candidate: { candidateId: "candidate-final" } }
+              : { value: "ok" },
+          "https://foldforge.example",
+          attemptId,
+        ),
       );
       context.lease.release();
     }
@@ -277,14 +577,17 @@ describe("live route security policy", () => {
     );
     first.lease.release();
 
+    const globalAuthorizer = new LiveRouteAuthorizer();
     const contexts = [];
     for (let index = 0; index < 8; index += 1) {
       contexts.push(
-        await expectAuthorized(authorize(authorizer, createAccessToken())),
+        await expectAuthorized(
+          authorize(globalAuthorizer, createAccessToken()),
+        ),
       );
     }
     await expectDenied(
-      authorize(authorizer, createAccessToken()),
+      authorize(globalAuthorizer, createAccessToken()),
       429,
       "TOO_MANY_ACTIVE_REQUESTS",
     );
@@ -297,8 +600,8 @@ describe("live route security policy", () => {
     await expect(
       authorizer.run(
         {
-          request: requestFor("compile", token),
-          operation: "compile",
+          request: requestFor("intent", token),
+          operation: "intent",
           reservedInputTokens: 1,
           reservedOutputTokens: 1,
           nowMs: 1_000,
@@ -331,8 +634,8 @@ describe("live route security policy", () => {
     const token = createAccessToken();
     const response = await authorizer.run(
       {
-        request: requestFor("compile", token),
-        operation: "compile",
+        request: requestFor("intent", token),
+        operation: "intent",
         reservedInputTokens: 1,
         reservedOutputTokens: 1,
         nowMs: 1_000,

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import type { ForgeDiagnosticV1 } from "@/lib/forge-diagnostics";
+
 export type SafeSecurityErrorCode =
   | "ACCESS_REQUIRED"
   | "LIVE_MODEL_UNAVAILABLE"
@@ -14,6 +16,7 @@ export interface SafeSecurityErrorBody {
     readonly code: SafeSecurityErrorCode;
     readonly message: string;
     readonly details: readonly string[];
+    readonly diagnostic?: ForgeDiagnosticV1;
   };
 }
 
@@ -63,6 +66,7 @@ const boundedRetryAfterSeconds = (value: number): number =>
 export const safeSecurityError = (
   code: SafeSecurityErrorCode,
   retryAfterSeconds?: number,
+  diagnostic?: ForgeDiagnosticV1,
 ): SafeSecurityErrorResponse => {
   const definition = DEFINITIONS[code];
   const headers = new Headers();
@@ -79,6 +83,7 @@ export const safeSecurityError = (
         code,
         message: definition.message,
         details: [],
+        ...(diagnostic ? { diagnostic } : {}),
       },
     },
     { status: definition.status, headers },

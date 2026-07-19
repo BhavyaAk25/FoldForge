@@ -8,11 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { canonicalSerialize } from "@/core/canonical";
 import { buildFabricationCandidate } from "@/core/fabrication/candidate";
-import { createOfflineFabricationShowcases } from "@/core/fabrication/examples";
-import {
-  fabricationPlanFromProgram,
-  FABRICATION_PLAN_EXPANDER_VERSION,
-} from "@/core/fabrication/planning";
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import { sha256Hex } from "@/core/sha256";
 import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
 import {
@@ -22,8 +18,14 @@ import {
   OpenAIFabricationProgramModel,
   OpenAIFabricationRepairModel,
   fabricationNarrativeInput,
+  fabricationPlanningInput,
+  fabricationSemanticReferenceKeys,
 } from "@/server/fabrication-ai/models";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
+import {
+  fixtureLiveAcceptancePlan,
+  fixtureSemanticPlan,
+} from "../../fixtures/semantic-plan";
 
 const {
   cancelResponse,
@@ -56,7 +58,7 @@ const planFunctionOutput = (diversityClaim: string) => [
     name: "submit_fabrication_plan",
     arguments: JSON.stringify({
       diversityClaim,
-      plan: fabricationPlanFromProgram(fixtureProgram()),
+      plan: fixtureSemanticPlan(),
     }),
   },
 ];
@@ -157,14 +159,12 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
 
     expect(result.program).toMatchObject({
       intentId: "intent-winged-display",
-      topologyId: "two-panel-fold",
+      topologyId: "topology-two-panel-fold",
     });
     expect(result.provenance).toEqual({
       modelId: FOLDFORGE_MODEL,
       modelResponseId: "resp-program",
-      planHash: sha256Hex(
-        canonicalSerialize(fabricationPlanFromProgram(fixtureProgram())),
-      ),
+      planHash: sha256Hex(canonicalSerialize(fixtureSemanticPlan())),
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
     });
     expect(createResponse).toHaveBeenCalledWith(
@@ -193,6 +193,34 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       }),
       { maxRetries: 0, timeout: 15_000 },
     );
+    expect(createResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "Never author flat transforms, packing coordinates, global axes or origins, quaternions",
+        ),
+      }),
+    );
+    expect(createResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "Code owns canonical identifiers, non-overlapping sheet packing",
+        ),
+      }),
+    );
+    expect(createResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "rectangle vertices [(0,0),(1,0),(1,1),(0,1)]: edges 0 top, 1 right, 2 bottom, 3 left",
+        ),
+      }),
+    );
+    expect(createResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        instructions: expect.stringContaining(
+          "canonical panel-front maps to panel key front",
+        ),
+      }),
+    );
   });
 
   it("allows a smaller explicit output ceiling for bounded live acceptance", async () => {
@@ -218,24 +246,114 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
   });
 
-  it("leaves conservative reasoning headroom above representative program JSON", () => {
-    const largestVisibleTokenEstimate = Math.max(
-      ...createOfflineFabricationShowcases().map((showcase) =>
-        Math.ceil(
-          Buffer.byteLength(
-            JSON.stringify({
-              diversityClaim: "A concise topology-specific proposal.",
-              plan: fabricationPlanFromProgram(showcase.program),
-            }),
-            "utf8",
-          ) / 3,
-        ),
-      ),
+  it("leaves conservative reasoning headroom above representative semantic JSON", () => {
+    const largestVisibleTokenEstimate = Math.ceil(
+      Buffer.byteLength(
+        JSON.stringify({
+          diversityClaim: "A concise topology-specific proposal.",
+          plan: fixtureLiveAcceptancePlan(),
+        }),
+        "utf8",
+      ) / 3,
     );
 
     expect(largestVisibleTokenEstimate).toBeLessThanOrEqual(
       FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS / 2,
     );
+  });
+
+  it("preserves the exact request alongside the compact normalized brief", () => {
+    const intent = fixtureIntent();
+    const input = fabricationPlanningInput(intent, []);
+    const serialized = canonicalSerialize(input);
+
+    expect(input).toMatchObject({
+      designBrief: {
+        objectLabel: intent.objectLabel,
+        requestedSize: intent.requestedSize,
+        stockOptions: intent.stockOptions,
+      },
+      exactRequirements: intent.sourcePrompt,
+      semanticReferenceKeys: [],
+      diversity: null,
+    });
+    expect(serialized).toContain(intent.sourcePrompt);
+    expect(serialized).not.toContain(intent.intentId);
+    expect(serialized).not.toContain('"scopeStatus"');
+    expect(serialized).not.toContain('"clarificationQuestion"');
+    expect(serialized).not.toContain('"unsupportedReason"');
+    expect(serialized).not.toContain('"candidateOrdinal"');
+    expect(serialized).not.toContain('"usedTopologyIds"');
+
+    expect(fabricationPlanningInput(intent, ["topology-used"])).toMatchObject({
+      diversity: { topologyIdsAlreadyUsed: ["topology-used"] },
+    });
+  });
+
+  it("normalizes canonical intent references to unprefixed semantic keys", () => {
+    const base = fixtureIntent();
+    const intent = {
+      ...base,
+      semanticConstraints: [
+        {
+          constraintId: "contact-lid-front",
+          kind: "contact" as const,
+          hard: true,
+          source: "user" as const,
+          geometryRefs: [
+            { kind: "panel" as const, id: "panel-front" },
+            { kind: "panel" as const, id: "panel-panel-lid" },
+            { kind: "connector" as const, id: "connector-lid-lock-tab" },
+            { kind: "connector" as const, id: "connector-lid-lock-slot" },
+          ],
+          minimumAreaMm2: 0,
+          during: "rest" as const,
+        },
+        {
+          constraintId: "motion-lid",
+          kind: "motion" as const,
+          hard: true,
+          source: "user" as const,
+          outputId: "output-output-lid",
+          minimumValue: 0,
+          maximumValue: 90,
+          unit: "deg" as const,
+        },
+      ],
+    };
+
+    expect(fabricationSemanticReferenceKeys(intent)).toEqual([
+      {
+        canonicalId: "connector-lid-lock-slot",
+        semanticKind: "connector_relationship",
+        semanticKey: "lid-lock",
+        connectorMember: "slot",
+      },
+      {
+        canonicalId: "connector-lid-lock-tab",
+        semanticKind: "connector_relationship",
+        semanticKey: "lid-lock",
+        connectorMember: "tab",
+      },
+      {
+        canonicalId: "output-output-lid",
+        semanticKind: "output",
+        semanticKey: "lid",
+        connectorMember: null,
+      },
+      {
+        canonicalId: "panel-front",
+        semanticKind: "panel",
+        semanticKey: "front",
+        connectorMember: null,
+      },
+      {
+        canonicalId: "panel-panel-lid",
+        semanticKind: "panel",
+        semanticKey: "lid",
+        connectorMember: null,
+      },
+    ]);
   });
 
   it("builds narrative input without resending compiled coordinates", () => {
@@ -408,13 +526,11 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
           arguments: JSON.stringify({
             diversityClaim: "Use a missing sheet.",
             plan: {
-              ...fabricationPlanFromProgram(fixtureProgram()),
-              panels: fabricationPlanFromProgram(fixtureProgram()).panels.map(
-                (panel) => ({
-                  ...panel,
-                  sheetId: "sheet-missing",
-                }),
-              ),
+              ...fixtureSemanticPlan(),
+              panels: fixtureSemanticPlan().panels.map((panel) => ({
+                ...panel,
+                sheetIndex: 3,
+              })),
             },
           }),
         },

@@ -1,14 +1,17 @@
 import { FABRICATION_KINEMATIC_LIMITS, FABRICATION_LIMITS } from "./limits";
+import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { buildDirectedBodyTopology } from "./topology";
 import type {
   ConnectorV1,
   FabricationPlanV1,
   JointV1,
   PlannedPanelBlueprintV1,
+  PlannedRigidBodyV1,
   Point2Mm,
   RequestedSizeV1,
   SheetV1,
   Transform2Mm,
+  Transform3Mm,
 } from "./types";
 
 const EPSILON_MM = 1e-7;
@@ -59,6 +62,56 @@ type FoldJoint = Extract<JointV1, { kind: "fold" }>;
 
 const isFoldJoint = (joint: JointV1): joint is FoldJoint =>
   joint.kind === "fold";
+
+const foldHomeTransform = (joint: FoldJoint): Transform3Mm | null => {
+  const matrix = rotationAroundAxisMatrix4(
+    joint.axis.startMm,
+    joint.axis.endMm,
+    joint.homeAngleDeg,
+  );
+  return matrix ? decomposeRigidMatrix4(matrix) : null;
+};
+
+/**
+ * Panel vertices and fold axes share the flat sheet coordinate frame. A
+ * body's initial transform therefore represents its home fold relative to
+ * its parent, while runtime motion applies the delta from that home value.
+ * Deriving the transform here prevents model-authored transforms or a net
+ * rewrite from silently turning a non-zero home angle back into a flat body.
+ */
+const bodiesWithDerivedFoldHomes = (
+  plan: FabricationPlanV1,
+  foldJoints: readonly FoldJoint[],
+  rootBodyId: string,
+): FoldPlanNormalizationResult => {
+  const jointByChildBodyId = new Map(
+    foldJoints.map((joint) => [joint.childBodyId, joint]),
+  );
+  const bodies: PlannedRigidBodyV1[] = [];
+  for (const body of plan.bodies) {
+    if (body.bodyId === rootBodyId) {
+      bodies.push({
+        ...body,
+        initialTransform: IDENTITY_TRANSFORM_3D,
+        grounded: true,
+      });
+      continue;
+    }
+    const parentJoint = jointByChildBodyId.get(body.bodyId);
+    const initialTransform = parentJoint
+      ? foldHomeTransform(parentJoint)
+      : null;
+    if (!parentJoint || !initialTransform) {
+      return {
+        ok: false,
+        path: ["bodies", body.bodyId, "initialTransform"],
+        message: `A finite home transform could not be derived for fold body ${body.bodyId}.`,
+      };
+    }
+    bodies.push({ ...body, initialTransform, grounded: false });
+  }
+  return { ok: true, value: { ...plan, bodies } };
+};
 
 export type FoldPlanNormalizationResult =
   | { readonly ok: true; readonly value: FabricationPlanV1 }
@@ -773,7 +826,11 @@ export const normalizeFoldOnlyPlan = (
     };
   }
   if (compatibleExistingLayout(plan, foldJoints, panelByBodyId, sheetById)) {
-    return { ok: true, value: plan };
+    return bodiesWithDerivedFoldHomes(
+      plan,
+      foldJoints,
+      topology.value.rootBodyId,
+    );
   }
   const expressivePanel = plan.panels.find(
     (panel) => !isCompleteRectangularContour(panel),
@@ -972,16 +1029,10 @@ export const normalizeFoldOnlyPlan = (
       },
     };
   });
-  return {
-    ok: true,
-    value: {
+  return bodiesWithDerivedFoldHomes(
+    {
       ...plan,
       panels: normalizedPanels,
-      bodies: plan.bodies.map((body) => ({
-        ...body,
-        initialTransform: IDENTITY_TRANSFORM_3D,
-        grounded: body.bodyId === topology.value.rootBodyId,
-      })),
       joints: normalizedJoints,
       connectors: normalizedConnectorPairs(
         plan.connectors,
@@ -989,5 +1040,7 @@ export const normalizeFoldOnlyPlan = (
         sheetById,
       ),
     },
-  };
+    normalizedJoints,
+    topology.value.rootBodyId,
+  );
 };

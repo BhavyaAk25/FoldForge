@@ -37,6 +37,7 @@ import {
   transformPoint2,
   triangulatePolygonWithHoles,
 } from "./polygon";
+import { pointTriangleDistanceMm } from "./spatial";
 import {
   ExportEquivalenceCheckV2Schema,
   FabricationIRV1Schema,
@@ -79,13 +80,14 @@ const MINIMUM_CONNECTOR_CLEARANCE_MM = 0.2;
 const CONNECTION_TOLERANCE_MM = 0.1;
 const JOINT_ANCHOR_TOLERANCE_MM = 1;
 const CONNECTOR_ALIGNMENT_COSINE_TOLERANCE = 1e-6;
+const CONTACT_LOCUS_TOLERANCE_MM = 1e-5;
 const REQUESTED_SIZE_TOLERANCE_MM = 2;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/u;
 const MAXIMUM_REPORT_CHECKS = 512;
 const MAXIMUM_REPORT_FAILURES = 256;
 
 const connectorPairMetricId = (
-  prefix: "axis" | "fit_l" | "fit_w" | "span",
+  prefix: "axis" | "fit_l" | "fit_w" | "reach" | "span",
   firstConnectorId: string,
   secondConnectorId: string,
 ): string =>
@@ -1588,6 +1590,24 @@ const connectorSpanAlignment = (
     : null;
 };
 
+const tabInsertionReachMm = (
+  tab: Extract<FabricationIRV1["connectors"][number], { readonly kind: "tab" }>,
+): number => {
+  const deltaXmm = tab.rootEdge.end.xMm - tab.rootEdge.start.xMm;
+  const deltaYmm = tab.rootEdge.end.yMm - tab.rootEdge.start.yMm;
+  const rootLengthMm = Math.hypot(deltaXmm, deltaYmm);
+  if (rootLengthMm <= 1e-12) return 0;
+  return Math.max(
+    ...tab.contour.vertices.map(
+      (point) =>
+        Math.abs(
+          deltaXmm * (tab.rootEdge.start.yMm - point.yMm) -
+            (tab.rootEdge.start.xMm - point.xMm) * deltaYmm,
+        ) / rootLengthMm,
+    ),
+  );
+};
+
 const distancePointToSegment3Mm = (
   point: Point3Mm,
   start: Point3Mm,
@@ -1793,6 +1813,57 @@ const validateConnections = (
           ],
           repairableProgramPaths: [],
         });
+      }
+      // A reciprocal pair on one panel is a repeatable external module port:
+      // each exported copy supplies one half to the next copy. Distinct-panel
+      // pairs belong to this assembly and must be reachable in its home pose.
+      if (tabPanel.panelId !== slotPanel.panelId) {
+        const tabAnchor = connectorWorldAnchor(tab, tabPanel, home.value);
+        const slotAnchor = connectorWorldAnchor(mate, slotPanel, home.value);
+        const mateDistanceMm =
+          tabAnchor && slotAnchor
+            ? Math.hypot(
+                tabAnchor.xMm - slotAnchor.xMm,
+                tabAnchor.yMm - slotAnchor.yMm,
+                tabAnchor.zMm - slotAnchor.zMm,
+              )
+            : Number.POSITIVE_INFINITY;
+        const maximumMateDistanceMm =
+          tabInsertionReachMm(tab) +
+          mate.widthMm / 2 +
+          Math.max(tab.clearanceMm, mate.clearanceMm);
+        state.metrics.push({
+          metricId: connectorPairMetricId(
+            "reach",
+            tab.connectorId,
+            mate.connectorId,
+          ),
+          value: mateDistanceMm,
+          unit: "mm",
+          geometryRefs: [
+            geometryRef("connector", tab.connectorId),
+            geometryRef("connector", mate.connectorId),
+          ],
+        });
+        if (mateDistanceMm > maximumMateDistanceMm) {
+          addFailure(state, {
+            failureId: `connections.connector_mate_reach#${tab.connectorId}:${mate.connectorId}`,
+            category: "manufacturability",
+            stage: "connections",
+            severity: "hard",
+            message:
+              "The assembled slot lies beyond the tab's available insertion reach.",
+            actual: measured(mateDistanceMm, "mm"),
+            expected: measured(maximumMateDistanceMm, "mm"),
+            geometryRefs: [
+              geometryRef("connector", tab.connectorId),
+              geometryRef("connector", mate.connectorId),
+              geometryRef("panel", tabPanel.panelId),
+              geometryRef("panel", slotPanel.panelId),
+            ],
+            repairableProgramPaths: [],
+          });
+        }
       }
     }
   }
@@ -2686,16 +2757,567 @@ const validateMotion = (
   };
 };
 
+type PanelTriangle3 = readonly [Point3Mm, Point3Mm, Point3Mm];
+type Segment3Mm = readonly [Point3Mm, Point3Mm];
+
+interface ReciprocalConnectorPair {
+  readonly tab: Extract<
+    FabricationIRV1["connectors"][number],
+    { readonly kind: "tab" }
+  >;
+  readonly slot: Extract<
+    FabricationIRV1["connectors"][number],
+    { readonly kind: "slot" }
+  >;
+}
+
+const triangleLike = (triangle: PanelTriangle3) => ({
+  first: triangle[0],
+  second: triangle[1],
+  third: triangle[2],
+});
+
+const pointDistance3Mm = (first: Point3Mm, second: Point3Mm): number =>
+  Math.hypot(
+    first.xMm - second.xMm,
+    first.yMm - second.yMm,
+    first.zMm - second.zMm,
+  );
+
+const segmentTriangleIntersectionPoint = (
+  segment: Segment3Mm,
+  triangle: PanelTriangle3,
+): Point3Mm | null => {
+  const [start, end] = segment;
+  const [first, second, third] = triangle;
+  const direction = {
+    x: end.xMm - start.xMm,
+    y: end.yMm - start.yMm,
+    z: end.zMm - start.zMm,
+  };
+  const firstEdge = {
+    x: second.xMm - first.xMm,
+    y: second.yMm - first.yMm,
+    z: second.zMm - first.zMm,
+  };
+  const secondEdge = {
+    x: third.xMm - first.xMm,
+    y: third.yMm - first.yMm,
+    z: third.zMm - first.zMm,
+  };
+  const directionCross = {
+    x: direction.y * secondEdge.z - direction.z * secondEdge.y,
+    y: direction.z * secondEdge.x - direction.x * secondEdge.z,
+    z: direction.x * secondEdge.y - direction.y * secondEdge.x,
+  };
+  const determinant =
+    firstEdge.x * directionCross.x +
+    firstEdge.y * directionCross.y +
+    firstEdge.z * directionCross.z;
+  if (Math.abs(determinant) <= 1e-10) return null;
+  const inverse = 1 / determinant;
+  const startOffset = {
+    x: start.xMm - first.xMm,
+    y: start.yMm - first.yMm,
+    z: start.zMm - first.zMm,
+  };
+  const firstBarycentric =
+    inverse *
+    (startOffset.x * directionCross.x +
+      startOffset.y * directionCross.y +
+      startOffset.z * directionCross.z);
+  if (firstBarycentric < -1e-9 || firstBarycentric > 1 + 1e-9) {
+    return null;
+  }
+  const offsetCross = {
+    x: startOffset.y * firstEdge.z - startOffset.z * firstEdge.y,
+    y: startOffset.z * firstEdge.x - startOffset.x * firstEdge.z,
+    z: startOffset.x * firstEdge.y - startOffset.y * firstEdge.x,
+  };
+  const secondBarycentric =
+    inverse *
+    (direction.x * offsetCross.x +
+      direction.y * offsetCross.y +
+      direction.z * offsetCross.z);
+  if (
+    secondBarycentric < -1e-9 ||
+    firstBarycentric + secondBarycentric > 1 + 1e-9
+  ) {
+    return null;
+  }
+  const segmentFraction =
+    inverse *
+    (secondEdge.x * offsetCross.x +
+      secondEdge.y * offsetCross.y +
+      secondEdge.z * offsetCross.z);
+  if (segmentFraction < -1e-9 || segmentFraction > 1 + 1e-9) {
+    return null;
+  }
+  return {
+    xMm: start.xMm + direction.x * segmentFraction,
+    yMm: start.yMm + direction.y * segmentFraction,
+    zMm: start.zMm + direction.z * segmentFraction,
+  };
+};
+
+const triangleIntersectionSegment = (
+  first: PanelTriangle3,
+  second: PanelTriangle3,
+): Segment3Mm | null => {
+  const edges = (triangle: PanelTriangle3): readonly Segment3Mm[] => [
+    [triangle[0], triangle[1]],
+    [triangle[1], triangle[2]],
+    [triangle[2], triangle[0]],
+  ];
+  const points: Point3Mm[] = [];
+  const addPoint = (point: Point3Mm | null): void => {
+    if (
+      point &&
+      !points.some(
+        (candidate) =>
+          pointDistance3Mm(candidate, point) <= CONTACT_LOCUS_TOLERANCE_MM,
+      )
+    ) {
+      points.push(point);
+    }
+  };
+  for (const edge of edges(first)) {
+    addPoint(segmentTriangleIntersectionPoint(edge, second));
+  }
+  for (const edge of edges(second)) {
+    addPoint(segmentTriangleIntersectionPoint(edge, first));
+  }
+  if (points.length < 2) return null;
+
+  let farthest: Segment3Mm | null = null;
+  let farthestDistanceMm = 0;
+  for (let firstIndex = 0; firstIndex < points.length; firstIndex += 1) {
+    const firstPoint = points[firstIndex];
+    if (!firstPoint) continue;
+    for (
+      let secondIndex = firstIndex + 1;
+      secondIndex < points.length;
+      secondIndex += 1
+    ) {
+      const secondPoint = points[secondIndex];
+      if (!secondPoint) continue;
+      const distanceMm = pointDistance3Mm(firstPoint, secondPoint);
+      if (distanceMm > farthestDistanceMm) {
+        farthest = [firstPoint, secondPoint];
+        farthestDistanceMm = distanceMm;
+      }
+    }
+  }
+  return farthestDistanceMm > CONTACT_LOCUS_TOLERANCE_MM ? farthest : null;
+};
+
+const panelIntersectionSegments = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Segment3Mm[] => {
+  const firstTriangles = motionState.panelTriangles[firstPanelId] ?? [];
+  const secondTriangles = motionState.panelTriangles[secondPanelId] ?? [];
+  return firstTriangles.flatMap((first) =>
+    secondTriangles.flatMap((second) => {
+      const segment = triangleIntersectionSegment(first, second);
+      return segment ? [segment] : [];
+    }),
+  );
+};
+
+const panelIntersectionWitnesses = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Point3Mm[] => {
+  // A zero-area panel intersection can be a valid shared edge or an invalid
+  // line through both interiors. Triangle witnesses retain the entire measured
+  // intersection locus so a declared seam elsewhere cannot hide the crossing.
+  const witnesses: Point3Mm[] = [];
+  const firstBoundary = motionState.panelVertices[firstPanelId] ?? [];
+  const secondBoundary = motionState.panelVertices[secondPanelId] ?? [];
+  const firstTriangles = motionState.panelTriangles[firstPanelId] ?? [];
+  const secondTriangles = motionState.panelTriangles[secondPanelId] ?? [];
+  const collect = (
+    boundary: readonly Point3Mm[],
+    triangles: readonly PanelTriangle3[],
+  ): void => {
+    for (const point of boundary) {
+      for (const triangle of triangles) {
+        if (
+          pointTriangleDistanceMm(point, triangleLike(triangle)) <=
+          CONTACT_LOCUS_TOLERANCE_MM
+        ) {
+          witnesses.push(point);
+        }
+      }
+    }
+    for (const [start, end] of boundary.map(
+      (point, index) =>
+        [point, boundary[(index + 1) % boundary.length]!] as const,
+    )) {
+      for (const triangle of triangles) {
+        const witness = segmentTriangleIntersectionPoint(
+          [start, end],
+          triangle,
+        );
+        if (witness) {
+          witnesses.push(witness);
+        }
+      }
+    }
+  };
+  collect(firstBoundary, secondTriangles);
+  collect(secondBoundary, firstTriangles);
+  return witnesses;
+};
+
+const coincidentSegmentOverlap3 = (
+  first: Segment3Mm,
+  second: Segment3Mm,
+): Segment3Mm | null => {
+  const firstDirection = {
+    x: first[1].xMm - first[0].xMm,
+    y: first[1].yMm - first[0].yMm,
+    z: first[1].zMm - first[0].zMm,
+  };
+  const secondDirection = {
+    x: second[1].xMm - second[0].xMm,
+    y: second[1].yMm - second[0].yMm,
+    z: second[1].zMm - second[0].zMm,
+  };
+  const firstLengthMm = Math.hypot(
+    firstDirection.x,
+    firstDirection.y,
+    firstDirection.z,
+  );
+  const secondLengthMm = Math.hypot(
+    secondDirection.x,
+    secondDirection.y,
+    secondDirection.z,
+  );
+  if (
+    firstLengthMm <= CONTACT_LOCUS_TOLERANCE_MM ||
+    secondLengthMm <= CONTACT_LOCUS_TOLERANCE_MM
+  ) {
+    return null;
+  }
+  const crossLength = Math.hypot(
+    firstDirection.y * secondDirection.z - firstDirection.z * secondDirection.y,
+    firstDirection.z * secondDirection.x - firstDirection.x * secondDirection.z,
+    firstDirection.x * secondDirection.y - firstDirection.y * secondDirection.x,
+  );
+  if (crossLength / (firstLengthMm * secondLengthMm) > 1e-8) return null;
+  if (
+    distancePointToLine3Mm(second[0], first[0], firstDirection) >
+      CONTACT_LOCUS_TOLERANCE_MM ||
+    distancePointToLine3Mm(second[1], first[0], firstDirection) >
+      CONTACT_LOCUS_TOLERANCE_MM
+  ) {
+    return null;
+  }
+  const unit = {
+    x: firstDirection.x / firstLengthMm,
+    y: firstDirection.y / firstLengthMm,
+    z: firstDirection.z / firstLengthMm,
+  };
+  const project = (point: Point3Mm): number =>
+    (point.xMm - first[0].xMm) * unit.x +
+    (point.yMm - first[0].yMm) * unit.y +
+    (point.zMm - first[0].zMm) * unit.z;
+  const secondProjections = [project(second[0]), project(second[1])] as const;
+  const overlapStartMm = Math.max(0, Math.min(...secondProjections));
+  const overlapEndMm = Math.min(firstLengthMm, Math.max(...secondProjections));
+  if (overlapEndMm - overlapStartMm <= CONTACT_LOCUS_TOLERANCE_MM) {
+    return null;
+  }
+  const pointAt = (distanceMm: number): Point3Mm => ({
+    xMm: first[0].xMm + unit.x * distanceMm,
+    yMm: first[0].yMm + unit.y * distanceMm,
+    zMm: first[0].zMm + unit.z * distanceMm,
+  });
+  return [pointAt(overlapStartMm), pointAt(overlapEndMm)];
+};
+
+const coincidentPanelBoundarySegments = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Segment3Mm[] => {
+  const boundarySegments = (panelId: string): readonly Segment3Mm[] => {
+    const vertices = motionState.panelVertices[panelId] ?? [];
+    return vertices.map(
+      (point, index) =>
+        [point, vertices[(index + 1) % vertices.length]!] as const,
+    );
+  };
+  return boundarySegments(firstPanelId).flatMap((first) =>
+    boundarySegments(secondPanelId).flatMap((second) => {
+      const overlap = coincidentSegmentOverlap3(first, second);
+      return overlap ? [overlap] : [];
+    }),
+  );
+};
+
+const witnessesAreConfinedToSegments = (
+  witnesses: readonly Point3Mm[],
+  segments: readonly Segment3Mm[],
+  toleranceMm = CONTACT_LOCUS_TOLERANCE_MM,
+): boolean =>
+  witnesses.length > 0 &&
+  segments.length > 0 &&
+  witnesses.every((point) =>
+    segments.some(
+      ([start, end]) =>
+        distancePointToSegment3Mm(point, start, end) <= toleranceMm,
+    ),
+  );
+
+const segmentIsCoveredByCoincidentSegments = (
+  segment: Segment3Mm,
+  coincidentSegments: readonly Segment3Mm[],
+): boolean => {
+  const direction = {
+    x: segment[1].xMm - segment[0].xMm,
+    y: segment[1].yMm - segment[0].yMm,
+    z: segment[1].zMm - segment[0].zMm,
+  };
+  const lengthMm = Math.hypot(direction.x, direction.y, direction.z);
+  if (lengthMm <= CONTACT_LOCUS_TOLERANCE_MM) return true;
+  const unit = {
+    x: direction.x / lengthMm,
+    y: direction.y / lengthMm,
+    z: direction.z / lengthMm,
+  };
+  const project = (point: Point3Mm): number =>
+    (point.xMm - segment[0].xMm) * unit.x +
+    (point.yMm - segment[0].yMm) * unit.y +
+    (point.zMm - segment[0].zMm) * unit.z;
+  const intervals = coincidentSegments
+    .flatMap(([start, end]) => {
+      if (
+        distancePointToLine3Mm(start, segment[0], direction) >
+          CONTACT_LOCUS_TOLERANCE_MM ||
+        distancePointToLine3Mm(end, segment[0], direction) >
+          CONTACT_LOCUS_TOLERANCE_MM
+      ) {
+        return [];
+      }
+      const startMm = Math.max(0, Math.min(project(start), project(end)));
+      const endMm = Math.min(lengthMm, Math.max(project(start), project(end)));
+      return endMm - startMm > CONTACT_LOCUS_TOLERANCE_MM
+        ? ([[startMm, endMm]] as const)
+        : [];
+    })
+    .toSorted((left, right) => left[0] - right[0]);
+  const firstInterval = intervals[0];
+  if (!firstInterval || firstInterval[0] > CONTACT_LOCUS_TOLERANCE_MM) {
+    return false;
+  }
+  let coveredUntilMm = firstInterval[1];
+  for (const [startMm, endMm] of intervals.slice(1)) {
+    if (startMm > coveredUntilMm + CONTACT_LOCUS_TOLERANCE_MM) return false;
+    coveredUntilMm = Math.max(coveredUntilMm, endMm);
+  }
+  return coveredUntilMm >= lengthMm - CONTACT_LOCUS_TOLERANCE_MM;
+};
+
+const boundaryContactIsLocusBound = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean => {
+  const coincidentSegments = coincidentPanelBoundarySegments(
+    firstPanelId,
+    secondPanelId,
+    motionState,
+  );
+  if (!witnessesAreConfinedToSegments(witnesses, coincidentSegments)) {
+    return false;
+  }
+  // Endpoint witnesses alone are insufficient for concave panels: a line can
+  // enter both interiors between two genuine seam fragments. Require every
+  // measured triangle-intersection interval to be continuously covered by the
+  // coincident contour seams.
+  return panelIntersectionSegments(
+    firstPanelId,
+    secondPanelId,
+    motionState,
+  ).every((segment) =>
+    segmentIsCoveredByCoincidentSegments(segment, coincidentSegments),
+  );
+};
+
+const positiveBoundarySeamExists = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): boolean =>
+  coincidentPanelBoundarySegments(firstPanelId, secondPanelId, motionState)
+    .length > 0;
+
+const tabTrianglesAtState = (
+  pair: ReciprocalConnectorPair,
+  tabPanel: PanelV1,
+  motionState: EvaluatedMotionState,
+): readonly PanelTriangle3[] => {
+  const triangulation = triangulatePolygonWithHoles(
+    pair.tab.contour.vertices,
+    [],
+  );
+  const vertices = triangulation.vertices.flatMap((point) => {
+    const transformed = connectorWorldPoint(point, tabPanel, motionState);
+    return transformed ? [transformed] : [];
+  });
+  if (vertices.length !== triangulation.vertices.length) return [];
+  return triangulation.triangles.map(
+    (triangle) =>
+      [
+        vertices[triangle.a]!,
+        vertices[triangle.b]!,
+        vertices[triangle.c]!,
+      ] as const,
+  );
+};
+
+const connectorContactIsLocusBound = (
+  pairs: readonly ReciprocalConnectorPair[],
+  panelById: ReadonlyMap<string, PanelV1>,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean =>
+  witnesses.length > 0 &&
+  pairs.some((pair) => {
+    if (!connectorInsertionDirectionsCompatible(pair.tab, pair.slot)) {
+      return false;
+    }
+    const tabPanel = panelById.get(pair.tab.panelId);
+    const slotPanel = panelById.get(pair.slot.panelId);
+    if (!tabPanel || !slotPanel) return false;
+    const slotStart = connectorWorldPoint(
+      pair.slot.centerline.start,
+      slotPanel,
+      motionState,
+    );
+    const slotEnd = connectorWorldPoint(
+      pair.slot.centerline.end,
+      slotPanel,
+      motionState,
+    );
+    if (!slotStart || !slotEnd) return false;
+    const tabTriangles = tabTrianglesAtState(pair, tabPanel, motionState);
+    // Slot material is removed from the collision mesh. Any remaining
+    // zero-clearance contact is allowed only at that aperture and within the
+    // actual tab contour, never across the rest of either connector panel.
+    const slotLocusToleranceMm =
+      pair.slot.widthMm / 2 + CONTACT_LOCUS_TOLERANCE_MM;
+    return (
+      tabTriangles.length > 0 &&
+      witnesses.every(
+        (point) =>
+          distancePointToSegment3Mm(point, slotStart, slotEnd) <=
+            slotLocusToleranceMm &&
+          tabTriangles.some(
+            (triangle) =>
+              pointTriangleDistanceMm(point, triangleLike(triangle)) <=
+              CONTACT_LOCUS_TOLERANCE_MM,
+          ),
+      )
+    );
+  });
+
 const validateCollision = (
   ir: FabricationIRV1,
   state: VerificationState,
   baseMotion: NonNullable<ReturnType<typeof validateMotion>>,
 ): MotionEvaluation => {
+  const isSingleStateStaticDesign =
+    ir.driver === null && baseMotion.baseStates.length === 1;
   const foldAdjacentBodies = new Set(
     ir.joints
       .filter((joint) => joint.kind === "fold")
       .map((joint) => unorderedPairKey(joint.parentBodyId, joint.childBodyId)),
   );
+  const panelById = new Map(ir.panels.map((panel) => [panel.panelId, panel]));
+  const bodyById = new Map(ir.bodies.map((body) => [body.bodyId, body]));
+  const foldAdjacentPanelPairs = new Set(
+    ir.joints.flatMap((joint) => {
+      if (joint.kind !== "fold") return [];
+      const parentPanelId = bodyById.get(joint.parentBodyId)?.panelIds[0];
+      const childPanelId = bodyById.get(joint.childBodyId)?.panelIds[0];
+      return parentPanelId && childPanelId
+        ? [unorderedPairKey(parentPanelId, childPanelId)]
+        : [];
+    }),
+  );
+  const connectorById = new Map(
+    ir.connectors.map((connector) => [connector.connectorId, connector]),
+  );
+  const reciprocalConnectorsByPanelPair = new Map<
+    string,
+    ReciprocalConnectorPair[]
+  >();
+  for (const connector of ir.connectors) {
+    if (connector.kind !== "tab") continue;
+    const mate = connectorById.get(connector.mateConnectorId);
+    const firstPanel = panelById.get(connector.panelId);
+    const secondPanel = mate ? panelById.get(mate.panelId) : undefined;
+    if (
+      mate?.mateConnectorId === connector.connectorId &&
+      mate.kind === "slot" &&
+      firstPanel &&
+      secondPanel
+    ) {
+      const panelPairKey = unorderedPairKey(
+        firstPanel.panelId,
+        secondPanel.panelId,
+      );
+      const pairs = reciprocalConnectorsByPanelPair.get(panelPairKey) ?? [];
+      pairs.push({ tab: connector, slot: mate });
+      reciprocalConnectorsByPanelPair.set(panelPairKey, pairs);
+    }
+  }
+  const declaredContactDuringByPanelPair = new Map<
+    string,
+    Set<"rest" | "all_states" | "open" | "closed">
+  >();
+  for (const constraint of ir.semanticConstraints) {
+    if (constraint.kind !== "contact" || !constraint.hard) continue;
+    const [firstRef, ...otherRefs] = constraint.geometryRefs;
+    if (!firstRef) continue;
+    const firstPanelIds = panelIdsForRef(ir, firstRef);
+    const otherPanelIds = otherRefs.flatMap((reference) =>
+      panelIdsForRef(ir, reference),
+    );
+    for (const firstPanelId of firstPanelIds) {
+      for (const otherPanelId of otherPanelIds) {
+        if (firstPanelId === otherPanelId) continue;
+        const key = unorderedPairKey(firstPanelId, otherPanelId);
+        const during = declaredContactDuringByPanelPair.get(key) ?? new Set();
+        during.add(constraint.during);
+        declaredContactDuringByPanelPair.set(key, during);
+      }
+    }
+  }
+  const declaredContactApplies = (
+    pairKey: string,
+    motionState: EvaluatedMotionState,
+  ): boolean => {
+    const during = declaredContactDuringByPanelPair.get(pairKey);
+    if (!during) return false;
+    if (during.has("all_states") || ir.driver === null) return true;
+    const value = motionState.driverValue;
+    return (
+      value !== null &&
+      ((during.has("rest") && Math.abs(value - ir.driver.homeValue) <= 1e-8) ||
+        (during.has("open") &&
+          Math.abs(value - ir.driver.maximumValue) <= 1e-8) ||
+        (during.has("closed") &&
+          Math.abs(value - ir.driver.minimumValue) <= 1e-8))
+    );
+  };
   let minimumClearanceMm = Number.POSITIVE_INFINITY;
   let minimumStateIndex = 0;
   let collisionRefs: readonly GeometryRefV1[] = [];
@@ -2729,10 +3351,73 @@ const validateCollision = (
             foldAdjacentBodies.has(
               unorderedPairKey(first.bodyId, second.bodyId),
             );
+          const panelPairKey = unorderedPairKey(first.panelId, second.panelId);
+          const declaredContact = declaredContactApplies(
+            panelPairKey,
+            motionState,
+          );
+          const reciprocalConnectorPairs =
+            reciprocalConnectorsByPanelPair.get(panelPairKey) ?? [];
+          const contactRelationshipExists =
+            intentionallyAdjacent ||
+            declaredContact ||
+            reciprocalConnectorPairs.length > 0;
+          const zeroAreaCenterlineContact =
+            centerlineDistanceMm <= 1e-6 && overlapAreaMm2 <= 1e-6;
+          // A verified fold's two source edges are the joint axis. For two
+          // rigid planes, every non-coplanar intersection lies on that axis;
+          // coplanar interior overlap is already measured as positive area.
+          // This proof avoids rebuilding triangle witnesses at 201 states.
+          const locusBoundFoldSeam =
+            !isSingleStateStaticDesign &&
+            zeroAreaCenterlineContact &&
+            foldAdjacentPanelPairs.has(panelPairKey) &&
+            positiveBoundarySeamExists(
+              first.panelId,
+              second.panelId,
+              motionState,
+            );
+          // A static assembly has exactly one measured pose. At that pose a
+          // positive-length contour seam is sufficient physical evidence for
+          // edge contact, even when the two walls are connected through the
+          // fold tree rather than by a direct joint. The witness confinement
+          // below is deliberately mandatory: neither a whole-panel relation
+          // nor an authored contact declaration can excuse an interior line
+          // crossing elsewhere on the same panel pair.
+          const boundaryWitnessProofEligible =
+            contactRelationshipExists || isSingleStateStaticDesign;
+          const witnesses =
+            boundaryWitnessProofEligible &&
+            zeroAreaCenterlineContact &&
+            !locusBoundFoldSeam
+              ? panelIntersectionWitnesses(
+                  first.panelId,
+                  second.panelId,
+                  motionState,
+                )
+              : [];
+          const locusBoundBoundaryContact =
+            boundaryWitnessProofEligible &&
+            !locusBoundFoldSeam &&
+            boundaryContactIsLocusBound(
+              first.panelId,
+              second.panelId,
+              motionState,
+              witnesses,
+            );
+          const locusBoundConnectorContact =
+            reciprocalConnectorPairs.length > 0 &&
+            connectorContactIsLocusBound(
+              reciprocalConnectorPairs,
+              panelById,
+              motionState,
+              witnesses,
+            );
           const allowedBoundaryContact =
-            intentionallyAdjacent &&
-            centerlineDistanceMm <= 1e-6 &&
-            overlapAreaMm2 <= 1e-6;
+            zeroAreaCenterlineContact &&
+            (locusBoundFoldSeam ||
+              locusBoundBoundaryContact ||
+              locusBoundConnectorContact);
           if (allowedBoundaryContact) continue;
           const clearanceMm =
             overlapAreaMm2 > 1e-6
@@ -3002,13 +3687,41 @@ const validateSemanticConstraint = (
         ),
       );
       const areaMm2 = areas.length > 0 ? Math.min(...areas) : 0;
-      if (areaMm2 < constraint.minimumAreaMm2) {
+      const boundarySeamRequired = constraint.minimumAreaMm2 <= 1e-6;
+      const boundarySeamPresent =
+        !boundarySeamRequired ||
+        (selectedStates.length > 0 &&
+          selectedStates.every((motionState) =>
+            firstPanelIds.some((firstPanelId) =>
+              otherPanelIds.some((secondPanelId) => {
+                if (firstPanelId === secondPanelId) return false;
+                const witnesses = panelIntersectionWitnesses(
+                  firstPanelId,
+                  secondPanelId,
+                  motionState,
+                );
+                return boundaryContactIsLocusBound(
+                  firstPanelId,
+                  secondPanelId,
+                  motionState,
+                  witnesses,
+                );
+              }),
+            ),
+          ));
+      if (areaMm2 < constraint.minimumAreaMm2 || !boundarySeamPresent) {
         semanticFailure(
           state,
           constraint,
-          measured(areaMm2, "mm2"),
-          measured(constraint.minimumAreaMm2, "mm2"),
-          "Measured coplanar contact overlap is below the requested minimum.",
+          boundarySeamRequired
+            ? measured(boundarySeamPresent ? "positive boundary seam" : "none")
+            : measured(areaMm2, "mm2"),
+          boundarySeamRequired
+            ? measured("positive-length coincident panel boundaries")
+            : measured(constraint.minimumAreaMm2, "mm2"),
+          boundarySeamRequired
+            ? "Declared seam contact requires positive-length coincident boundaries at the requested state."
+            : "Measured coplanar contact overlap is below the requested minimum.",
         );
       }
       return;

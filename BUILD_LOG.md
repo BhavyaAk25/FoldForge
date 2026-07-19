@@ -1,5 +1,19 @@
 # FoldForge build log
 
+## 2026-07-18 — Compact semantic plan and guarded acceptance build
+
+- Replaced the model-facing canonical program payload with `FabricationPlanV2`, a smaller semantic contract for bounded shapes, bodies, local-edge attachments, joints, tab-slot relationships, motion, landmarks, and assembly intent. Pure code expands it through the unchanged canonical program and verifier without prompt-keyword or prepared-object routing.
+- Added an exact offline playing-card-box proof on one 210 × 297 mm sheet with 5 mm margins, 0.4 mm stock, six named panels, five folds, one reciprocal tab-slot pair, and 70 × 95 × 25 mm assembled spans. A dimension-matching two-panel shape is not accepted as the requested enclosure.
+- Hardened contact verification so a contact exemption requires every measured intersection interval to be covered continuously by coincident contour seams, or to remain at the actual reciprocal connector locus. Interior crossings—including concave crossings hidden between valid seam endpoints—inset overlaps, unrelated seams, and distant connector geometry remain hard failures.
+- Derived folded static home transforms from authored fold relationships so assembled previews and verification use the requested pose rather than a flat placeholder.
+- Preserved the source prompt and explicit requirements at the planning boundary and documented built-in shape edge ordering so Sol does not guess edge indices or silently lose topology requirements.
+- Added stage-specific typed diagnostics, real verifier failure IDs, no-op and duplicate repair rejection, prompt/attempt result binding, and stale-finalization rejection. A failed new prompt cannot display or export an older result.
+- Moved paid finalization into the same authorization and deduplication boundary as intent, planning, and repair. Each signed random access session now has independent best-effort quotas and deduplication, while a separate process-local deployment ceiling limits aggregate warm-instance use. The same random session subject remains the OpenAI safety identifier.
+- Reduced the semantic-plan output ceiling to 4,000 tokens and retained one-design generation, no model-generation retry, bounded background polling, and fail-closed schema validation.
+- Passed the complete no-cost gate: 450 tests; 96.95% statements, 90.37% branches, 97.85% functions, and 97.99% lines; 1,000 seeded properties; offline compiler, repair, E2E, and ablation suites; 7/7 Chromium flows; consumer parsers; production audit; and build.
+- Kept production `LIVE_MODEL_KILL_SWITCH=true`. No paid response has yet validated the new semantic-plan path, so no live program or artifact success is claimed.
+- Recorded a new, separate builder authorization of at most $2.00 for the exact compact-plan acceptance path. It uses a fresh run-specific ledger, stops at the first failure, and does not modify or continue the historical ledger sealed at $3.6134275.
+
 ## 2026-07-18 — Single-design live forge
 
 - Diagnosed the first production playing-card-box run from Vercel request metadata: intent compilation succeeded, candidate one generated, compiled, and reached a repair response, then candidate two returned a controlled program-response error before the client committed any result. Production metadata does not retain the repair body, so it does not prove that candidate one passed.

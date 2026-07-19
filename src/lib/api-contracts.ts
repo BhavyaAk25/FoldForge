@@ -14,6 +14,12 @@ import {
   ProgramProposalV1Schema,
 } from "@/server/fabrication-ai/contracts";
 
+import { ForgeDiagnosticV1Schema } from "./forge-diagnostics";
+import {
+  ForgeResultBindingSchema,
+  forgePromptHash,
+} from "./forge-result-binding";
+
 export const HealthApiResponseSchema = z
   .object({
     status: z.literal("ok"),
@@ -51,12 +57,14 @@ export const CompileApiResponseSchema = z.discriminatedUnion("status", [
     .object({
       status: z.literal("passed"),
       ...CompiledCandidateFields,
+      diagnostic: z.null(),
     })
     .strict(),
   z
     .object({
       status: z.literal("invalid"),
       ...CompiledCandidateFields,
+      diagnostic: ForgeDiagnosticV1Schema,
     })
     .strict(),
   z
@@ -66,21 +74,43 @@ export const CompileApiResponseSchema = z.discriminatedUnion("status", [
       ir: z.null(),
       report: z.null(),
       score: z.null(),
+      diagnostic: ForgeDiagnosticV1Schema,
     })
     .strict(),
 ]);
 
-export const RepairApiResponseSchema = z
-  .object({
-    status: z.enum(["passed", "still_invalid", "infeasible"]),
-    candidateId: z.string(),
-    patch: ProgramPatchV1Schema.nullable(),
-    program: FabricationProgramV1Schema,
-    ir: FabricationIRV1Schema.nullable(),
-    report: VerificationReportV2Schema.nullable(),
-    score: CandidateScoreV2Schema.nullable(),
-  })
-  .strict();
+const RepairResponseFields = {
+  candidateId: z.string(),
+  patch: ProgramPatchV1Schema.nullable(),
+  program: FabricationProgramV1Schema,
+  ir: FabricationIRV1Schema.nullable(),
+  report: VerificationReportV2Schema.nullable(),
+  score: CandidateScoreV2Schema.nullable(),
+};
+
+export const RepairApiResponseSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("passed"),
+      ...RepairResponseFields,
+      diagnostic: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("still_invalid"),
+      ...RepairResponseFields,
+      diagnostic: ForgeDiagnosticV1Schema,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("infeasible"),
+      ...RepairResponseFields,
+      diagnostic: ForgeDiagnosticV1Schema,
+    })
+    .strict(),
+]);
 
 export const FinalizeApiResponseSchema = z
   .object({ narrative: FabricationNarrativeV1Schema })
@@ -98,16 +128,37 @@ export const RepairEvidenceSchema = z
 
 export const StudioCheckpointSchema = z
   .object({
-    version: z.literal(3),
+    version: z.literal(4),
     savedAt: z.string().datetime(),
     prompt: z.string().max(4_000),
+    resultBinding: ForgeResultBindingSchema.nullable(),
     intent: FabricationIntentV1Schema.nullable(),
     candidates: z.array(CandidateV2Schema).max(3),
     selectedId: z.string(),
     repairEvidence: z.record(z.string(), z.array(RepairEvidenceSchema)),
     narrative: FabricationNarrativeV1Schema.nullable(),
   })
-  .strict();
+  .strict()
+  .superRefine((checkpoint, context) => {
+    const hasResult = checkpoint.candidates.length > 0;
+    if (hasResult !== (checkpoint.resultBinding !== null)) {
+      context.addIssue({
+        code: "custom",
+        path: ["resultBinding"],
+        message: "A saved design requires its forge-result binding.",
+      });
+    }
+    if (
+      checkpoint.resultBinding &&
+      checkpoint.resultBinding.promptHash !== forgePromptHash(checkpoint.prompt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["resultBinding", "promptHash"],
+        message: "The saved design does not belong to this prompt.",
+      });
+    }
+  });
 
 export type HealthApiResponse = z.infer<typeof HealthApiResponseSchema>;
 export type ProgramsApiResponse = z.infer<typeof ProgramsApiResponseSchema>;

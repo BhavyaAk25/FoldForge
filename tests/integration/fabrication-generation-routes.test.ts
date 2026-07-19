@@ -2,6 +2,7 @@ import { NextRequest, type NextResponse } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import type {
   FabricationProgramV1,
   ProgramPatchV1,
@@ -21,6 +22,7 @@ import type {
   FabricationRepairModel,
 } from "@/server/fabrication-ai/models";
 import { programStructureFingerprint } from "@/server/fabrication-ai/orchestration";
+import { FabricationProgramModelError } from "@/server/fabrication-ai/plan-response";
 
 import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
 
@@ -159,7 +161,7 @@ describe("POST /api/programs", () => {
         modelId: "gpt-5.6-sol",
         modelResponseId: "resp-program-route",
         planHash: "a".repeat(64),
-        expanderVersion: "2",
+        expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
       },
     });
     mocks.generateProgram.mockResolvedValueOnce(proposal);
@@ -228,6 +230,36 @@ describe("POST /api/programs", () => {
     expect(serialized).toContain("MODEL_RESPONSE_ERROR");
     expect(serialized).not.toContain(providerDetail);
   });
+
+  it("reports an incomplete plan with a stable non-private diagnostic", async () => {
+    const privateDetail = "private partial plan content";
+    mocks.generateProgram.mockRejectedValueOnce(
+      new FabricationProgramModelError("model_incomplete", privateDetail),
+    );
+
+    const response = await programsPost(
+      authorizedRequest("/api/programs", {
+        intent: fixtureIntent(),
+        candidateOrdinal: 1,
+        usedTopologyIds: [],
+      }),
+    );
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      error: {
+        code: "MODEL_INCOMPLETE",
+        diagnostic: {
+          stage: "program",
+          kind: "contract",
+          code: "MODEL_INCOMPLETE",
+          modelCall: "attempted",
+          failureIds: [],
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(privateDetail);
+  });
 });
 
 describe("POST /api/compile", () => {
@@ -266,6 +298,18 @@ describe("POST /api/compile", () => {
       ir: null,
       report: null,
       score: null,
+      diagnostic: {
+        version: "1",
+        stage: "compile",
+        kind: "compilation",
+        code: "PROGRAM_COMPILE_ERROR",
+        message: "The generated program could not be compiled safely.",
+        retryable: false,
+        modelCall: "not_applicable",
+        failureIds: ["compile.invalid_reference"],
+        failedAtStage: null,
+        repairCycle: null,
+      },
     });
     expect(JSON.stringify(compileErrorBody)).not.toContain("intent-other");
     expect(mocks.generateProgram).not.toHaveBeenCalled();
@@ -381,6 +425,12 @@ describe("POST /api/repair", () => {
       patch: { repairCycle: 1 },
       report: { valid: false },
       score: { eligible: false },
+      diagnostic: {
+        stage: "repair",
+        code: "REPAIR_INCOMPLETE",
+        modelCall: "attempted",
+        failureIds: ["geometry.simple_panel#panel-base"],
+      },
     });
     expect(mocks.diagnoseRepair).toHaveBeenCalledOnce();
   });
@@ -400,6 +450,12 @@ describe("POST /api/repair", () => {
       status: "infeasible",
       patch: null,
       report: { valid: false },
+      diagnostic: {
+        stage: "repair",
+        code: "REPAIR_INFEASIBLE",
+        modelCall: "attempted",
+        failureIds: ["geometry.simple_panel#panel-base"],
+      },
     });
 
     mocks.diagnoseRepair.mockResolvedValueOnce(repairPatch(program, 2));
@@ -415,6 +471,12 @@ describe("POST /api/repair", () => {
       status: "infeasible",
       patch: null,
       program,
+      diagnostic: {
+        stage: "repair",
+        code: "REPAIR_PATCH_REJECTED",
+        modelCall: "attempted",
+        failureIds: ["geometry.simple_panel#panel-base"],
+      },
     });
 
     const providerDetail = "private provider repair response";
@@ -430,6 +492,8 @@ describe("POST /api/repair", () => {
     const serialized = JSON.stringify(await providerFailure.json());
     expect(providerFailure.status).toBe(502);
     expect(serialized).toContain("MODEL_RESPONSE_ERROR");
+    expect(serialized).toContain('"stage":"repair"');
+    expect(serialized).toContain('"modelCall":"attempted"');
     expect(serialized).not.toContain(providerDetail);
   });
 });

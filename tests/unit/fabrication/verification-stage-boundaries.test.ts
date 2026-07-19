@@ -1388,7 +1388,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
         source: "user",
         geometryRefs: [
           { kind: "panel", id: "panel-base" },
-          { kind: "body", id: "body-base" },
+          { kind: "body", id: "body-wing" },
         ],
         minimumAreaMm2: 0,
         during: "rest",

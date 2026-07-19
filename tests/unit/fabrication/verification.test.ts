@@ -437,6 +437,34 @@ describe("fabrication verifier", () => {
     expect(report.failedAtStage).toBe("collision");
     expect(report.failures[0]?.failureId).toBe("collision.minimum_clearance");
     expect(report.motionSummary?.minimumClearanceMm).toBe(0);
+
+    const declaredContact = verifyFabricationIr(
+      {
+        ...ir,
+        joints: [{ ...fold, maxAngleDeg: 180 }],
+        driver: { ...driver, maximumValue: 180 },
+        outputs: [{ ...output, maximumValue: 180 }],
+        semanticConstraints: [
+          {
+            constraintId: "constraint-overlap-is-not-contact",
+            kind: "contact",
+            hard: true,
+            source: "program",
+            geometryRefs: [
+              { kind: "panel", id: "panel-base" },
+              { kind: "panel", id: "panel-wing" },
+            ],
+            minimumAreaMm2: 0,
+            during: "all_states",
+          },
+        ],
+      },
+      "candidate-declared-overlap",
+    );
+    expect(declaredContact.failedAtStage).toBe("collision");
+    expect(declaredContact.failures[0]?.failureId).toBe(
+      "collision.minimum_clearance",
+    );
   });
 
   it("measures contact overlap instead of a union bounding box", () => {

@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { forgeDiagnostic } from "@/lib/forge-diagnostics";
+import { modelFailureDiagnostic } from "@/server/api/forge-diagnostic";
 import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
 import { apiError } from "@/server/api/response";
 import {
@@ -22,6 +24,14 @@ const invalidRequest = (): NextResponse =>
     "INVALID_REQUEST",
     "The fabrication program request is malformed.",
     400,
+    [],
+    forgeDiagnostic({
+      stage: "program",
+      kind: "request",
+      code: "INVALID_PROGRAM_REQUEST",
+      message: "The fabrication program request is malformed.",
+      modelCall: "not_started",
+    }),
   );
 
 const invalidModelResponse = (): NextResponse =>
@@ -29,6 +39,14 @@ const invalidModelResponse = (): NextResponse =>
     "MODEL_RESPONSE_ERROR",
     "The model did not return a valid fabrication program.",
     502,
+    [],
+    forgeDiagnostic({
+      stage: "program",
+      kind: "contract",
+      code: "MODEL_PLAN_INVALID",
+      message: "The model plan did not satisfy the fabrication contract.",
+      modelCall: "attempted",
+    }),
   );
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
@@ -60,8 +78,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             proposal.data.program,
           ),
         });
-      } catch {
-        return invalidModelResponse();
+      } catch (error) {
+        const diagnostic = modelFailureDiagnostic("program", error);
+        return apiError(
+          diagnostic.code,
+          diagnostic.message,
+          502,
+          [],
+          diagnostic,
+        );
       }
     },
   );

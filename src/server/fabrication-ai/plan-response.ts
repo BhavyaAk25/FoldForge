@@ -3,13 +3,14 @@ import {
   expandFabricationPlan,
   FABRICATION_PLAN_EXPANDER_VERSION,
 } from "@/core/fabrication/planning";
+import { expandSemanticFabricationPlan } from "@/core/fabrication/semantic-plan-expansion";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 import { sha256Hex } from "@/core/sha256";
 
 import {
   FabricationPlanProposalV1Schema,
+  FabricationPlanProposalV2Schema,
   ProgramProposalV1Schema,
-  type FabricationPlanProposalV1,
   type ProgramProposalV1,
 } from "./contracts";
 
@@ -83,22 +84,47 @@ export const fabricationProgramProposalFromResponse = (input: {
       "GPT-5.6 Sol returned malformed fabrication plan arguments.",
     );
   }
-  let proposal: FabricationPlanProposalV1;
+  let rawProposal: unknown;
   try {
-    proposal = FabricationPlanProposalV1Schema.parse(
-      JSON.parse(planCall.arguments),
-    );
+    rawProposal = JSON.parse(planCall.arguments);
   } catch {
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned malformed fabrication plan arguments.",
     );
   }
-  const expanded = expandFabricationPlan(
-    input.intent,
-    proposal.plan,
-    input.candidateOrdinal,
-  );
+  const semanticProposal =
+    FabricationPlanProposalV2Schema.safeParse(rawProposal);
+  const legacyProposal = semanticProposal.success
+    ? null
+    : FabricationPlanProposalV1Schema.safeParse(rawProposal);
+  const parsed = (() => {
+    if (semanticProposal.success) {
+      return {
+        proposal: semanticProposal.data,
+        expanded: expandSemanticFabricationPlan(
+          input.intent,
+          semanticProposal.data.plan,
+          input.candidateOrdinal,
+        ),
+      };
+    }
+    if (legacyProposal?.success) {
+      return {
+        proposal: legacyProposal.data,
+        expanded: expandFabricationPlan(
+          input.intent,
+          legacyProposal.data.plan,
+          input.candidateOrdinal,
+        ),
+      };
+    }
+    throw new FabricationProgramModelError(
+      "invalid_plan",
+      "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+    );
+  })();
+  const { proposal, expanded } = parsed;
   if (!expanded.ok) {
     throw new FabricationProgramModelError(
       "invalid_plan",

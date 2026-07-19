@@ -15,10 +15,12 @@ import type {
   FabricationProgramV1,
 } from "@/core/fabrication/types";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
+import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 
 import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
 
 interface StudioMockOptions {
+  readonly failIntentAfterFirst?: boolean;
   readonly liveAiEnabled?: boolean;
   readonly malformedIntent?: boolean;
   readonly requireAccessOnce?: boolean;
@@ -60,6 +62,8 @@ const consoleMessagesByPage = new WeakMap<Page, string[]>();
 
 const isAllowedBrowserDiagnostic = (entry: string): boolean =>
   entry.includes("401") ||
+  entry ===
+    "Failed to load resource: the server responded with a status of 502 (Bad Gateway)" ||
   /^\[\.WebGL-[^\]]+\]GL Driver Message .*GPU stall due to ReadPixels/.test(
     entry,
   );
@@ -143,6 +147,21 @@ const evaluateProgram = (body: CompileRequestBody) => {
     ir: compiled.value,
     report,
     score,
+    diagnostic: report.valid
+      ? null
+      : forgeDiagnostic({
+          stage: "compile",
+          kind: "verification",
+          code: "DESIGN_INVALID",
+          message:
+            report.failures[0]?.message ??
+            "The generated design did not pass deterministic verification.",
+          failureIds: report.failures
+            .filter((failure) => failure.severity === "hard")
+            .slice(0, 24)
+            .map((failure) => failure.failureId),
+          failedAtStage: report.failedAtStage,
+        }),
   };
 };
 
@@ -206,6 +225,28 @@ const installStudioMocks = async (
         );
         return;
       }
+      if (options.failIntentAfterFirst && state.intentPrompts.length > 1) {
+        const diagnostic = forgeDiagnostic({
+          stage: "intent",
+          kind: "provider",
+          code: "MODEL_PROVIDER_ERROR",
+          message: "The live model request failed safely.",
+          modelCall: "attempted",
+        });
+        await respondJson(
+          route,
+          {
+            error: {
+              code: diagnostic.code,
+              message: diagnostic.message,
+              details: [],
+              diagnostic,
+            },
+          },
+          502,
+        );
+        return;
+      }
       state.endpointOrder.push("intent");
       if (options.malformedIntent) {
         await respondJson(route, { scopeStatus: "supported" });
@@ -230,7 +271,7 @@ const installStudioMocks = async (
             modelId: "gpt-5.6-sol",
             modelResponseId: `resp-e2e-program-${body.candidateOrdinal}`,
             planHash: String(body.candidateOrdinal).repeat(64),
-            expanderVersion: "2",
+            expanderVersion: "3",
           },
         },
         programStructureFingerprint: String(body.candidateOrdinal).repeat(64),
@@ -287,6 +328,7 @@ const installStudioMocks = async (
         ir: evaluation.ir,
         report: evaluation.report,
         score: evaluation.score,
+        diagnostic: null,
       });
       return;
     }
@@ -515,19 +557,19 @@ test("runs access, single-design forge, real repair evidence, checkpoint, and ex
       modelId: "gpt-5.6-sol",
       modelResponseId: "resp-e2e-program-1",
       modelPlanHash: "1".repeat(64),
-      planExpanderVersion: "2",
+      planExpanderVersion: "3",
     });
   }
 
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v5"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
       ),
     )
     .not.toBeNull();
   const checkpoint = await page.evaluate(() =>
-    window.localStorage.getItem("foldforge.studio.checkpoint.v5"),
+    window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
   );
   expect(checkpoint).not.toContain("e2e-secret");
 
@@ -684,15 +726,66 @@ test("fails safely on malformed strict API data", async ({ page }) => {
   await page.getByRole("button", { name: "Create design" }).click();
   await expect(
     page.getByRole("alert").filter({
-      hasText: "could not be checked safely",
+      hasText: "intent response did not satisfy its strict contract",
     }),
-  ).toContainText("could not be checked safely");
+  ).toContainText("intent response did not satisfy its strict contract");
   await expect(
     page.getByRole("heading", {
       name: "Turn an idea into a buildable paper design.",
     }),
   ).toBeVisible();
   await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+});
+
+test("never shows or exports prompt A after prompt B fails", async ({
+  page,
+}) => {
+  await installStudioMocks(page, { failIntentAfterFirst: true });
+  await page.goto("/");
+  const prompt = page.getByLabel("What do you want to make?");
+
+  await prompt.fill("Prompt A: make a folding display.");
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
+
+  await prompt.fill("Prompt B: make a different folding box.");
+  await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download SVG" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "The live model request failed safely.",
+    }),
+  ).toContainText("The live model request failed safely.");
+  await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download SVG" })).toHaveCount(
+    0,
+  );
+
+  await expect
+    .poll(async () => {
+      const raw = await page.evaluate(() =>
+        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
+      );
+      if (!raw) return null;
+      const checkpoint = JSON.parse(raw) as {
+        readonly candidates: readonly unknown[];
+        readonly prompt: string;
+        readonly resultBinding: unknown;
+      };
+      return {
+        candidateCount: checkpoint.candidates.length,
+        prompt: checkpoint.prompt,
+        resultBinding: checkpoint.resultBinding,
+      };
+    })
+    .toEqual({
+      candidateCount: 0,
+      prompt: "Prompt B: make a different folding box.",
+      resultBinding: null,
+    });
 });
 
 test("has no horizontal overflow with results at required widths", async ({

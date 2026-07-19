@@ -168,6 +168,24 @@ describe("bounded fabrication program patches", () => {
       error: { id: "patch.duplicate" },
     });
 
+    const noop = applyProgramPatch(
+      fixtureProgram(),
+      {
+        ...patch,
+        operations: [
+          {
+            ...firstNumberOperation(patch),
+            value: 80,
+          },
+        ],
+      },
+      groundedReport(path),
+    );
+    expect(noop).toMatchObject({
+      ok: false,
+      error: { id: "patch.noop" },
+    });
+
     const differentPath = "/blueprint/panels/panel-base/heightMm";
     const ungrounded = applyProgramPatch(
       fixtureProgram(),

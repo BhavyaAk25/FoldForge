@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import type {
   FabricationIntentModel,
   FabricationProgramModel,
@@ -18,7 +19,7 @@ describe("fabrication AI orchestration", () => {
     modelId: "gpt-5.6-sol",
     modelResponseId: "resp-orchestration",
     planHash: "a".repeat(64),
-    expanderVersion: "2",
+    expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
   } as const;
 
   it("validates and traces strict prompt compilation", async () => {

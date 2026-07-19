@@ -1,4 +1,5 @@
 import type { ExpectedLiveIntentConstraints } from "./live-constraint-evidence";
+import type { LiveAcceptanceContract } from "./live-acceptance-evidence";
 
 export interface LiveReadinessCaseDefinition {
   readonly caseId: string;
@@ -6,6 +7,7 @@ export interface LiveReadinessCaseDefinition {
   readonly expected: ExpectedLiveIntentConstraints;
   readonly requiresRepairEvidence: boolean;
   readonly requiredCandidateCount: 1 | 3;
+  readonly acceptanceContract: LiveAcceptanceContract | null;
 }
 
 const A3_SHEET_SIZE_MM = { widthMm: 297, heightMm: 420 } as const;
@@ -33,6 +35,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
     },
     requiresRepairEvidence: true,
     requiredCandidateCount: 3,
+    acceptanceContract: null,
   },
   {
     caseId: "live-organizer",
@@ -56,6 +59,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
     },
     requiresRepairEvidence: false,
     requiredCandidateCount: 3,
+    acceptanceContract: null,
   },
   {
     caseId: "live-sample-sorter",
@@ -79,6 +83,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
     },
     requiresRepairEvidence: false,
     requiredCandidateCount: 3,
+    acceptanceContract: null,
   },
   {
     caseId: "live-tabbed-box",
@@ -102,6 +107,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
     },
     requiresRepairEvidence: false,
     requiredCandidateCount: 3,
+    acceptanceContract: null,
   },
   {
     caseId: "live-expanding-display",
@@ -125,6 +131,7 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
     },
     requiresRepairEvidence: false,
     requiredCandidateCount: 3,
+    acceptanceContract: null,
   },
 ];
 
@@ -133,16 +140,79 @@ export const LIVE_READINESS_CASES: readonly LiveReadinessCaseDefinition[] = [
  * without relabeling a one-case run as the sealed release evaluation.
  */
 export const LIVE_SOL_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
-  caseId: "live-sol-two-panel-acceptance",
+  caseId: "live-sol-playing-card-box-acceptance",
   prompt:
-    "Make a one-sheet hinged counter display from 0.3 mm cardstock. Use one fixed rectangular panel 80 mm wide by 60 mm high and one rectangular wing 30 mm wide by 60 mm high. Join their full 60 mm outer edges so the wing opens like a flap from 0 to 90 degrees. The complete motion envelope is 110 mm wide, 60 mm high, and 30 mm deep. Use one 300 by 240 mm sheet with 5 mm printable margins, allow cuts, use no glue. Keep the design to exactly those two panels, one fold joint, and no tabs or slots.",
+    "Make a static playing-card box from one sheet of 0.4 mm cardstock. The assembled box must be exactly 70 mm wide, 95 mm high, and 25 mm deep. Use one 210 by 297 mm sheet with 5 mm printable margins, allow cuts, and use no glue. Use a base (the bottom), front, back, left side, right side, and hinged lid. The lid must close with one reciprocal tab-and-slot lock. Keep the construction to exactly six rectangular panels, five fold joints, and that one tab-slot pair. Name the six panel landmarks base, front, back, left, right, and lid. The assembled box is the home state.",
+  expected: {
+    widthMm: 70,
+    heightMm: 95,
+    depthMm: 25,
+    materialThicknessMm: 0.4,
+    requiredMaterialTerms: ["cardstock"],
+    sheetSizeMm: { widthMm: 210, heightMm: 297 },
+    printableMarginMm: 5,
+    maximumSheets: 1,
+    behavior: "static",
+    cutsAllowed: true,
+    glueAllowed: false,
+    motion: null,
+    requiredSemanticKinds: [],
+    requiredDimensionTargetsMm: [],
+    requiredDescriptionTerms: ["box", "lid", "tab"],
+  },
+  requiresRepairEvidence: false,
+  requiredCandidateCount: 1,
+  acceptanceContract: {
+    behavior: "static",
+    assemblyStrategy: "tab_slot",
+    panels: [
+      { name: "base", role: "structural", widthMm: 70, heightMm: 95 },
+      { name: "front", role: "structural", widthMm: 70, heightMm: 25 },
+      { name: "back", role: "structural", widthMm: 70, heightMm: 25 },
+      { name: "left", role: "structural", widthMm: 25, heightMm: 95 },
+      { name: "right", role: "structural", widthMm: 25, heightMm: 95 },
+      { name: "lid", role: "output", widthMm: 70, heightMm: 95 },
+    ],
+    foldConnections: [
+      { parentPanelName: "base", childPanelName: "front" },
+      { parentPanelName: "base", childPanelName: "back" },
+      { parentPanelName: "base", childPanelName: "left" },
+      { parentPanelName: "base", childPanelName: "right" },
+      { parentPanelName: "back", childPanelName: "lid" },
+    ],
+    connectorPairs: [{ tabPanelName: "lid", slotPanelName: "front" }],
+    sheet: {
+      widthMm: 210,
+      heightMm: 297,
+      printableMarginMm: 5,
+      stockThicknessMm: 0.4,
+    },
+    homeEnvelopeSpansMm: [70, 95, 25],
+    motion: null,
+    exports: {
+      foldExpected: false,
+      glbAnimationCount: 0,
+      glbMotionSampleCount: 0,
+    },
+  },
+};
+
+/**
+ * A second, opt-in acceptance case proves the live path can author a real
+ * articulated design. It is not run by the default paid acceptance command.
+ */
+export const LIVE_SOL_MOTION_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
+  caseId: "live-sol-articulated-flap-acceptance",
+  prompt:
+    "Make an articulated one-sheet cardstock display with exactly two rectangular panels: a stationary structural base 80 mm wide by 60 mm high and an output flap 30 mm wide by 60 mm high. Join the base's right edge to the flap's left edge with exactly one valley fold and no connectors. Use one fold driver and one output to rotate the flap from flat at 0 degrees to 90 degrees, with 0 degrees as home. The maximum swept envelope must be exactly 110 mm wide, 60 mm high, and 30 mm deep. Use one 210 by 297 mm sheet of 0.4 mm cardstock with 5 mm printable margins, allow cuts, and use no glue.",
   expected: {
     widthMm: 110,
     heightMm: 60,
     depthMm: 30,
-    materialThicknessMm: 0.3,
+    materialThicknessMm: 0.4,
     requiredMaterialTerms: ["cardstock"],
-    sheetSizeMm: { widthMm: 300, heightMm: 240 },
+    sheetSizeMm: { widthMm: 210, heightMm: 297 },
+    printableMarginMm: 5,
     maximumSheets: 1,
     behavior: "flap",
     cutsAllowed: true,
@@ -150,8 +220,38 @@ export const LIVE_SOL_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
     motion: { unit: "deg", maximumValue: 90, tolerance: 1 },
     requiredSemanticKinds: [],
     requiredDimensionTargetsMm: [80, 60, 30],
-    requiredDescriptionTerms: ["display", "wing"],
+    requiredDescriptionTerms: ["display", "flap"],
   },
   requiresRepairEvidence: false,
   requiredCandidateCount: 1,
+  acceptanceContract: {
+    behavior: "flap",
+    assemblyStrategy: "fold_only",
+    panels: [
+      { name: "base", role: "structural", widthMm: 80, heightMm: 60 },
+      { name: "flap", role: "output", widthMm: 30, heightMm: 60 },
+    ],
+    foldConnections: [{ parentPanelName: "base", childPanelName: "flap" }],
+    connectorPairs: [],
+    sheet: {
+      widthMm: 210,
+      heightMm: 297,
+      printableMarginMm: 5,
+      stockThicknessMm: 0.4,
+    },
+    homeEnvelopeSpansMm: null,
+    motion: {
+      control: "fold",
+      minimumValue: 0,
+      maximumValue: 90,
+      homeValue: 0,
+      outputCount: 1,
+      baseSampleCount: 201,
+    },
+    exports: {
+      foldExpected: true,
+      glbAnimationCount: 1,
+      glbMotionSampleCount: 11,
+    },
+  },
 };

@@ -22,6 +22,7 @@ export type ProgramPatchError =
   | { readonly id: "patch.program"; readonly message: string }
   | { readonly id: "patch.hash"; readonly message: string }
   | { readonly id: "patch.duplicate"; readonly path: string }
+  | { readonly id: "patch.noop"; readonly path: string }
   | { readonly id: "patch.failure_reference"; readonly failureId: string }
   | { readonly id: "patch.ungrounded"; readonly path: string }
   | { readonly id: "patch.path"; readonly path: string }
@@ -497,6 +498,9 @@ const validateOperation = (
       expected: target.kind,
       actual: kind,
     };
+  }
+  if (Object.is(operationValue(operation), target.value)) {
+    return { id: "patch.noop", path: operation.path };
   }
   const expectedValue = operationExpectedValue(operation);
   if (expectedValue !== null && expectedValue !== target.value) {

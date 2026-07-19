@@ -18,8 +18,13 @@ import {
   type LiveIntentConstraintEvidence,
 } from "../src/server/evals/live-constraint-evidence";
 import {
+  evaluateLiveAcceptance,
+  type LiveAcceptanceEvidence,
+} from "../src/server/evals/live-acceptance-evidence";
+import {
   LIVE_READINESS_CASES,
   LIVE_SOL_ACCEPTANCE_CASE,
+  LIVE_SOL_MOTION_ACCEPTANCE_CASE,
   type LiveReadinessCaseDefinition,
 } from "../src/server/evals/live-readiness-cases";
 import {
@@ -85,8 +90,24 @@ const requestedCount = Math.max(
   Math.min(LIVE_READINESS_CASES.length, requestedCountValue),
 );
 const acceptanceMode = process.argv.includes("--acceptance");
+const acceptanceKindArgument = argument("--acceptance-kind");
+if (
+  acceptanceKindArgument !== null &&
+  acceptanceKindArgument !== "static" &&
+  acceptanceKindArgument !== "motion"
+) {
+  throw new Error("--acceptance-kind must be static or motion.");
+}
+if (!acceptanceMode && acceptanceKindArgument !== null) {
+  throw new Error("--acceptance-kind requires --acceptance.");
+}
+const acceptanceKind = acceptanceKindArgument ?? "static";
 const selectedCases = acceptanceMode
-  ? [LIVE_SOL_ACCEPTANCE_CASE]
+  ? [
+      acceptanceKind === "motion"
+        ? LIVE_SOL_MOTION_ACCEPTANCE_CASE
+        : LIVE_SOL_ACCEPTANCE_CASE,
+    ]
   : LIVE_READINESS_CASES.slice(0, requestedCount);
 const artifactRoot = path.resolve("artifacts/evals/live-readiness");
 const runStartedIso = new Date().toISOString();
@@ -182,6 +203,7 @@ interface LiveCaseResult {
   readonly foldStatus: string | null;
   readonly sourceEquivalent: boolean;
   readonly consumerValidation: ConsumerValidationResult | null;
+  readonly acceptanceEvidence: LiveAcceptanceEvidence | null;
   readonly artifactPack: ArtifactPackEvidence | null;
 }
 
@@ -212,6 +234,7 @@ const emptyResult = (
   foldStatus: null,
   sourceEquivalent: false,
   consumerValidation: null,
+  acceptanceEvidence: null,
   artifactPack: null,
 });
 
@@ -553,6 +576,48 @@ if (!liveEnabled) {
         if (consumerValidation.json.assemblyOperationCount < 1) {
           throw new Error("deterministic_assembly_operations_required");
         }
+        const acceptanceEvidence = liveCase.acceptanceContract
+          ? evaluateLiveAcceptance({
+              candidate: finalized.value.candidate,
+              consumerValidation,
+              contract: liveCase.acceptanceContract,
+            })
+          : null;
+        if (liveCase.acceptanceContract && !acceptanceEvidence?.passed) {
+          results.push({
+            ...emptyResult(
+              liveCase,
+              "failed",
+              "acceptance_contract_failed",
+              Number((performance.now() - startedAt).toFixed(3)),
+            ),
+            constraintEvidence,
+            intentResponseId,
+            programResponseIds,
+            topologyFingerprints: proposals.map(
+              (proposal) => proposal.structureFingerprint,
+            ),
+            generatedCandidateCount: generated.length,
+            verifiedCandidateCount: verified.length,
+            repairedCandidateCount: verified.filter((run) => run.repaired)
+              .length,
+            repairEvidence: measuredRepair,
+            selectedCandidateId: finalized.value.candidate.candidateId,
+            selectedIrHash: finalized.value.candidate.verification.irHash,
+            selectedScore: finalized.value.candidate.score.totalScore,
+            exportFormats: finalized.value.artifacts.map(
+              (artifact) => artifact.format,
+            ),
+            foldStatus: finalized.value.foldOmission
+              ? `omitted:${finalized.value.foldOmission.code}`
+              : "generated",
+            sourceEquivalent:
+              finalized.value.candidate.exportMetadata.sourceEquivalent,
+            consumerValidation,
+            acceptanceEvidence,
+          });
+          continue;
+        }
         const beforeNarrativeEntries = budget.snapshot().entries.length;
         const narrative = await narrativeModel.generateNarrative(
           finalized.value.candidate,
@@ -609,6 +674,7 @@ if (!liveEnabled) {
           sourceEquivalent:
             finalized.value.candidate.exportMetadata.sourceEquivalent,
           consumerValidation,
+          acceptanceEvidence,
           artifactPack,
         });
       } catch (error) {
@@ -687,6 +753,7 @@ if (!liveEnabled) {
     gate.selectedRunPassed &&
     compilerContractEvidence.passed &&
     exactArtifactConsumerChecksPassed &&
+    results.every((result) => result.acceptanceEvidence?.passed === true) &&
     !budgetStopped;
   await writeReport({
     reportVersion: 2,
@@ -703,6 +770,7 @@ if (!liveEnabled) {
     preRequestReservationCeilingUsd: paidUsage.budgetUsd,
     caseCount: selectedCases.length,
     acceptanceMode,
+    acceptanceKind: acceptanceMode ? acceptanceKind : null,
     acceptancePassed,
     ...gate,
     measuredRepairPassed,

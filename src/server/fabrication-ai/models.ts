@@ -15,6 +15,7 @@ import type {
   CandidateV2,
   FabricationIntentV1,
   FabricationProgramV1,
+  GeometryRefKind,
   ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
@@ -25,7 +26,7 @@ import type {
 } from "@/server/ai/paid-eval-budget";
 
 import {
-  FabricationPlanProposalV1Schema,
+  FabricationPlanProposalV2Schema,
   FabricationNarrativeV1Schema,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
@@ -39,11 +40,11 @@ import {
 } from "./prompts";
 
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
-export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 8_000;
+export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 4_000;
 
 const PROGRAM_BACKGROUND_POLL_INTERVAL_MS = 2_000;
 const PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS = 3;
-const PROGRAM_BACKGROUND_MAX_WAIT_MS = 210_000;
+export const FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS = 210_000;
 const PROGRAM_BACKGROUND_CREATE_TIMEOUT_MS = 15_000;
 const PROGRAM_BACKGROUND_RETRIEVAL_TIMEOUT_MS = 10_000;
 const PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS = 5_000;
@@ -91,7 +92,8 @@ const runBackgroundResponse = async (
   request: ResponseCreateParamsNonStreaming,
 ): Promise<OpenAIResponse> => {
   const startedAtMs = Date.now();
-  const responseDeadlineMs = startedAtMs + PROGRAM_BACKGROUND_MAX_WAIT_MS;
+  const responseDeadlineMs =
+    startedAtMs + FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS;
   const retrievalDeadlineMs =
     responseDeadlineMs - PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS;
   let response = await openAI.responses.create(request, {
@@ -192,6 +194,165 @@ export interface FabricationNarrativeModel {
     safetyIdentifier: string,
   ): Promise<FabricationNarrativeV1>;
 }
+
+type SemanticReferenceKind =
+  | "panel"
+  | "body"
+  | "joint"
+  | "connector_relationship"
+  | "driver"
+  | "output"
+  | "landmark";
+
+interface SemanticReferenceKey {
+  readonly canonicalId: string;
+  readonly semanticKind: SemanticReferenceKind;
+  readonly semanticKey: string;
+  readonly connectorMember: "tab" | "slot" | null;
+}
+
+const referenceKeyConvention = (
+  kind: GeometryRefKind,
+): {
+  readonly prefix: string;
+  readonly semanticKind: SemanticReferenceKind;
+} | null => {
+  switch (kind) {
+    case "panel":
+    case "body":
+    case "joint":
+    case "driver":
+    case "output":
+      return { prefix: `${kind}-`, semanticKind: kind };
+    case "semantic_part":
+      return { prefix: "part-", semanticKind: "landmark" };
+    case "sheet":
+    case "path":
+    case "connector":
+    case "semantic_constraint":
+    case "export":
+      return null;
+  }
+};
+
+const removeRepeatedPrefix = (identifier: string, prefix: string): string => {
+  let result = identifier;
+  while (result.startsWith(prefix) && result.length > prefix.length) {
+    result = result.slice(prefix.length);
+  }
+  return result;
+};
+
+const semanticReferenceKey = (
+  kind: GeometryRefKind,
+  canonicalId: string,
+): SemanticReferenceKey | null => {
+  if (kind === "connector") {
+    const withoutPrefix = removeRepeatedPrefix(canonicalId, "connector-");
+    const connectorMember = withoutPrefix.endsWith("-tab")
+      ? "tab"
+      : withoutPrefix.endsWith("-slot")
+        ? "slot"
+        : null;
+    const semanticKey = connectorMember
+      ? withoutPrefix.slice(0, -(connectorMember.length + 1))
+      : withoutPrefix;
+    return semanticKey.length > 0
+      ? {
+          canonicalId,
+          semanticKind: "connector_relationship",
+          semanticKey,
+          connectorMember,
+        }
+      : null;
+  }
+  const convention = referenceKeyConvention(kind);
+  if (!convention) return null;
+  const semanticKey = removeRepeatedPrefix(canonicalId, convention.prefix);
+  if (semanticKey.length === 0) return null;
+  return {
+    canonicalId,
+    semanticKind: convention.semanticKind,
+    semanticKey,
+    connectorMember: null,
+  };
+};
+
+export const fabricationSemanticReferenceKeys = (
+  intent: FabricationIntentV1,
+): readonly SemanticReferenceKey[] => {
+  const references: {
+    readonly kind: GeometryRefKind;
+    readonly id: string;
+  }[] = [];
+  for (const constraint of intent.semanticConstraints) {
+    switch (constraint.kind) {
+      case "dimension":
+        references.push(constraint.geometryRef);
+        break;
+      case "clearance":
+      case "contact":
+        references.push(...constraint.geometryRefs);
+        break;
+      case "symmetry":
+      case "fold_flat":
+        references.push(
+          ...constraint.bodyIds.map((id) => ({ kind: "body" as const, id })),
+        );
+        break;
+      case "motion":
+        references.push({ kind: "output", id: constraint.outputId });
+        break;
+      case "recognizable_form":
+        references.push(
+          ...constraint.semanticPartIds.map((id) => ({
+            kind: "semantic_part" as const,
+            id,
+          })),
+        );
+        break;
+    }
+  }
+  const byCanonicalReference = new Map<string, SemanticReferenceKey>();
+  for (const reference of references) {
+    const normalized = semanticReferenceKey(reference.kind, reference.id);
+    if (normalized) {
+      byCanonicalReference.set(
+        `${normalized.semanticKind}:${normalized.canonicalId}`,
+        normalized,
+      );
+    }
+  }
+  return [...byCanonicalReference.values()].toSorted((left, right) =>
+    `${left.semanticKind}:${left.canonicalId}`.localeCompare(
+      `${right.semanticKind}:${right.canonicalId}`,
+      "en-US",
+    ),
+  );
+};
+
+export const fabricationPlanningInput = (
+  intent: FabricationIntentV1,
+  usedTopologyIds: readonly string[],
+) => ({
+  exactRequirements: intent.sourcePrompt,
+  designBrief: {
+    objectLabel: intent.objectLabel,
+    functionalGoal: intent.functionalGoal,
+    visualDescription: intent.visualDescription,
+    behavior: intent.behavior,
+    requestedSize: intent.requestedSize,
+    stockOptions: intent.stockOptions,
+    fabricationBudget: intent.fabricationBudget,
+    semanticConstraints: intent.semanticConstraints,
+    priorities: intent.priorities,
+  },
+  semanticReferenceKeys: fabricationSemanticReferenceKeys(intent),
+  diversity:
+    usedTopologyIds.length > 0
+      ? { topologyIdsAlreadyUsed: [...usedTopologyIds] }
+      : null,
+});
 
 export const fabricationNarrativeInput = (candidate: CandidateV2) => ({
   candidateId: candidate.candidateId,
@@ -303,11 +464,9 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
       input: [
         {
           role: "user",
-          content: canonicalSerialize({
-            intent,
-            candidateOrdinal,
-            usedTopologyIds,
-          }),
+          content: canonicalSerialize(
+            fabricationPlanningInput(intent, usedTopologyIds),
+          ),
         },
       ],
       // Deterministic expansion and verification own correctness. Low effort
@@ -319,7 +478,7 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
           name: "submit_fabrication_plan",
           description:
             "Submit one compact bounded plan for deterministic expansion.",
-          parameters: FabricationPlanProposalV1Schema,
+          parameters: FabricationPlanProposalV2Schema,
         }),
       ],
       tool_choice: { type: "function", name: "submit_fabrication_plan" },

@@ -8,8 +8,7 @@ export const API_BODY_LIMIT_BYTES = {
   exports: 256 * 1024,
 } as const;
 
-export type LiveOperation =
-  "intent" | "programs" | "compile" | "repair" | "finalize";
+export type LiveOperation = "intent" | "programs" | "repair" | "finalize";
 
 export type LiveOperationQuotaGroup = "generation" | "repair" | "finalize";
 
@@ -31,13 +30,7 @@ export const LIVE_OPERATION_POLICIES: Readonly<
   },
   programs: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.programs,
-    maximumOutputTokens: 8_000,
-    maximumRequestsPerHour: 20,
-    quotaGroup: "generation",
-  },
-  compile: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.compile,
-    maximumOutputTokens: 3_000,
+    maximumOutputTokens: 4_000,
     maximumRequestsPerHour: 20,
     quotaGroup: "generation",
   },
@@ -64,6 +57,22 @@ export const LIVE_SESSION_LIMITS = {
   maximumReservedTokens: 140_000,
   maximumConcurrentPerSession: 1,
   maximumConcurrentGlobal: 8,
+} as const;
+
+/**
+ * Best-effort aggregate protection for one warm deployment process. Session
+ * limits keep judges independent; this separate ceiling still bounds repeated
+ * access-code logins on that process.
+ */
+export const LIVE_DEPLOYMENT_LIMITS = {
+  windowMs: 60 * 60 * 1_000,
+  maximumRequests: 40,
+  maximumReservedTokens: 560_000,
+} as const;
+
+export const LIVE_ATTEMPT_LIMITS = {
+  windowMs: 60 * 60 * 1_000,
+  maximumEntries: 2_000,
 } as const;
 
 export const DETERMINISTIC_ROUTE_LIMITS = {
