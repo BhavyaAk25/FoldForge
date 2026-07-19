@@ -4,7 +4,7 @@
 
 The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **455 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
 
-Live GPT-5.6 Sol is the remaining product gate. The first separately budgeted compact-path compiler smoke passed, but the exact box intent exhausted its 3,000-token output allowance before returning structured intent, so program generation was never started. Intent now uses medium reasoning and a 4,000-token allowance; that remedy is proven offline, not yet by a paid response. Production therefore has `LIVE_MODEL_KILL_SWITCH=true` and makes no live-success claim.
+Live GPT-5.6 Sol is the remaining product gate. Sol now completes strict intent and compact semantic-plan generation inside the bounded runtime. The latest exact run passed all 16 intent requirements and returned a strict plan, but deterministic expansion rejected one model-selected short child edge at `joints/rightFold`. The compiler now resolves an incorrectly selected angular child edge only when another edge has the same physical length and places the child outside the parent; the exact six-panel regression then passes expansion, verification, and source-equivalent exports offline. Production therefore retains `LIVE_MODEL_KILL_SWITCH=true` until this exact build passes the paid local acceptance.
 
 | Area                                                                   | Status   | Evidence boundary                                                    |
 | ---------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
@@ -14,7 +14,7 @@ Live GPT-5.6 Sol is the remaining product gate. The first separately budgeted co
 | SVG, DXF, GLB, JSON, and conditional FOLD                              | Complete | Source-bound exporters and independent prepared-artifact consumers   |
 | One-design Describe → Forge → Export experience                        | Complete | 7/7 Chromium flows at all required widths                            |
 | OpenAI boundary and production safety                                  | Complete | Strict tools, access, origin/body caps, quotas, dedupe, kill switch  |
-| Compact live Sol plan                                                  | Pending  | Offline-tested; no new paid plan response claimed                    |
+| Compact live Sol plan                                                  | Complete | Strict live plans complete; latest deterministic rejection recorded  |
 | Exact live prompt → verified files                                     | Pending  | Must pass within the separate $2 authorization                       |
 | Final deployment, PR merge, video, `/feedback`                         | Pending  | Deployment/merge follow code proof; video and task ID are user-owned |
 
@@ -22,12 +22,12 @@ Live GPT-5.6 Sol is the remaining product gate. The first separately budgeted co
 
 Calendar dates are not gates. Complete each ready step and stop only for a real blocker.
 
-1. **Finish the exact offline acceptance contract.** Preserve the full source prompt and every explicit requirement into planning, define shape-edge ordering for Sol, and prove that the target playing-card box cannot be replaced by a superficially dimension-matching two-panel shape.
-2. **Finish static seam verification.** Permit only real positive-length coincident static boundary seams while continuing to reject interior crossings, inset overlaps, connector mismatches, and moving contacts without a declared relationship.
-3. **Run every no-cost gate.** Run `check`, coverage, 1,000 seeded properties, offline compiler, repair, end-to-end, ablation, browser, consumer, audit, and `git diff --check`. Resolve every serious review finding.
-4. **Commit the exact acceptance build.** Paid evidence must name a clean immutable build SHA. No secret or ignored ledger is committed.
-5. **Open a fresh, separately authorized paid ledger capped at $2.00.** It is a new authorization, not a reset or continuation of the historical $3.70 ledger. Preserve the old ledger and all failed reports unchanged.
-6. **Run the smallest useful live proof.** The first compiler smoke passed and the first exact intent exposed a measured output-headroom failure. Commit the medium-reasoning/4,000-token remedy, rerun the compiler controls on that exact immutable build, then make one evidence-based exact playing-card-box retry through intent → semantic plan → expansion → deterministic verification/repair → exact exports. Stop at any different failure; do not retry it blindly.
+1. **Complete — exact offline acceptance contract.** The full source prompt, shape-edge convention, six-panel topology, dimensions, stock, lock, and negative two-panel control are enforced.
+2. **Complete — static seam verification.** Only complete positive-length coincident boundary loci receive the seam exemption; adversarial interior crossings remain invalid.
+3. **Complete — no-cost gates.** The full check, coverage, properties, offline evaluations, browser suite, consumer validation, audit, and independent reviews pass at the recorded milestones.
+4. **Complete — immutable acceptance builds.** Every paid report names its clean build SHA; ignored ledgers and secrets remain outside Git.
+5. **Complete — separate $2 ledger.** The immutable continuation carries every prior charge and remains capped at the original authorization.
+6. **In progress — smallest useful live proof.** Commit the general exterior equal-edge resolver, rerun compiler controls on that exact SHA, then make one exact playing-card-box acceptance call. Stop at a new measured failure or the ledger ceiling; never retry blindly.
 7. **Validate exact bytes.** Check the selected live SVG scale/layers/calibration, parse its DXF, validate its GLB, verify canonical JSON hashes, and record why FOLD is present or omitted.
 8. **Enable and verify production only after local acceptance.** Deploy the exact runtime commit, remove the kill switch, confirm `/api/health`, and run the supported prompt from a clean browser while the same separate $2 ceiling still has room. Confirm the displayed result, controls, downloads, build SHA, and metadata-only logs.
 9. **Publish truthfully.** Add the new report and exact result to the evidence packet. Do not call a single case a five-case reliability suite or a 92/100 score.

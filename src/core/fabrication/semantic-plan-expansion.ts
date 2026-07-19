@@ -312,6 +312,74 @@ const orientPanelComponent = (
   };
 };
 
+const inwardNormal = (geometry: PanelGeometry, edge: Edge2Mm): Point2Mm => {
+  const lengthMm = edgeLengthMm(edge);
+  const sign = signedPolygonAreaMm2(geometry.localVertices) >= 0 ? 1 : -1;
+  return {
+    xMm: (-(edge.end.yMm - edge.start.yMm) / lengthMm) * sign,
+    yMm: ((edge.end.xMm - edge.start.xMm) / lengthMm) * sign,
+  };
+};
+
+const matchingExteriorChildEdge = (
+  parentGeometry: PanelGeometry,
+  parentEdge: Edge2Mm,
+  childGeometry: PanelGeometry,
+): Edge2Mm | null => {
+  const parentLengthMm = edgeLengthMm(parentEdge);
+  const parentMidpoint = {
+    xMm: (parentEdge.start.xMm + parentEdge.end.xMm) / 2,
+    yMm: (parentEdge.start.yMm + parentEdge.end.yMm) / 2,
+  };
+  const parentInward = inwardNormal(parentGeometry, parentEdge);
+  return (
+    childGeometry.localVertices
+      .map((_, edgeIndex) => ({
+        edgeIndex,
+        result: edgeFor(childGeometry, edgeIndex),
+      }))
+      .flatMap(({ edgeIndex, result }) => {
+        if (
+          !result.ok ||
+          Math.abs(edgeLengthMm(result.value) - parentLengthMm) >
+            EDGE_LENGTH_TOLERANCE_MM
+        ) {
+          return [];
+        }
+        const transform = transformFromAlignedEdges(result.value, parentEdge);
+        const inwardDistancesMm = childGeometry.localVertices.map((point) => {
+          const placed = transformPoint2(point, transform);
+          return (
+            (placed.xMm - parentMidpoint.xMm) * parentInward.xMm +
+            (placed.yMm - parentMidpoint.yMm) * parentInward.yMm
+          );
+        });
+        if (
+          inwardDistancesMm.some(
+            (distanceMm) => distanceMm > EDGE_LENGTH_TOLERANCE_MM,
+          ) ||
+          Math.min(...inwardDistancesMm) >= -EDGE_LENGTH_TOLERANCE_MM
+        ) {
+          return [];
+        }
+        return [
+          {
+            edgeIndex,
+            edge: result.value,
+            meanInwardDistanceMm:
+              inwardDistancesMm.reduce((sum, value) => sum + value, 0) /
+              inwardDistancesMm.length,
+          },
+        ];
+      })
+      .toSorted(
+        (left, right) =>
+          left.meanInwardDistanceMm - right.meanInwardDistanceMm ||
+          left.edgeIndex - right.edgeIndex,
+      )[0]?.edge ?? null
+  );
+};
+
 const derivePanelPacking = (
   intent: FabricationIntentV1,
   plan: FabricationPlanV2,
@@ -377,7 +445,7 @@ const derivePanelPacking = (
         parentGeometry,
         joint.parentAttachment.edgeIndex,
       );
-      const childEdgeResult = edgeFor(
+      let childEdgeResult = edgeFor(
         childGeometry,
         joint.childAttachment.edgeIndex,
       );
@@ -389,11 +457,19 @@ const derivePanelPacking = (
             edgeLengthMm(childEdgeResult.value),
         ) > EDGE_LENGTH_TOLERANCE_MM
       ) {
-        return mappingError(
-          "edge_length_mismatch",
-          ["joints", joint.key],
-          `Joint ${joint.key} attachment edges must have equal physical length.`,
+        const resolvedChildEdge = matchingExteriorChildEdge(
+          parentGeometry,
+          parentEdgeResult.value,
+          childGeometry,
         );
+        if (!resolvedChildEdge) {
+          return mappingError(
+            "edge_length_mismatch",
+            ["joints", joint.key],
+            `Joint ${joint.key} attachment edges must have equal physical length.`,
+          );
+        }
+        childEdgeResult = { ok: true, value: resolvedChildEdge };
       }
       const parentPlacedEdge = transformedEdge(
         parentEdgeResult.value,
@@ -514,15 +590,6 @@ const derivePanelPacking = (
     cursorBySheetIndex.set(first.semantic.sheetIndex, cursor);
   }
   return { ok: true, value: { transformsByPanelKey: packed } };
-};
-
-const inwardNormal = (geometry: PanelGeometry, edge: Edge2Mm): Point2Mm => {
-  const lengthMm = edgeLengthMm(edge);
-  const sign = signedPolygonAreaMm2(geometry.localVertices) >= 0 ? 1 : -1;
-  return {
-    xMm: (-(edge.end.yMm - edge.start.yMm) / lengthMm) * sign,
-    yMm: ((edge.end.xMm - edge.start.xMm) / lengthMm) * sign,
-  };
 };
 
 const pointAlong = (edge: Edge2Mm, distanceMm: number): Point2Mm => {

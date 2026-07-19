@@ -157,6 +157,13 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - Added fail-closed plan-call and expansion tests, round-tripped all three prepared mechanisms through compile and verification, and retained provider token counts when structurally valid usage exceeds a request ceiling. This mitigation is offline-tested only; it does not change or upgrade the sealed paid result.
 - Bound deterministic program IDs to the complete canonical intent as well as the compact plan and ordinal, moved same-build compiler-report and ledger-lineage validation ahead of every readiness provider call, and made sealed ledgers at or above their ceiling ineligible for continuation before any target or claim file is created.
 
+## 2026-07-19 — compact live-plan integration
+
+- Continued the separately authorized $2 compact-path ledger without resetting or deleting any earlier evidence. On clean commit `f880d20`, compiler controls passed, the exact intent recalled 16/16 requirements, and Sol completed a strict semantic plan.
+- Deterministic expansion rejected that plan at `joints/rightFold` with `edge_length_mismatch`; the model had selected the short edge of a 25 × 95 mm side panel for a 95 mm base seam. The two exact calls cost $0.1821925, bringing cumulative compact-path spend to $1.617172 and leaving $0.382828.
+- Added a general deterministic recovery for that bounded model error: when an angular child edge has the wrong length, the mapper may select only a same-length boundary edge that aligns the child outside its parent. It preserves the original typed failure when no valid edge exists and never changes model-authored panel dimensions, topology, motion, or user intent.
+- The exact six-panel acceptance test now reproduces the wrong right-panel edge and proves the recovered program has exact 70 × 95 × 25 mm closed spans, passes the complete verifier, and produces source-equivalent SVG, DXF, GLB, and canonical JSON offline.
+
 ## Remaining external gate
 
 - Preserve every sealed ledger, continuation, claim, and failed-run report. Do not delete, reset, relabel, branch, or bypass them, and make no further paid call under the $3.70 cap.

@@ -503,7 +503,7 @@ describe("semantic FabricationPlanV2", () => {
     }
   });
 
-  it("expands the sealed six-panel box into exact verified source-equivalent exports", () => {
+  it("repairs the model-selected box edge and produces exact source-equivalent exports", () => {
     const panelIds = ["base", "front", "back", "left", "right", "lid"];
     const intent: FabricationIntentV1 = {
       version: "1",
@@ -601,7 +601,9 @@ describe("semantic FabricationPlanV2", () => {
         fold("front", "base", "base", 0, "front", 2),
         fold("back", "base", "base", 2, "back", 0),
         fold("left", "base", "base", 3, "left", 1),
-        fold("right", "base", "base", 1, "right", 3),
+        // The live model chose the short top edge here. The deterministic
+        // mapper must select the equal-length exterior edge before compiling.
+        fold("right", "base", "base", 1, "right", 0),
         fold("lid", "back", "back", 2, "lid", 0),
       ],
       connectorRelationships: [
@@ -1685,6 +1687,11 @@ describe("semantic FabricationPlanV2", () => {
       fixtureIntent(),
       {
         ...source,
+        panels: source.panels.map((panel) =>
+          panel.key === "wing"
+            ? { ...panel, widthMm: 31, heightMm: 59 }
+            : panel,
+        ),
         joints: source.joints.map((joint) => ({
           ...joint,
           childAttachment: { ...joint.childAttachment, edgeIndex: 0 },
@@ -1977,7 +1984,7 @@ describe("semantic FabricationPlanV2", () => {
     });
   });
 
-  it("fails typed when a local attachment mapping is ambiguous", () => {
+  it("resolves a wrong child edge to a same-length exterior edge", () => {
     const plan = fixtureSemanticPlan();
     const malformed = {
       ...plan,
@@ -1986,11 +1993,10 @@ describe("semantic FabricationPlanV2", () => {
         childAttachment: { ...joint.childAttachment, edgeIndex: 0 },
       })),
     };
-    expect(
-      semanticPlanToFabricationPlanV1(fixtureIntent(), malformed),
-    ).toMatchObject({
-      ok: false,
-      error: { kind: "semantic_plan_mapping", code: "edge_length_mismatch" },
-    });
+    const result = semanticPlanToFabricationPlanV1(fixtureIntent(), malformed);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.panels).toHaveLength(2);
+    expect(result.value.joints).toHaveLength(1);
   });
 });

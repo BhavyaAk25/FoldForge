@@ -141,6 +141,10 @@ On clean commit `0f78b02`, compiler controls and 16/16 exact intent checks passe
 
 The next build reserves a separate 32-token provider accounting allowance without raising the `max_output_tokens` sent to Sol. Usage inside that allowance is charged normally; larger or structurally invalid usage still halts. Any further call must use the one-time immutable continuation carrying all $1.360834 already spent.
 
+On clean commit `f880d20`, the compiler controls passed again and the exact intent recalled 16/16 requirements. Sol completed a strict compact semantic plan, which deterministic expansion rejected as `edge_length_mismatch` at `joints/rightFold`: the chosen short child edge could not attach to the base's full-height edge. The exact intent and plan calls cost $0.1821925, bringing cumulative spend to $1.617172 with $0.382828 remaining under the unchanged $2 ceiling.
+
+The deterministic mapper now considers an alternative child edge only after the authored angular edge has a physical-length mismatch. It accepts only a same-length boundary edge whose aligned panel lies outside the parent, with deterministic tie-breaking; if none exists, the original typed failure remains. The exact six-panel box regression deliberately supplies Sol's wrong right-panel edge and still passes exact dimensions, ordered verification, SVG/DXF/GLB/JSON finalization, and source-equivalence checks offline. This fix is not a template, prompt-keyword route, or live success claim.
+
 Guardrails:
 
 - use a fresh exclusive ledger and report path tied to one clean commit;
