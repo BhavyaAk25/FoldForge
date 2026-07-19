@@ -24,7 +24,7 @@ export const LIVE_OPERATION_POLICIES: Readonly<
 > = {
   intent: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.intent,
-    maximumOutputTokens: 3_000,
+    maximumOutputTokens: 4_000,
     maximumRequestsPerHour: 20,
     quotaGroup: "generation",
   },

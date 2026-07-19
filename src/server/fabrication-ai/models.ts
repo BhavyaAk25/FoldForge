@@ -38,8 +38,10 @@ import {
   FABRICATION_PROGRAM_PROMPT,
   FABRICATION_REPAIR_PROMPT,
 } from "./prompts";
+import { FabricationIntentModelError } from "./model-contract-error";
 
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
+export const FABRICATION_INTENT_MAX_OUTPUT_TOKENS = 4_000;
 export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 4_000;
 
 const PROGRAM_BACKGROUND_POLL_INTERVAL_MS = 2_000;
@@ -400,12 +402,12 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
     prompt: string,
     safetyIdentifier: string,
   ): Promise<FabricationIntentV1> {
-    const maxOutputTokens = 3_000;
+    const maxOutputTokens = FABRICATION_INTENT_MAX_OUTPUT_TOKENS;
     const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_INTENT_PROMPT,
       input: [{ role: "user", content: prompt }],
-      reasoning: { effort: "high" },
+      reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(
           FabricationIntentV1Schema,
@@ -428,7 +430,9 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
       execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
-      throw new Error("GPT-5.6 Sol returned no parsed fabrication intent.");
+      throw new FabricationIntentModelError(
+        "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
+      );
     }
     return FabricationIntentV1Schema.parse(response.output_parsed);
   }

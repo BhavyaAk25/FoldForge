@@ -12,6 +12,7 @@ import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import { sha256Hex } from "@/core/sha256";
 import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
 import {
+  FABRICATION_INTENT_MAX_OUTPUT_TOKENS,
   FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
   FOLDFORGE_MODEL,
   OpenAIFabricationIntentModel,
@@ -117,7 +118,8 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(parseResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
-        reasoning: { effort: "high" },
+        reasoning: { effort: "medium" },
+        max_output_tokens: FABRICATION_INTENT_MAX_OUTPUT_TOKENS,
         store: false,
         parallel_tool_calls: false,
         safety_identifier: "ff_subject",
@@ -142,6 +144,22 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       }),
     );
     expect(getClient).toHaveBeenCalledWith({ paidEvaluation: false });
+  });
+
+  it("classifies a truncated intent response as an incomplete model contract", async () => {
+    parseResponse.mockResolvedValue({ output_parsed: null });
+
+    await expect(
+      new OpenAIFabricationIntentModel().compileIntent(
+        "Make a playing-card box.",
+        "ff_subject",
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: "model_incomplete",
+        name: "FabricationIntentModelError",
+      }),
+    );
   });
 
   it("generates a complete program through a strict response schema", async () => {

@@ -11,6 +11,7 @@ import type {
 import { LIVE_OPERATION_POLICIES } from "@/server/api/security-policy";
 import { PROMPT_MAXIMUM_CHARACTERS } from "@/server/fabrication-ai/contracts";
 import type { FabricationIntentModel } from "@/server/fabrication-ai/models";
+import { FabricationIntentModelError } from "@/server/fabrication-ai/model-contract-error";
 
 import { fixtureIntent } from "../fixtures/fabrication";
 
@@ -177,6 +178,31 @@ describe("POST /api/intent", () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain(privateProviderText);
+  });
+
+  it("reports truncated intent output as a stable contract failure", async () => {
+    const privateDetail = "private partial intent content";
+    mocks.compileIntent.mockRejectedValueOnce(
+      new FabricationIntentModelError(privateDetail),
+    );
+
+    const response = await POST(requestFor({ prompt: "Build a display." }));
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      error: {
+        code: "MODEL_INCOMPLETE",
+        diagnostic: {
+          stage: "intent",
+          kind: "contract",
+          code: "MODEL_INCOMPLETE",
+          retryable: false,
+          modelCall: "attempted",
+          failureIds: [],
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(privateDetail);
   });
 
   it("rejects a non-strict model result at the route boundary", async () => {

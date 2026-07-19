@@ -4,7 +4,10 @@ import {
   type ForgeDiagnosticStage,
   type ForgeDiagnosticV1,
 } from "@/lib/forge-diagnostics";
-import { FabricationProgramModelError } from "@/server/fabrication-ai/plan-response";
+import {
+  FabricationModelContractError,
+  type FabricationModelContractErrorCode,
+} from "@/server/fabrication-ai/model-contract-error";
 
 type ProviderFailureClass =
   | "authentication"
@@ -56,7 +59,7 @@ const providerFailureClass = (error: unknown): ProviderFailureClass => {
 
 const MODEL_FAILURES: Readonly<
   Record<
-    FabricationProgramModelError["code"],
+    FabricationModelContractErrorCode,
     { readonly code: string; readonly message: string }
   >
 > = {
@@ -130,7 +133,7 @@ export const modelFailureDiagnostic = (
   stage: Extract<ForgeDiagnosticStage, "intent" | "program" | "repair">,
   error: unknown,
 ): ForgeDiagnosticV1 => {
-  if (error instanceof FabricationProgramModelError) {
+  if (error instanceof FabricationModelContractError) {
     const failure = MODEL_FAILURES[error.code];
     return forgeDiagnostic({
       stage,

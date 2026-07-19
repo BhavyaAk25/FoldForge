@@ -13,6 +13,8 @@
 - Passed the complete no-cost gate: 450 tests; 96.95% statements, 90.37% branches, 97.85% functions, and 97.99% lines; 1,000 seeded properties; offline compiler, repair, E2E, and ablation suites; 7/7 Chromium flows; consumer parsers; production audit; and build.
 - Kept production `LIVE_MODEL_KILL_SWITCH=true`. No paid response has yet validated the new semantic-plan path, so no live program or artifact success is claimed.
 - Recorded a new, separate builder authorization of at most $2.00 for the exact compact-plan acceptance path. It uses a fresh run-specific ledger, stops at the first failure, and does not modify or continue the historical ledger sealed at $3.6134275.
+- On clean commit `659e84b`, the new live compiler smoke passed its supported, refusal, and injection controls for $0.13202125. The exact box run then stopped before program generation because intent extraction consumed its full 3,000-output-token allowance, including 2,918 reasoning tokens, without returning parsed intent. That completed request cost $0.10198375; the separate ledger remains open at $0.234005 charged and $1.765995 available.
+- Reduced intent extraction from high to medium reasoning, raised its strict output allowance to 4,000 tokens, and classified missing parsed intent as a stable `MODEL_INCOMPLETE` contract failure. The evidence-based remedy passes 452 tests, coverage, the seeded property gate, all offline evals, 7/7 Chromium flows, consumer validation, and the production build; it still requires a paid response on its exact clean commit.
 
 ## 2026-07-18 — Single-design live forge
 

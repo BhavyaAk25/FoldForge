@@ -115,6 +115,10 @@ describe("live route security policy", () => {
       maximumOutputTokens: 4_000,
       maximumRequestsPerHour: 20,
     });
+    expect(LIVE_OPERATION_POLICIES.intent).toMatchObject({
+      maximumOutputTokens: 4_000,
+      maximumRequestsPerHour: 20,
+    });
     expect(LIVE_OPERATION_POLICIES.repair).toMatchObject({
       maximumOutputTokens: 2_500,
       maximumRequestsPerHour: 5,
@@ -534,7 +538,7 @@ describe("live route security policy", () => {
     ];
     const reservations: readonly (readonly [LiveOperation, number, number])[] =
       [
-        reservation("intent", 4_000, 3_000),
+        reservation("intent", 4_000, 4_000),
         reservation("programs", 8_192, 4_000),
         ...Array.from({ length: 5 }, () =>
           reservation("repair", 16_384, 2_500),

@@ -13,6 +13,10 @@ import {
   ProgramProposalV1Schema,
   type ProgramProposalV1,
 } from "./contracts";
+import {
+  FabricationModelContractError,
+  type FabricationModelContractErrorCode,
+} from "./model-contract-error";
 
 export interface CompletedFabricationPlanResponse {
   readonly id: string;
@@ -20,16 +24,9 @@ export interface CompletedFabricationPlanResponse {
   readonly output?: readonly unknown[] | null;
 }
 
-export class FabricationProgramModelError extends Error {
-  constructor(
-    readonly code:
-      | "model_incomplete"
-      | "missing_plan_call"
-      | "duplicate_plan_call"
-      | "invalid_plan",
-    message: string,
-  ) {
-    super(message);
+export class FabricationProgramModelError extends FabricationModelContractError {
+  constructor(code: FabricationModelContractErrorCode, message: string) {
+    super(code, message);
     this.name = "FabricationProgramModelError";
   }
 }

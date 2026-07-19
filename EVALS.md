@@ -26,7 +26,7 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 450/450 passing                     |
+| Vitest           | 452/452 passing                     |
 | Statements       | 96.95%                              |
 | Branches         | 90.37%                              |
 | Functions        | 97.85%                              |
@@ -120,6 +120,10 @@ Representative semantic payloads fit inside the reduced 4,000-token plan ceiling
 ## Separately authorized $2 acceptance plan
 
 The builder has authorized a new maximum of **$2.00** for the compact path. This is separate from the sealed historical ledger.
+
+On clean commit `659e84b`, the new compiler controls passed 3/3 for $0.13202125. The exact box request then used all 3,000 intent-output tokens, 2,918 of them reasoning tokens, and returned no parsed intent. FoldForge stopped before program generation after charging the completed $0.10198375 request. The new ledger therefore records $0.234005 charged and $1.765995 remaining. This is evidence for an intent-output truncation, not a program-generation result.
+
+The targeted remedy uses medium intent reasoning, a strict 4,000-token ceiling, and a typed `MODEL_INCOMPLETE` diagnostic. It has passed every no-cost gate but must be committed and revalidated by a live response before it changes the evidence boundary.
 
 Guardrails:
 
