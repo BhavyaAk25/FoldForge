@@ -1531,6 +1531,35 @@ describe("semantic FabricationPlanV2", () => {
     );
   });
 
+  it("quarter-turns a connected flat component when only that sheet orientation fits", () => {
+    const intent = {
+      ...fixtureIntent(),
+      stockOptions: fixtureIntent().stockOptions.map((sheet) => ({
+        ...sheet,
+        widthMm: 72,
+        heightMm: 122,
+        printableMarginMm: 5,
+      })),
+    };
+    const result = semanticPlanToFabricationPlanV1(
+      intent,
+      fixtureSemanticPlan(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.value.panels.map((panel) => panel.flatTransform.rotationDeg),
+    ).toEqual([90, 90]);
+    expect(
+      result.value.panels.every(
+        (panel) =>
+          panel.flatTransform.translationMm.xMm >= 5 &&
+          panel.flatTransform.translationMm.yMm >= 5,
+      ),
+    ).toBe(true);
+  });
+
   it("rejects unavailable or excessive sheet selection and cross-sheet folds", () => {
     const source = fixtureSemanticPlan();
     const secondSheet = {

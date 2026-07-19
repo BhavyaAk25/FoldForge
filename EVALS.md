@@ -26,10 +26,10 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 453/453 passing                     |
-| Statements       | 96.95%                              |
-| Branches         | 90.37%                              |
-| Functions        | 97.85%                              |
+| Vitest           | 454/454 passing                     |
+| Statements       | 96.96%                              |
+| Branches         | 90.40%                              |
+| Functions        | 97.86%                              |
 | Lines            | 97.99%                              |
 | Chromium E2E     | 7/7 passing                         |
 | Production build | Pass                                |
@@ -128,6 +128,10 @@ The targeted remedy uses medium intent reasoning, a strict 4,000-token ceiling, 
 On clean commit `6537b46`, all three compiler controls passed. The exact intent passed 16/16 requirements, and Sol completed one compact program response in about 71 seconds. Deterministic expansion rejected it as `model_invalid_plan` before compilation, repair, or export. The exact intent and program calls cost $0.19071875; cumulative new-ledger spend is $0.542165 with $1.457835 remaining. This proves the compact program call can complete inside the bounded runtime, but it does not prove a valid program.
 
 The next build records only bounded invalid-plan phase/code/path diagnostics and asks Sol to audit the exact semantic plan against deterministic expansion invariants before its single function call. The failed model body remains unlogged and unrecoverable under `store:false`; no unmodified retry is permitted.
+
+On clean commit `21c82f7`, the compiler controls passed and the exact intent again passed 16/16. The complete strict program response was rejected with the newly isolated expansion detail `packing_failed` at `panels/base`: its connected flat net did not fit in the authored orientation. Those two calls cost $0.1735275, bringing cumulative spend to $0.795658 with $1.204342 remaining.
+
+The deterministic packer now evaluates both 0° and 90° orientations for every connected flat component and composes the chosen rotation into every panel transform. A focused regression proves a 110 × 60 mm connected net fits a 62 × 112 mm printable area only after the legal quarter-turn. This is a general compiler fix, not a prompt or object-specific route.
 
 Guardrails:
 

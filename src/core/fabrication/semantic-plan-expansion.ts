@@ -265,6 +265,53 @@ interface PackedPanels {
   readonly transformsByPanelKey: ReadonlyMap<string, Transform2Mm>;
 }
 
+interface OrientedPanelComponent {
+  readonly rotationDeg: 0 | 90;
+  readonly transformsByPanelKey: ReadonlyMap<string, Transform2Mm>;
+  readonly minimumXmm: number;
+  readonly minimumYmm: number;
+  readonly widthMm: number;
+  readonly heightMm: number;
+}
+
+const orientPanelComponent = (
+  panelKeys: readonly string[],
+  rotationDeg: 0 | 90,
+  relativeTransforms: ReadonlyMap<string, Transform2Mm>,
+  geometryByPanelKey: ReadonlyMap<string, PanelGeometry>,
+): OrientedPanelComponent => {
+  const groupRotation: Transform2Mm = {
+    translationMm: { xMm: 0, yMm: 0 },
+    rotationDeg,
+  };
+  const transformsByPanelKey = new Map<string, Transform2Mm>();
+  const points: Point2Mm[] = [];
+  for (const panelKey of panelKeys) {
+    const relative = relativeTransforms.get(panelKey)!;
+    const oriented = {
+      translationMm: transformPoint2(relative.translationMm, groupRotation),
+      rotationDeg: relative.rotationDeg + rotationDeg,
+    };
+    transformsByPanelKey.set(panelKey, oriented);
+    const geometry = geometryByPanelKey.get(panelKey)!;
+    points.push(
+      ...geometry.localVertices.map((point) =>
+        transformPoint2(point, oriented),
+      ),
+    );
+  }
+  const minimumXmm = Math.min(...points.map((point) => point.xMm));
+  const minimumYmm = Math.min(...points.map((point) => point.yMm));
+  return {
+    rotationDeg,
+    transformsByPanelKey,
+    minimumXmm,
+    minimumYmm,
+    widthMm: Math.max(...points.map((point) => point.xMm)) - minimumXmm,
+    heightMm: Math.max(...points.map((point) => point.yMm)) - minimumYmm,
+  };
+};
+
 const derivePanelPacking = (
   intent: FabricationIntentV1,
   plan: FabricationPlanV2,
@@ -392,51 +439,67 @@ const derivePanelPacking = (
     // Sheet references are checked before packing, and every angular edge is
     // checked for same-sheet membership while its component is assembled.
     const sheet = intent.stockOptions[first.semantic.sheetIndex]!;
-    const points = panelKeys.flatMap((panelKey) => {
-      const geometry = geometryByPanelKey.get(panelKey)!;
-      const transform = relative.get(panelKey)!;
-      return geometry.localVertices.map((point) =>
-        transformPoint2(point, transform),
-      );
-    });
-    const minimumXmm = Math.min(...points.map((point) => point.xMm));
-    const minimumYmm = Math.min(...points.map((point) => point.yMm));
-    const maximumXmm = Math.max(...points.map((point) => point.xMm));
-    const maximumYmm = Math.max(...points.map((point) => point.yMm));
-    const widthMm = maximumXmm - minimumXmm;
-    const heightMm = maximumYmm - minimumYmm;
     const usableWidthMm = sheet.widthMm - sheet.printableMarginMm * 2;
     const usableHeightMm = sheet.heightMm - sheet.printableMarginMm * 2;
-    if (widthMm > usableWidthMm || heightMm > usableHeightMm) {
-      return mappingError(
-        "packing_failed",
-        ["panels", first.semantic.key],
-        `Layout component ${first.semantic.key} does not fit sheet ${sheet.sheetId}.`,
-      );
-    }
     const cursor = cursorBySheetIndex.get(first.semantic.sheetIndex) ?? {
       xMm: 0,
       yMm: 0,
       rowHeightMm: 0,
     };
-    if (cursor.xMm > 0 && cursor.xMm + widthMm > usableWidthMm) {
-      cursor.xMm = 0;
-      cursor.yMm += cursor.rowHeightMm + LAYOUT_GAP_MM;
-      cursor.rowHeightMm = 0;
-    }
-    if (cursor.yMm + heightMm > usableHeightMm) {
+
+    const placements = ([0, 90] as const)
+      .map((rotationDeg) =>
+        orientPanelComponent(
+          panelKeys,
+          rotationDeg,
+          relative,
+          geometryByPanelKey,
+        ),
+      )
+      .filter(
+        (component) =>
+          component.widthMm <= usableWidthMm &&
+          component.heightMm <= usableHeightMm,
+      )
+      .flatMap((component) => {
+        const startsNewRow =
+          cursor.xMm > 0 && cursor.xMm + component.widthMm > usableWidthMm;
+        const xMm = startsNewRow ? 0 : cursor.xMm;
+        const yMm = startsNewRow
+          ? cursor.yMm + cursor.rowHeightMm + LAYOUT_GAP_MM
+          : cursor.yMm;
+        const rowHeightMm = startsNewRow
+          ? component.heightMm
+          : Math.max(cursor.rowHeightMm, component.heightMm);
+        return yMm + component.heightMm <= usableHeightMm
+          ? [{ component, xMm, yMm, rowHeightMm }]
+          : [];
+      })
+      .toSorted(
+        (left, right) =>
+          left.yMm + left.rowHeightMm - (right.yMm + right.rowHeightMm) ||
+          left.component.rotationDeg - right.component.rotationDeg,
+      );
+    const placement = placements[0];
+    if (!placement) {
       return mappingError(
         "packing_failed",
         ["panels", first.semantic.key],
-        `Deterministic shelf packing exhausted sheet ${sheet.sheetId}.`,
+        `Layout component ${first.semantic.key} does not fit the remaining printable area on sheet ${sheet.sheetId}.`,
       );
     }
     const shift = {
-      xMm: sheet.printableMarginMm + cursor.xMm - minimumXmm,
-      yMm: sheet.printableMarginMm + cursor.yMm - minimumYmm,
+      xMm:
+        sheet.printableMarginMm +
+        placement.xMm -
+        placement.component.minimumXmm,
+      yMm:
+        sheet.printableMarginMm +
+        placement.yMm -
+        placement.component.minimumYmm,
     };
     for (const panelKey of panelKeys) {
-      const transform = relative.get(panelKey)!;
+      const transform = placement.component.transformsByPanelKey.get(panelKey)!;
       packed.set(panelKey, {
         translationMm: {
           xMm: transform.translationMm.xMm + shift.xMm,
@@ -445,8 +508,9 @@ const derivePanelPacking = (
         rotationDeg: transform.rotationDeg,
       });
     }
-    cursor.xMm += widthMm + LAYOUT_GAP_MM;
-    cursor.rowHeightMm = Math.max(cursor.rowHeightMm, heightMm);
+    cursor.xMm = placement.xMm + placement.component.widthMm + LAYOUT_GAP_MM;
+    cursor.yMm = placement.yMm;
+    cursor.rowHeightMm = placement.rowHeightMm;
     cursorBySheetIndex.set(first.semantic.sheetIndex, cursor);
   }
   return { ok: true, value: { transformsByPanelKey: packed } };
