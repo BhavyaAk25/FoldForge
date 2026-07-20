@@ -1,5 +1,4 @@
-import { expandFabricationPlan } from "./planning";
-import { compileFabricationProgram } from "./compiler";
+import { compileFabricationProgram, type CompilationError } from "./compiler";
 import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { connectorReferencePoint2 } from "./connector-geometry";
 import {
@@ -9,6 +8,12 @@ import {
   transformPoint2,
 } from "./polygon";
 import { FabricationIntentV1Schema } from "./schemas";
+import {
+  expandFabricationPlan,
+  type FabricationPlanExpansionError,
+} from "./planning";
+import { semanticPlanResourceCounts } from "./resource-counts";
+import type { FabricationLimitError } from "./result";
 import {
   FabricationPlanV2Schema,
   type FabricationPlanV2,
@@ -59,9 +64,12 @@ export interface SemanticPlanMappingError {
   readonly message: string;
 }
 
+export type SemanticPlanExpansionError =
+  SemanticPlanMappingError | FabricationLimitError;
+
 export type SemanticPlanMappingResult<T> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: SemanticPlanMappingError };
+  | { readonly ok: false; readonly error: SemanticPlanExpansionError };
 
 const mappingError = (
   code: SemanticPlanMappingError["code"],
@@ -70,6 +78,15 @@ const mappingError = (
 ): SemanticPlanMappingResult<never> => ({
   ok: false,
   error: { kind: "semantic_plan_mapping", code, path, message },
+});
+
+const planLimitError = (
+  limit: string,
+  actual: number,
+  maximum: number,
+): SemanticPlanMappingResult<never> => ({
+  ok: false,
+  error: { kind: "limit_exceeded", limit, actual, maximum },
 });
 
 const canonicalId = (
@@ -1093,6 +1110,24 @@ export const semanticPlanToFabricationPlanV1 = (
   }
   const intent = intentParsed.data;
   const plan = planParsed.data;
+  const resourceCounts = semanticPlanResourceCounts(plan);
+  if (resourceCounts.panelCount > intent.fabricationBudget.maximumPanels) {
+    return planLimitError(
+      "intent.maximumPanels",
+      resourceCounts.panelCount,
+      intent.fabricationBudget.maximumPanels,
+    );
+  }
+  if (
+    resourceCounts.mechanismFeatureCount >
+    intent.fabricationBudget.maximumJointAndConnectorCount
+  ) {
+    return planLimitError(
+      "intent.maximumJointAndConnectorCount",
+      resourceCounts.mechanismFeatureCount,
+      intent.fabricationBudget.maximumJointAndConnectorCount,
+    );
+  }
   const selectedSheetIndexes = new Set(
     plan.panels.map((panel) => panel.sheetIndex),
   );
@@ -1154,6 +1189,13 @@ export const semanticPlanToFabricationPlanV1 = (
   if (!packing.ok) return packing;
   const connectorsResult = deriveConnectors(intent, plan, geometryByPanelKey);
   if (!connectorsResult.ok) return connectorsResult;
+  if (connectorsResult.value.length !== resourceCounts.expandedConnectorCount) {
+    return mappingError(
+      "unsupported_mapping",
+      ["connectorRelationships"],
+      "Semantic connector expansion did not produce one tab and one slot per relationship.",
+    );
+  }
   const jointsResult = createJoints(
     plan,
     geometryByPanelKey,
@@ -1581,6 +1623,23 @@ interface ResolvedPlanEvaluation {
   readonly report: VerificationReportV2;
 }
 
+export type ResolvedSemanticPlanExpansionError =
+  SemanticPlanExpansionError | FabricationPlanExpansionError | CompilationError;
+
+export type ResolvedSemanticPlanExpansionResult =
+  | { readonly ok: true; readonly value: FabricationProgramV1 }
+  | {
+      readonly ok: false;
+      readonly error: ResolvedSemanticPlanExpansionError;
+    };
+
+type ResolvedPlanEvaluationResult =
+  | { readonly ok: true; readonly value: ResolvedPlanEvaluation }
+  | {
+      readonly ok: false;
+      readonly error: ResolvedSemanticPlanExpansionError;
+    };
+
 const MAXIMUM_PLAN_RESOLUTION_EVALUATIONS = 160;
 const MAXIMUM_EDGE_CHOICES_PER_PANEL = 8;
 
@@ -1678,7 +1737,7 @@ export const expandResolvedSemanticFabricationPlan = (
   intentInput: unknown,
   planInput: unknown,
   candidateOrdinal: number,
-): ReturnType<typeof expandSemanticFabricationPlan> => {
+): ResolvedSemanticPlanExpansionResult => {
   const intent = FabricationIntentV1Schema.safeParse(intentInput);
   const plan = FabricationPlanV2Schema.safeParse(planInput);
   const initial = expandSemanticFabricationPlan(
@@ -1690,43 +1749,46 @@ export const expandResolvedSemanticFabricationPlan = (
 
   const evaluate = (
     candidatePlan: FabricationPlanV2,
-  ): ResolvedPlanEvaluation | null => {
+  ): ResolvedPlanEvaluationResult => {
     const expanded = expandSemanticFabricationPlan(
       intent.data,
       candidatePlan,
       candidateOrdinal,
     );
-    if (!expanded.ok) return null;
+    if (!expanded.ok) return expanded;
     const compiled = compileFabricationProgram(intent.data, expanded.value);
-    if (!compiled.ok) return null;
+    if (!compiled.ok) return compiled;
     return {
-      plan: candidatePlan,
-      program: expanded.value,
-      report: verifyFabricationIr(
-        compiled.value,
-        `candidate-plan-resolution-${candidateOrdinal}`,
-      ),
+      ok: true,
+      value: {
+        plan: candidatePlan,
+        program: expanded.value,
+        report: verifyFabricationIr(
+          compiled.value,
+          `candidate-plan-resolution-${candidateOrdinal}`,
+        ),
+      },
     };
   };
 
   const initialEvaluation = evaluate(plan.data);
+  if (!initialEvaluation.ok) return initialEvaluation;
   if (
-    !initialEvaluation ||
-    initialEvaluation.report.valid ||
+    initialEvaluation.value.report.valid ||
     intent.data.behavior !== "static" ||
-    !isStaticPoseFailure(initialEvaluation.report)
+    !isStaticPoseFailure(initialEvaluation.value.report)
   ) {
-    return initial;
+    return { ok: true, value: initialEvaluation.value.program };
   }
 
   let evaluationCount = 1;
-  let best = initialEvaluation;
+  let best = initialEvaluation.value;
   const consider = (candidatePlan: FabricationPlanV2): void => {
     if (evaluationCount >= MAXIMUM_PLAN_RESOLUTION_EVALUATIONS) return;
     evaluationCount += 1;
     const candidate = evaluate(candidatePlan);
-    if (candidate && reportIsBetter(candidate.report, best.report)) {
-      best = candidate;
+    if (candidate.ok && reportIsBetter(candidate.value.report, best.report)) {
+      best = candidate.value;
     }
   };
 

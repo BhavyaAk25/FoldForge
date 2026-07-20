@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { canonicalSerialize } from "@/core/canonical";
 import { buildFabricationCandidate } from "@/core/fabrication/candidate";
+import { FABRICATION_LIMITS } from "@/core/fabrication/limits";
 import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import { sha256Hex } from "@/core/sha256";
 import { PaidEvalBudget } from "@/server/ai/paid-eval-budget";
@@ -115,6 +116,11 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
 
     expect(result.intentId).toBe("intent-winged-display");
+    expect(result.fabricationBudget).toMatchObject({
+      maximumPanels: FABRICATION_LIMITS.maximumPanelCount,
+      maximumJointAndConnectorCount:
+        FABRICATION_LIMITS.maximumJointAndConnectorCount,
+    });
     expect(parseResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
@@ -151,6 +157,20 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       }),
     );
     expect(getClient).toHaveBeenCalledWith({ paidEvaluation: false });
+  });
+
+  it("preserves explicit user resource ceilings during intent normalization", async () => {
+    parseResponse.mockResolvedValue({ output_parsed: fixtureIntent() });
+
+    const result = await new OpenAIFabricationIntentModel().compileIntent(
+      "Use no more than 3 panels and at most 5 joints and connectors.",
+      "ff_subject",
+    );
+
+    expect(result.fabricationBudget).toMatchObject({
+      maximumPanels: 3,
+      maximumJointAndConnectorCount: 5,
+    });
   });
 
   it("classifies a truncated intent response as an incomplete model contract", async () => {
@@ -316,6 +336,36 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         ),
       }),
     );
+  });
+
+  it("rejects a model plan that fails the real compile preflight", async () => {
+    createResponse.mockResolvedValue({
+      id: "resp-program-compile-rejected",
+      status: "completed",
+      output: planFunctionOutput("Use one direct fold with a grounded base."),
+    });
+    const intent = fixtureIntent();
+
+    await expect(
+      new OpenAIFabricationProgramModel().generateProgram(
+        {
+          ...intent,
+          fabricationBudget: {
+            ...intent.fabricationBudget,
+            cutsAllowed: false,
+          },
+        },
+        1,
+        [],
+        "ff_subject",
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_plan",
+      safeDetail: {
+        phase: "expansion",
+        code: "contract_validation",
+      },
+    });
   });
 
   it("allows a smaller explicit output ceiling for bounded live acceptance", async () => {

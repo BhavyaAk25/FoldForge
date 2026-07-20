@@ -8,6 +8,7 @@ import type {
 
 import { canonicalSerialize } from "@/core/canonical";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { normalizeFabricationIntentBudget } from "@/core/fabrication/intent-budget";
 import {
   FabricationIntentV1Schema,
   ProgramPatchV1Schema,
@@ -529,8 +530,11 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
       );
     }
     return FabricationIntentV1Schema.parse(
-      normalizeIntentSemanticPartIds(
-        FabricationIntentV1Schema.parse(response.output_parsed),
+      normalizeFabricationIntentBudget(
+        normalizeIntentSemanticPartIds(
+          FabricationIntentV1Schema.parse(response.output_parsed),
+        ),
+        prompt,
       ),
     );
   }

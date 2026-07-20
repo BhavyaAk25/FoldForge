@@ -1,3 +1,4 @@
+import type { CompilationError } from "@/core/fabrication/compiler";
 import type { VerificationReportV2 } from "@/core/fabrication/types";
 import {
   forgeDiagnostic,
@@ -55,6 +56,33 @@ const providerFailureClass = (error: unknown): ProviderFailureClass => {
   if (name === "APIConnectionError") return "unavailable";
   if (status !== null && status >= 500) return "unavailable";
   return "unknown";
+};
+
+const FABRICATION_LIMIT_LABELS: Readonly<
+  Record<string, { readonly singular: string; readonly plural: string }>
+> = {
+  "intent.maximumSheets": { singular: "sheet", plural: "sheets" },
+  "intent.maximumPanels": { singular: "panel", plural: "panels" },
+  "intent.maximumJointAndConnectorCount": {
+    singular: "combined joint or connector",
+    plural: "combined joints and connectors",
+  },
+};
+
+const fabricationLimitMessage = (
+  limit: string,
+  actual: number,
+  maximum: number,
+): string => {
+  const labels = FABRICATION_LIMIT_LABELS[limit];
+  const label = labels
+    ? actual === 1
+      ? labels.singular
+      : labels.plural
+    : actual === 1
+      ? "resource"
+      : "resources";
+  return `The generated program uses ${actual} ${label}; the permitted maximum is ${maximum}. Limit: ${limit}.`;
 };
 
 const MODEL_FAILURES: Readonly<
@@ -135,6 +163,31 @@ export const modelFailureDiagnostic = (
 ): ForgeDiagnosticV1 => {
   if (error instanceof FabricationModelContractError) {
     const failure = MODEL_FAILURES[error.code];
+    const detail = recordValue(recordValue(error)?.safeDetail);
+    const limit = recordValue(detail?.limit);
+    if (
+      error.code === "invalid_plan" &&
+      detail?.code === "limit_exceeded" &&
+      typeof limit?.name === "string" &&
+      typeof limit.actual === "number" &&
+      typeof limit.maximum === "number"
+    ) {
+      return forgeDiagnostic({
+        stage,
+        kind: "compilation",
+        code: "PROGRAM_LIMIT_EXCEEDED",
+        message: fabricationLimitMessage(
+          limit.name,
+          limit.actual,
+          limit.maximum,
+        ),
+        modelCall: "attempted",
+        failureIds: [
+          "compile.limit_exceeded",
+          `compile.limit_exceeded#${limit.name}`,
+        ],
+      });
+    }
     return forgeDiagnostic({
       stage,
       kind: "contract",
@@ -183,12 +236,29 @@ export const verificationFailureDiagnostic = (input: {
 };
 
 export const compilationFailureDiagnostic = (
-  failureKind: string,
-): ForgeDiagnosticV1 =>
-  forgeDiagnostic({
+  failure: CompilationError,
+): ForgeDiagnosticV1 => {
+  if (failure.kind === "limit_exceeded") {
+    return forgeDiagnostic({
+      stage: "compile",
+      kind: "compilation",
+      code: "PROGRAM_LIMIT_EXCEEDED",
+      message: fabricationLimitMessage(
+        failure.limit,
+        failure.actual,
+        failure.maximum,
+      ),
+      failureIds: [
+        "compile.limit_exceeded",
+        `compile.limit_exceeded#${failure.limit}`,
+      ],
+    });
+  }
+  return forgeDiagnostic({
     stage: "compile",
     kind: "compilation",
     code: "PROGRAM_COMPILE_ERROR",
     message: "The generated program could not be compiled safely.",
-    failureIds: [`compile.${failureKind}`],
+    failureIds: [`compile.${failure.kind}`],
   });
+};

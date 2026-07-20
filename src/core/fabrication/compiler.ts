@@ -35,6 +35,7 @@ import type {
   Transform2Mm,
 } from "./types";
 import { transformPoint2 } from "./polygon";
+import { fabricationProgramResourceCounts } from "./resource-counts";
 
 export type CompilationError =
   | FabricationContractValidationError
@@ -392,16 +393,15 @@ export const compileFabricationProgram = (
       ),
     );
   }
-  const mechanismFeatureCount =
-    program.blueprint.joints.length + program.blueprint.connectors.length;
+  const resourceCounts = fabricationProgramResourceCounts(program);
   if (
-    mechanismFeatureCount >
+    resourceCounts.mechanismFeatureCount >
     intent.fabricationBudget.maximumJointAndConnectorCount
   ) {
     return fabricationErr(
       limitIssue(
         "intent.maximumJointAndConnectorCount",
-        mechanismFeatureCount,
+        resourceCounts.mechanismFeatureCount,
         intent.fabricationBudget.maximumJointAndConnectorCount,
       ),
     );

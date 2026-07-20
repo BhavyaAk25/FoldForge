@@ -59,7 +59,7 @@ export const POST = async (request: Request): Promise<NextResponse> => {
           ir: null,
           report: null,
           score: null,
-          diagnostic: compilationFailureDiagnostic(compiled.error.kind),
+          diagnostic: compilationFailureDiagnostic(compiled.error),
         }),
       );
     }
