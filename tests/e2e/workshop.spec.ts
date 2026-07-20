@@ -8,6 +8,7 @@ import {
   fabricationProgramHash,
 } from "@/core/fabrication/compiler";
 import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import type {
   CandidateV2,
   ExportFormat,
@@ -271,7 +272,7 @@ const installStudioMocks = async (
             modelId: "gpt-5.6-sol",
             modelResponseId: `resp-e2e-program-${body.candidateOrdinal}`,
             planHash: String(body.candidateOrdinal).repeat(64),
-            expanderVersion: "3",
+            expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
           },
         },
         programStructureFingerprint: String(body.candidateOrdinal).repeat(64),
@@ -557,7 +558,7 @@ test("runs access, single-design forge, real repair evidence, checkpoint, and ex
       modelId: "gpt-5.6-sol",
       modelResponseId: "resp-e2e-program-1",
       modelPlanHash: "1".repeat(64),
-      planExpanderVersion: "3",
+      planExpanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
     });
   }
 
