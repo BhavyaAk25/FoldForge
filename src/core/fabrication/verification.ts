@@ -85,6 +85,7 @@ const REQUESTED_SIZE_TOLERANCE_MM = 2;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/u;
 const MAXIMUM_REPORT_CHECKS = 512;
 const MAXIMUM_REPORT_FAILURES = 256;
+const MAXIMUM_REPAIRABLE_PROGRAM_PATHS = 16;
 
 const connectorPairMetricId = (
   prefix: "axis" | "fit_l" | "fit_w" | "reach" | "span",
@@ -137,32 +138,35 @@ interface MotionEvaluation {
   readonly collisionRefs: readonly GeometryRefV1[];
 }
 
-const motionRepairPaths = (ir: FabricationIRV1): readonly string[] => [
-  ...(ir.driver
-    ? [
-        `/blueprint/driver/${ir.driver.driverId}/minimumValue`,
-        `/blueprint/driver/${ir.driver.driverId}/maximumValue`,
-        `/blueprint/driver/${ir.driver.driverId}/homeValue`,
-      ]
-    : []),
-  ...ir.joints.flatMap((joint) =>
+const motionRepairPaths = (ir: FabricationIRV1): readonly string[] => {
+  const jointHomePaths = ir.joints.map((joint) =>
+    joint.kind === "prismatic"
+      ? `/blueprint/joints/${joint.jointId}/homeTravelMm`
+      : `/blueprint/joints/${joint.jointId}/homeAngleDeg`,
+  );
+  const jointLimitPaths = ir.joints.flatMap((joint) =>
     joint.kind === "prismatic"
       ? [
           `/blueprint/joints/${joint.jointId}/minTravelMm`,
           `/blueprint/joints/${joint.jointId}/maxTravelMm`,
-          `/blueprint/joints/${joint.jointId}/homeTravelMm`,
         ]
       : [
           `/blueprint/joints/${joint.jointId}/minAngleDeg`,
           `/blueprint/joints/${joint.jointId}/maxAngleDeg`,
-          `/blueprint/joints/${joint.jointId}/homeAngleDeg`,
         ],
-  ),
-  ...ir.outputs.flatMap((output) => [
+  );
+  const driverPaths = ir.driver
+    ? [
+        `/blueprint/driver/${ir.driver.driverId}/homeValue`,
+        `/blueprint/driver/${ir.driver.driverId}/minimumValue`,
+        `/blueprint/driver/${ir.driver.driverId}/maximumValue`,
+      ]
+    : [];
+  const outputPaths = ir.outputs.flatMap((output) => [
     `/blueprint/outputs/${output.outputId}/minimumValue`,
     `/blueprint/outputs/${output.outputId}/maximumValue`,
-  ]),
-  ...ir.couplings.flatMap((coupling) => {
+  ]);
+  const couplingPaths = ir.couplings.flatMap((coupling) => {
     switch (coupling.kind) {
       case "direct_ratio":
         return [
@@ -179,8 +183,18 @@ const motionRepairPaths = (ir: FabricationIRV1): readonly string[] => [
       case "cam_slot":
         return [`/blueprint/couplings/${coupling.couplingId}/phaseOffsetMm`];
     }
-  }),
-];
+  });
+  // Home-pose changes are the most direct response to collision and mate
+  // reach failures. Preserve that priority while respecting the strict
+  // VerificationFailureV2 transport bound.
+  return [
+    ...jointHomePaths,
+    ...driverPaths,
+    ...jointLimitPaths,
+    ...outputPaths,
+    ...couplingPaths,
+  ].slice(0, MAXIMUM_REPAIRABLE_PROGRAM_PATHS);
+};
 
 const measured = (
   value: MeasuredValueV1["value"],
@@ -221,17 +235,24 @@ const addFailure = (
   failure: VerificationFailureV2,
 ): void => {
   if (state.failures.length >= MAXIMUM_REPORT_FAILURES) return;
-  state.failures.push(failure);
+  const boundedFailure = {
+    ...failure,
+    repairableProgramPaths: failure.repairableProgramPaths.slice(
+      0,
+      MAXIMUM_REPAIRABLE_PROGRAM_PATHS,
+    ),
+  };
+  state.failures.push(boundedFailure);
   addCheck(
     state,
-    failure.failureId,
-    failure.stage,
+    boundedFailure.failureId,
+    boundedFailure.stage,
     "fail",
-    failure.message,
-    failure.actual,
-    failure.expected,
-    failure.geometryRefs,
-    failure.failureId,
+    boundedFailure.message,
+    boundedFailure.actual,
+    boundedFailure.expected,
+    boundedFailure.geometryRefs,
+    boundedFailure.failureId,
   );
 };
 
