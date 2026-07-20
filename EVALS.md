@@ -26,7 +26,7 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 455/455 passing                     |
+| Vitest           | 456/456 passing                     |
 | Statements       | 96.96%                              |
 | Branches         | 90.40%                              |
 | Functions        | 97.86%                              |
@@ -146,6 +146,10 @@ On clean commit `f880d20`, the compiler controls passed again and the exact inte
 The deterministic mapper now considers an alternative child edge only after the authored angular edge has a physical-length mismatch. It accepts only a same-length boundary edge whose aligned panel lies outside the parent, with deterministic tie-breaking; if none exists, the original typed failure remains. The exact six-panel box regression deliberately supplies Sol's wrong right-panel edge and still passes exact dimensions, ordered verification, SVG/DXF/GLB/JSON finalization, and source-equivalence checks offline. This fix is not a template, prompt-keyword route, or live success claim.
 
 On clean commit `2357c2f`, all three compiler responses were schema-valid and completed. The supported case and prompt-injection refusal passed, but the plain powered-robot request was classified `needs_clarification` instead of `unsupported`. The gate failed and stopped before the exact acceptance prompt. These controls cost $0.11447125, bringing cumulative spend to $1.73164325 and leaving $0.26835675. The intent instructions now make unsupported essential behavior take precedence over absent measurements; clarification is reserved for representable requests missing an essential choice. That contract correction passes offline tests but has not been paid-revalidated.
+
+Under the builder's next separate $2 authorization, clean commit `5ae9fea` passed the corrected live compiler gate 3/3 for $0.1164025. The exact intent then recalled 16/16 requirements and Sol completed one strict semantic plan. Deterministic verification rejected nine recognizable-form references at topology: semantic-part fields contained panel, joint, and connector identifiers rather than the canonical landmark-part identifiers they are required to name. The exact calls cost $0.1867375; cumulative spend in this ledger is $0.30314 with $1.69686 remaining. No repair or export was claimed.
+
+Intent normalization now converts recognizable-form references to canonical `part-*` landmark IDs, including deduplicated panel/body/joint aliases and reciprocal connector relationships. Hard `landmark_geometry` constraints pass only when every named part exists, every referenced part owns source-checked geometry, and every required landmark is present in those referenced parts; `human_review` cannot satisfy a hard gate. The exact six-panel regression includes this hard constraint and passes topology, semantics, full verification, and source-equivalent exports offline.
 
 Guardrails:
 

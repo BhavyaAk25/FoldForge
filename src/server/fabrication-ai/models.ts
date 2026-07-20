@@ -245,6 +245,38 @@ const removeRepeatedPrefix = (identifier: string, prefix: string): string => {
   return result;
 };
 
+const canonicalSemanticPartId = (identifier: string): string => {
+  if (identifier.startsWith("connector-")) {
+    const connectorKey = removeRepeatedPrefix(identifier, "connector-").replace(
+      /-(?:tab|slot)$/u,
+      "",
+    );
+    return `part-connector-${connectorKey}`;
+  }
+  for (const prefix of ["panel-", "body-", "joint-", "driver-", "output-"]) {
+    if (identifier.startsWith(prefix)) {
+      return `part-${removeRepeatedPrefix(identifier, prefix)}`;
+    }
+  }
+  return `part-${removeRepeatedPrefix(identifier, "part-")}`;
+};
+
+const normalizeIntentSemanticPartIds = (
+  intent: FabricationIntentV1,
+): FabricationIntentV1 => ({
+  ...intent,
+  semanticConstraints: intent.semanticConstraints.map((constraint) =>
+    constraint.kind === "recognizable_form"
+      ? {
+          ...constraint,
+          semanticPartIds: [
+            ...new Set(constraint.semanticPartIds.map(canonicalSemanticPartId)),
+          ],
+        }
+      : constraint,
+  ),
+});
+
 const semanticReferenceKey = (
   kind: GeometryRefKind,
   canonicalId: string,
@@ -434,7 +466,9 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
         "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
       );
     }
-    return FabricationIntentV1Schema.parse(response.output_parsed);
+    return normalizeIntentSemanticPartIds(
+      FabricationIntentV1Schema.parse(response.output_parsed),
+    );
   }
 }
 

@@ -1200,7 +1200,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
         label: "Hard form",
         semanticPartIds: ["part-base"],
         requiredLandmarks: ["base"],
-        evaluation: "landmark_geometry",
+        evaluation: "human_review",
       },
       {
         constraintId: "constraint-soft-form",
@@ -1406,7 +1406,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
       {
         constraintId: "constraint-form-pass",
         kind: "recognizable_form",
-        hard: false,
+        hard: true,
         source: "user",
         label: "Known parts",
         semanticPartIds: ["part-base", "part-wing"],

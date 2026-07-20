@@ -3754,34 +3754,43 @@ const validateSemanticConstraint = (
       return;
     }
     case "recognizable_form": {
-      const partIds = new Set(
-        ir.semanticParts.map((part) => part.semanticPartId.toLowerCase()),
+      const partsById = new Map(
+        ir.semanticParts.map((part) => [
+          part.semanticPartId.toLowerCase(),
+          part,
+        ]),
       );
-      const labels = ir.semanticParts
+      const referencedParts = constraint.semanticPartIds.flatMap((partId) => {
+        const part = partsById.get(partId.toLowerCase());
+        return part ? [part] : [];
+      });
+      const labels = referencedParts
         .flatMap((part) => [part.label, part.role])
         .join(" ")
         .toLowerCase();
       const missingParts = constraint.semanticPartIds.filter(
-        (partId) => !partIds.has(partId.toLowerCase()),
+        (partId) => !partsById.has(partId.toLowerCase()),
       );
+      const partsWithoutGeometry = referencedParts
+        .filter((part) => part.geometryRefs.length === 0)
+        .map((part) => part.semanticPartId);
       const missingLandmarks = constraint.requiredLandmarks.filter(
         (landmark) => !labels.includes(landmark.toLowerCase()),
       );
       if (
-        constraint.hard ||
+        constraint.evaluation !== "landmark_geometry" ||
         missingParts.length > 0 ||
+        partsWithoutGeometry.length > 0 ||
         missingLandmarks.length > 0
       ) {
         semanticFailure(
           state,
           constraint,
           measured(
-            constraint.hard
-              ? "no auditable geometric landmark evidence"
-              : `missing parts=${missingParts.join(",")}; landmarks=${missingLandmarks.join(",")}`,
+            `evaluation=${constraint.evaluation}; missing parts=${missingParts.join(",")}; parts without geometry=${partsWithoutGeometry.join(",")}; missing landmarks=${missingLandmarks.join(",")}`,
           ),
-          measured("all landmark geometry encoded deterministically"),
-          "Hard recognizable-form evidence cannot be established by labels alone in the V1 geometry contract.",
+          measured("all named landmarks bound to validated geometry"),
+          "Recognizable-form constraints require explicit semantic landmarks bound to source-checked geometry.",
         );
       }
       return;

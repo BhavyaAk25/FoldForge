@@ -169,6 +169,49 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     );
   });
 
+  it("normalizes recognizable-form references into canonical semantic parts", async () => {
+    const source = fixtureIntent();
+    parseResponse.mockResolvedValue({
+      output_parsed: {
+        ...source,
+        semanticConstraints: [
+          {
+            constraintId: "constraint-box-landmarks",
+            kind: "recognizable_form",
+            hard: true,
+            source: "user",
+            label: "Six-panel box",
+            semanticPartIds: [
+              "panel-base",
+              "body-body-front",
+              "joint-lid",
+              "connector-lid-lock-tab",
+              "connector-lid-lock-slot",
+              "part-part-lid",
+            ],
+            requiredLandmarks: ["base", "front", "lid", "lid lock"],
+            evaluation: "landmark_geometry",
+          },
+        ],
+      },
+    });
+
+    const intent = await new OpenAIFabricationIntentModel().compileIntent(
+      "Make a six-panel box.",
+      "ff_subject",
+    );
+
+    expect(intent.semanticConstraints[0]).toMatchObject({
+      kind: "recognizable_form",
+      semanticPartIds: [
+        "part-base",
+        "part-front",
+        "part-lid",
+        "part-connector-lid-lock",
+      ],
+    });
+  });
+
   it("generates a complete program through a strict response schema", async () => {
     createResponse.mockResolvedValue({
       id: "resp-program",

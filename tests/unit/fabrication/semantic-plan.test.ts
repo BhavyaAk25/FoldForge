@@ -537,7 +537,34 @@ describe("semantic FabricationPlanV2", () => {
         cutsAllowed: true,
         glueAllowed: false,
       },
-      semanticConstraints: [],
+      semanticConstraints: [
+        {
+          constraintId: "constraint-six-panel-box-form",
+          kind: "recognizable_form",
+          hard: true,
+          source: "user",
+          label: "Six-panel playing-card box",
+          semanticPartIds: [
+            "part-base",
+            "part-front",
+            "part-back",
+            "part-left",
+            "part-right",
+            "part-lid",
+            "part-connector-lid-lock",
+          ],
+          requiredLandmarks: [
+            "base",
+            "front",
+            "back",
+            "left",
+            "right",
+            "lid",
+            "tab and slot",
+          ],
+          evaluation: "landmark_geometry",
+        },
+      ],
       priorities: ["mechanical_simplicity", "fabrication_efficiency"],
       scopeStatus: "supported",
       clarificationQuestion: null,
@@ -652,7 +679,9 @@ describe("semantic FabricationPlanV2", () => {
     const compiled = compileFabricationProgram(intent, expanded.value);
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) return;
-    expect(compiled.value.semanticConstraints).toEqual([]);
+    expect(compiled.value.semanticConstraints).toEqual(
+      intent.semanticConstraints,
+    );
     const home = evaluateMotionState(compiled.value);
     expect(home.ok).toBe(true);
     if (!home.ok) return;
