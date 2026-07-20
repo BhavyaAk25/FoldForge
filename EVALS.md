@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. The compact semantic-plan path has not yet produced a paid live Sol program, so production remains behind `LIVE_MODEL_KILL_SWITCH=true` and no live prompt-to-artifact success is claimed.
+The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. On clean commit `2dc57ed`, the compact semantic-plan path also passed one exact paid live-Sol prompt-to-artifact acceptance case. Production deployment and clean hosted-browser verification remain pending; this one case is not a five-case reliability claim.
 
 Generated reports are written under ignored `artifacts/evals/`. Public evidence contains bounded metrics and hashes, never credentials, prompt bodies, model bodies, response IDs, or private reasoning. Offline evidence never counts as live-model evidence.
 
@@ -27,10 +27,10 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
 | Vitest           | 457/457 passing                     |
-| Statements       | 96.96%                              |
-| Branches         | 90.40%                              |
-| Functions        | 97.86%                              |
-| Lines            | 97.99%                              |
+| Statements       | 96.95%                              |
+| Branches         | 90.36%                              |
+| Functions        | 97.79%                              |
+| Lines            | 97.97%                              |
 | Chromium E2E     | 7/7 passing                         |
 | Production build | Pass                                |
 | Production audit | No known production vulnerabilities |
@@ -158,6 +158,10 @@ Requested envelopes are now matched against the best deterministic permutation o
 On clean commit `e7d38af`, the live compiler gate passed 3/3 for $0.11398. The exact intent passed 16/16 and Sol completed a strict plan. All prior semantic failures were cleared; topology then rejected one duplicate `part-connector-lid-lock` because the plan explicitly declared the required lid-lock landmark while deterministic expansion also derived the same semantic part from the reciprocal connector relationship. The exact calls cost $0.16564; cumulative current-ledger spend is $0.862795 with $1.137205 remaining.
 
 Semantic expansion now merges an explicit connector-relationship landmark with its code-derived reciprocal connector part, deduplicating geometry references by kind and canonical ID. It does not discard either source, invent a new relationship, or permit duplicate semantic identifiers. The exact six-panel regression includes both sources and proves one canonical lid-lock part reaches full verification and export finalization offline.
+
+On clean commit `8f8c008`, the compiler gate passed 3/3 and Sol returned a verified six-panel candidate with source-bound SVG, DXF, GLB, and JSON. That run exposed two final deterministic issues: an 8 mm slot inset consumed the full 8 mm tab engagement, and the acceptance fixture described a shallow 70 × 95 base rather than the requested upright 70 mm wide × 95 mm high × 25 mm deep box. The mapper now retains a 1 mm connector engagement margin. The acceptance gate now requires the correct six named face dimensions, five-fold connected tree, reciprocal lid/front lock, exact envelope, A4 stock, and full consumer proof without forcing one A4-incompatible cuboid net.
+
+On clean commit `2dc57ed`, the same-build live compiler gate passed all three supported, unsupported, and injection cases. The exact intent passed 16/16 explicit checks; Sol returned one strict compact plan; deterministic code expanded, compiled, and verified one candidate. All **63/63** acceptance checks passed. SVG, DXF, GLB, and canonical JSON were source-bound to the selected IR; SVG/DXF calibration and layers passed, GLB validation returned zero errors and warnings, JSON retained assembly operations and hashes, and FOLD was honestly omitted with `connector_semantics`. The separate ledger charged **$1.6265905** and retained **$0.3734095**. `releaseGatePassed` remains false because this was intentionally one acceptance smoke, not the five-case suite.
 
 Guardrails:
 

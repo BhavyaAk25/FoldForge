@@ -4,7 +4,7 @@
 
 The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **457 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
 
-Live GPT-5.6 Sol is the remaining product gate. Sol completes strict intent and compact semantic-plan generation inside the bounded runtime, and the corrected live compiler gate passes supported, unsupported, and injection controls. The latest exact run recalled 16/16 requirements and returned a strict plan; all prior semantic failures cleared, leaving one duplicate lid-lock semantic part authored explicitly and derived from the same connector relationship. The merger is corrected generally and its exact regression passes offline. Production retains `LIVE_MODEL_KILL_SWITCH=true` until this corrected build passes paid local acceptance.
+GPT-5.6 Sol now passes the smallest complete live product proof. On clean commit `2dc57ed`, the same-build compiler gate passed supported, unsupported, and injection controls; the exact playing-card-box request produced one strict plan, one deterministically verified candidate, and source-bound SVG, DXF, GLB, and JSON. All 63 acceptance checks passed. Production deployment and hosted-browser confirmation are in progress.
 
 | Area                                                                   | Status   | Evidence boundary                                                    |
 | ---------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
@@ -14,8 +14,8 @@ Live GPT-5.6 Sol is the remaining product gate. Sol completes strict intent and 
 | SVG, DXF, GLB, JSON, and conditional FOLD                              | Complete | Source-bound exporters and independent prepared-artifact consumers   |
 | One-design Describe → Forge → Export experience                        | Complete | 7/7 Chromium flows at all required widths                            |
 | OpenAI boundary and production safety                                  | Complete | Strict tools, access, origin/body caps, quotas, dedupe, kill switch  |
-| Compact live Sol plan                                                  | Complete | Strict live plans complete; latest deterministic rejection recorded  |
-| Exact live prompt → verified files                                     | Pending  | Must pass within the separate $2 authorization                       |
+| Compact live Sol plan                                                  | Complete | Strict plan completed inside the bounded route                       |
+| Exact live prompt → verified files                                     | Complete | 63/63 checks; SVG/DXF/GLB/JSON consumers pass                        |
 | Final deployment, PR merge, video, `/feedback`                         | Pending  | Deployment/merge follow code proof; video and task ID are user-owned |
 
 ## Immediate sequence
@@ -27,9 +27,9 @@ Calendar dates are not gates. Complete each ready step and stop only for a real 
 3. **Complete — no-cost gates.** The full check, coverage, properties, offline evaluations, browser suite, consumer validation, audit, and independent reviews pass at the recorded milestones.
 4. **Complete — immutable acceptance builds.** Every paid report names its clean build SHA; ignored ledgers and secrets remain outside Git.
 5. **Complete — separate $2 ledger.** The immutable continuation carries every prior charge and remains capped at the original authorization.
-6. **In progress — smallest useful live proof.** Commit the connector-landmark merger, rerun compiler controls on that exact SHA under the separately authorized ledger, then make one exact playing-card-box acceptance call. Stop at a new measured failure or the ledger ceiling; never retry blindly.
-7. **Validate exact bytes.** Check the selected live SVG scale/layers/calibration, parse its DXF, validate its GLB, verify canonical JSON hashes, and record why FOLD is present or omitted.
-8. **Enable and verify production only after local acceptance.** Deploy the exact runtime commit, remove the kill switch, confirm `/api/health`, and run the supported prompt from a clean browser while the same separate $2 ceiling still has room. Confirm the displayed result, controls, downloads, build SHA, and metadata-only logs.
+6. **Complete — smallest useful live proof.** Clean commit `2dc57ed` passed the same-build compiler controls and exact static acceptance within the separate ledger.
+7. **Complete — validate exact bytes.** The selected SVG scale/layers/calibration, DXF parser/layers, GLB validator, canonical JSON source binding, and FOLD omission reason all passed.
+8. **In progress — production verification.** Deploy the accepted runtime, confirm `/api/health`, and run the supported prompt from a clean browser while the separate $2 ceiling still has room. Confirm the displayed result, controls, downloads, build SHA, and metadata-only logs.
 9. **Publish truthfully.** Add the new report and exact result to the evidence packet. Do not call a single case a five-case reliability suite or a 92/100 score.
 10. **Finish delivery.** Push the branch, complete PR review/checks, merge to `main` under the user's explicit authorization, verify production matches `main`, then record the public narrated demo and submit the primary Codex task's `/feedback` session ID.
 
@@ -45,8 +45,8 @@ The historical ledger is immutable:
 The new acceptance allowance is separate:
 
 - maximum: **$2.00** total;
-- charged after the latest compiler gate: **$1.73164325**;
-- remaining under that ceiling: **$0.26835675**, which cannot reserve both a fresh compiler gate and the exact program flow;
+- charged through the successful exact acceptance: **$1.6265905**;
+- remaining under that ceiling: **$0.3734095**;
 - fresh run-specific report and ledger paths;
 - sequential calls only;
 - no model-generation retry;
@@ -78,4 +78,4 @@ FoldForge verifies geometry, bounded motion, clearance, and source equivalence. 
 
 Offline, prepared, mocked, smoke, and live evidence are labelled separately. A partial request is never promoted to a successful design. A hard-invalid candidate is never displayed or exported as valid.
 
-The harsh target remains at least **92/100** overall and **22/25** in each official category, but it is not earned yet. Current missing evidence is a complete live compact-plan result, exact live-selected consumer proof, the hosted clean-browser run, a final reviewer score, and the public narrated submission.
+The harsh target remains at least **92/100** overall and **22/25** in each official category, but it is not earned yet. Current missing evidence is the hosted clean-browser run, a final reviewer score, and the public narrated submission.

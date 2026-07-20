@@ -16,7 +16,7 @@
 
 If code finds a repairable failure, Sol may propose a small typed patch. Code applies the patch and reruns every check. The model cannot declare its own work valid.
 
-Production live generation is currently protected by `LIVE_MODEL_KILL_SWITCH=true` while the final compact-plan contract is acceptance-tested. The prepared flower and duck studies remain available without spending API credits. They are clearly labelled as prepared examples, not prompt results.
+The compact live path has passed its exact paid local acceptance case. Production promotion and a clean hosted-browser confirmation are the remaining live-delivery checks. The prepared flower and duck studies remain available without spending API credits and are clearly labelled as prepared examples, not prompt results.
 
 | Playing-card box                                                                                                            | Vertical-lift flower study                                                                                                          | Static duck crease pattern                                                                                     |
 | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -85,15 +85,15 @@ Independent regression checks parse the showcase DXFs with `dxf-parser`, validat
 
 The current branch passes the no-cost release gates:
 
-- **450/450** Vitest tests;
-- coverage: **96.95% statements, 90.37% branches, 97.85% functions, 97.99% lines**;
+- **457/457** Vitest tests;
+- coverage: **96.95% statements, 90.36% branches, 97.79% functions, 97.97% lines**;
 - **120/120** valid compiler controls accepted and **0/560** hard-invalid mutations accepted;
 - **50 programs × 10 runs** with zero canonical differences;
 - **40/40** seeded failures repaired, **20/20** no-progress cases reported infeasible, and **0/120** hostile patches accepted;
 - **140/140** offline intent-contract cases and **15/15** offline end-to-end cases; and
 - **7/7** Chromium flows at 390, 768, 1280, and 1440 px, including keyboard use, reduced motion, accessibility, malformed responses, prompt/result binding, controls, and downloads.
 
-These results prove deterministic behavior and offline model contracts. They do **not** prove that the new compact-plan path succeeds with live Sol. [EVALS.md](./EVALS.md) keeps that boundary explicit.
+These no-cost results prove deterministic behavior and offline model contracts. Separately, one exact paid live-Sol acceptance case now proves the bounded playing-card-box path; it is not a five-case reliability claim. [EVALS.md](./EVALS.md) keeps that boundary explicit.
 
 ## Live Sol and spending history
 
@@ -105,7 +105,7 @@ Historical paid evaluation used a separate **$3.70** reservation ledger under an
 - no program, repair, or export from those failed attempts is claimed as a live success; and
 - the immutable historical ledger remains sealed at **$3.6134275**. It is not edited, reset, or reused.
 
-The builder later authorized a **new, separate maximum of $2.00** to test the smaller semantic-plan path and one exact prompt-to-export acceptance case. That allowance uses a fresh run-specific ledger and stops on the first failure; it does not rewrite the historical ledger or prove a five-case reliability claim. No result from that new allowance is claimed in this README until the report exists.
+The builder later authorized a **new, separate maximum of $2.00** to test the smaller semantic-plan path and one exact prompt-to-export acceptance case. On clean commit `2dc57ed`, the same-build compiler controls passed 3/3 and the exact live case passed all 63 acceptance checks. Sol produced one strict plan; code verified one candidate and generated source-bound SVG, DXF, GLB, and canonical JSON. The GLB passed with zero errors and warnings, while FOLD was correctly omitted because it cannot preserve the design's tab-slot semantics. The ledger charged **$1.6265905** and retained **$0.3734095**. This is one successful acceptance smoke, not the older five-case reliability suite.
 
 The interactive quota and deduplication store is process-local and therefore best-effort across serverless instances. The evaluation ledger is the auditable client-side pre-request guard. Neither is an account-level provider billing cap.
 
@@ -197,15 +197,14 @@ pnpm audit --prod
 
 Paid evaluation is not part of an ordinary local check. It requires explicit live flags, a clean committed build, and a separately authorized run-specific ledger.
 
-## What remains before a live claim
+## What remains before final delivery
 
-- pass the new strict compiler smoke and exact playing-card-box acceptance run within the separate $2 maximum;
-- confirm the live result passes deterministic verification and exact SVG/DXF/GLB/JSON consumer checks;
-- deploy that exact commit, remove the production kill switch, and repeat the supported prompt from a clean browser;
+- complete the production deployment of the accepted runtime and confirm `/api/health` reports that build with live generation enabled;
+- repeat the supported prompt from a clean browser without exceeding the separate $2 maximum;
 - confirm the hosted build SHA, downloads, and production logs; and
 - update the evidence, complete the public narrated demo, add the `/feedback` session ID, and merge only after the final checks pass.
 
-Until then, the production prompt path is intentionally off and the project does not claim live prompt-to-fabrication success or a 92/100 release score.
+The exact local live case is a demonstrated prompt-to-fabrication success. Until hosted verification and the broader judging gates are complete, the project does not claim five-case reliability or a 92/100 release score.
 
 ## Repository guide
 

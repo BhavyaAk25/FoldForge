@@ -174,8 +174,17 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - On clean commit `e7d38af`, the live compiler gate passed 3/3 for $0.11398 and the exact 16/16 intent produced a strict plan. The earlier semantic failures were gone; topology rejected only a duplicate `part-connector-lid-lock`, authored once as the requested landmark and once derived by code from the same reciprocal relationship. The exact calls cost $0.16564, bringing current-ledger spend to $0.862795 with $1.137205 remaining.
 - Merged explicit connector-relationship landmarks with their code-derived semantic part and deduplicated canonical connector geometry references. The exact offline acceptance now exercises this dual-source case and retains one source-bound lid-lock part.
 
+## 2026-07-19 — exact live acceptance
+
+- Continued only under the builder's new separate $2 authorization; no historical ledger was reset, deleted, or reused.
+- On clean commit `8f8c008`, Sol produced a deterministically verified six-panel candidate and source-bound SVG, DXF, GLB, and JSON. The strict acceptance gate exposed a fully consumed tab engagement and an incorrect shallow-box fixture rather than another model or verifier failure.
+- Bounded derived slot inset to retain a 1 mm engagement margin. Corrected the acceptance geometry for a 70 mm wide × 95 mm high × 25 mm deep upright box and allowed any deterministically valid connected cuboid net instead of forcing one base-star net that cannot fit printable A4.
+- The complete no-cost gate passes 457/457 tests, the production build, consumer validators, and 96.95% statement / 90.36% branch / 97.79% function / 97.97% line coverage.
+- On clean commit `2dc57ed`, the same-build compiler controls passed 3/3 and the exact live playing-card-box case passed all 63 acceptance checks. One strict Sol plan became one verified candidate with source-bound SVG, DXF, GLB, and JSON; GLB validation reported zero errors and warnings, and FOLD was correctly omitted for `connector_semantics`.
+- The separate ledger records $1.6265905 charged and $0.3734095 remaining. This is one successful acceptance smoke, not the five-case reliability gate.
+
 ## Remaining external gate
 
 - Preserve every sealed ledger, continuation, claim, and failed-run report. Do not delete, reset, relabel, branch, or bypass them, and make no further paid call under the $3.70 cap.
-- Keep live generation disabled. The five-case release gate and exact live-artifact consumer checks remain incomplete.
-- Record only the disclosed prepared-example practice path unless separately authorized future evidence satisfies the full truth gate. The paid intent contract is the only live-model success claimed; no live program, repair, artifact, or end-to-end success is claimed.
+- Complete production deployment and a clean-browser hosted prompt/download check without exceeding the separate $2 authorization.
+- Keep the five-case reliability gate, final judge score, narrated demo, and `/feedback` submission explicitly separate from the successful one-case live acceptance.
