@@ -3,6 +3,7 @@ import { err, ok, type Result } from "@/core/result";
 import { sha256Hex } from "@/core/sha256";
 
 import { fabricationProgramHash } from "./compiler";
+import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { FabricationProgramV1Schema, ProgramPatchV1Schema } from "./schemas";
 import type {
   CouplingV1,
@@ -328,6 +329,17 @@ const updateJoint = (
   }
 };
 
+const angularJointHomeTransform = (
+  joint: Exclude<JointV1, { readonly kind: "prismatic" }>,
+) => {
+  const matrix = rotationAroundAxisMatrix4(
+    joint.axis.startMm,
+    joint.axis.endMm,
+    joint.homeAngleDeg,
+  );
+  return matrix ? decomposeRigidMatrix4(matrix) : null;
+};
+
 const updateCoupling = (
   coupling: CouplingV1,
   property: string,
@@ -410,18 +422,37 @@ const writeTarget = (
           ),
         },
       };
-    case "joints":
+    case "joints": {
+      const joints = program.blueprint.joints.map((joint) =>
+        joint.jointId === id
+          ? updateJoint(joint, property[0] ?? "", numericValue)
+          : joint,
+      );
+      const updatedJoint = joints.find((joint) => joint.jointId === id);
+      const updatedHomeTransform =
+        property[0] === "homeAngleDeg" &&
+        updatedJoint &&
+        updatedJoint.kind !== "prismatic"
+          ? angularJointHomeTransform(updatedJoint)
+          : null;
       return {
         ...program,
         blueprint: {
           ...program.blueprint,
-          joints: program.blueprint.joints.map((joint) =>
-            joint.jointId === id
-              ? updateJoint(joint, property[0] ?? "", numericValue)
-              : joint,
-          ),
+          joints,
+          // Joint home values and child-body transforms describe the same
+          // reference pose. Keeping them synchronized makes an angular
+          // repair change the assembled geometry instead of becoming a no-op.
+          bodies: updatedHomeTransform
+            ? program.blueprint.bodies.map((body) =>
+                body.bodyId === updatedJoint?.childBodyId
+                  ? { ...body, initialTransform: updatedHomeTransform }
+                  : body,
+              )
+            : program.blueprint.bodies,
         },
       };
+    }
     case "connectors":
       return {
         ...program,
