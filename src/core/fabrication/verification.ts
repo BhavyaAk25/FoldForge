@@ -3348,6 +3348,7 @@ const validateCollision = (
   };
   let minimumClearanceMm = Number.POSITIVE_INFINITY;
   let minimumStateIndex = 0;
+  let minimumStateLabel = "the static home state";
   let collisionRefs: readonly GeometryRefV1[] = [];
   const evaluateStates = (states: readonly EvaluatedMotionState[]): void => {
     for (const [stateIndex, motionState] of states.entries()) {
@@ -3458,6 +3459,10 @@ const validateCollision = (
           if (clearanceMm < minimumClearanceMm) {
             minimumClearanceMm = clearanceMm;
             minimumStateIndex = stateIndex;
+            minimumStateLabel =
+              motionState.driverValue === null
+                ? "the static home state"
+                : `driver value ${Number(motionState.driverValue.toFixed(6))}`;
             collisionRefs = [
               geometryRef("panel", first.panelId),
               geometryRef("panel", second.panelId),
@@ -3499,13 +3504,21 @@ const validateCollision = (
   const clearancePasses =
     minimumClearanceMm >= FABRICATION_KINEMATIC_LIMITS.minimumMovingClearanceMm;
   if (!collisionFree || !clearancePasses) {
+    const [firstCollisionRef, secondCollisionRef] = collisionRefs;
+    const collisionPair =
+      firstCollisionRef?.kind === "panel" &&
+      secondCollisionRef?.kind === "panel"
+        ? `Panels ${firstCollisionRef.id} and ${secondCollisionRef.id}`
+        : "Two panels";
+    const actualClearanceMm = Number(minimumClearanceMm.toFixed(6));
+    const requiredClearanceMm =
+      FABRICATION_KINEMATIC_LIMITS.minimumMovingClearanceMm;
     addFailure(state, {
       failureId: "collision.minimum_clearance",
       category: "collision",
       stage: "collision",
       severity: "hard",
-      message:
-        "Moving panels collide, overlap across a joint, or violate minimum clearance.",
+      message: `${collisionPair} collide or violate clearance at ${minimumStateLabel}: actual clearance ${actualClearanceMm} mm; required clearance ${requiredClearanceMm} mm.`,
       actual: measured(minimumClearanceMm, "mm"),
       expected: measured(
         FABRICATION_KINEMATIC_LIMITS.minimumMovingClearanceMm,

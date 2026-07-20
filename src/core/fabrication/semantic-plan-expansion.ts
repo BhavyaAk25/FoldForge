@@ -1,3 +1,4 @@
+import { canonicalSerialize } from "../canonical";
 import { compileFabricationProgram, type CompilationError } from "./compiler";
 import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { connectorReferencePoint2 } from "./connector-geometry";
@@ -1623,8 +1624,22 @@ interface ResolvedPlanEvaluation {
   readonly report: VerificationReportV2;
 }
 
+export interface StructuralCollisionError {
+  readonly kind: "structural_collision";
+  readonly code: "collision.minimum_clearance";
+  readonly path: readonly string[];
+  readonly panelIds: readonly [string, string];
+  readonly actualClearanceMm: number;
+  readonly requiredClearanceMm: number;
+  readonly report: VerificationReportV2;
+  readonly message: string;
+}
+
 export type ResolvedSemanticPlanExpansionError =
-  SemanticPlanExpansionError | FabricationPlanExpansionError | CompilationError;
+  | SemanticPlanExpansionError
+  | FabricationPlanExpansionError
+  | CompilationError
+  | StructuralCollisionError;
 
 export type ResolvedSemanticPlanExpansionResult =
   | { readonly ok: true; readonly value: FabricationProgramV1 }
@@ -1642,6 +1657,9 @@ type ResolvedPlanEvaluationResult =
 
 const MAXIMUM_PLAN_RESOLUTION_EVALUATIONS = 160;
 const MAXIMUM_EDGE_CHOICES_PER_PANEL = 8;
+const MAXIMUM_JOINT_ATTACHMENT_PAIRS = 6;
+const MAXIMUM_COLLISION_SEARCH_DEPTH = 5;
+const COLLISION_SEARCH_BEAM_WIDTH = 10;
 
 const numericFailureDeficit = (report: VerificationReportV2): number =>
   report.failures.reduce((total, failure) => {
@@ -1726,12 +1744,361 @@ const withDirectionConsistentStaticFolds = (
   }),
 });
 
+const collisionFailure = (report: VerificationReportV2) =>
+  report.failures.find(
+    (failure) => failure.failureId === "collision.minimum_clearance",
+  );
+
+const panelKeyForId = (
+  plan: FabricationPlanV2,
+  panelId: string,
+): string | null =>
+  plan.panels.find((panel) => canonicalId("panel", panel.key) === panelId)
+    ?.key ?? null;
+
+const bodyKeyForPanelKey = (
+  plan: FabricationPlanV2,
+  panelKey: string,
+): string | null =>
+  plan.panels.find((panel) => panel.key === panelKey)?.bodyKey ?? null;
+
+const jointPathBetweenBodies = (
+  plan: FabricationPlanV2,
+  firstBodyKey: string,
+  secondBodyKey: string,
+): readonly string[] => {
+  if (firstBodyKey === secondBodyKey) return [];
+  const adjacency = new Map<
+    string,
+    { readonly bodyKey: string; readonly jointKey: string }[]
+  >();
+  for (const joint of plan.joints) {
+    const parentNeighbors = adjacency.get(joint.parentBodyKey) ?? [];
+    parentNeighbors.push({ bodyKey: joint.childBodyKey, jointKey: joint.key });
+    adjacency.set(joint.parentBodyKey, parentNeighbors);
+    const childNeighbors = adjacency.get(joint.childBodyKey) ?? [];
+    childNeighbors.push({ bodyKey: joint.parentBodyKey, jointKey: joint.key });
+    adjacency.set(joint.childBodyKey, childNeighbors);
+  }
+  const previous = new Map<
+    string,
+    { readonly bodyKey: string; readonly jointKey: string }
+  >();
+  const visited = new Set([firstBodyKey]);
+  const queue = [firstBodyKey];
+  while (queue.length > 0) {
+    const bodyKey = queue.shift();
+    if (bodyKey === undefined) break;
+    for (const neighbor of adjacency.get(bodyKey) ?? []) {
+      if (visited.has(neighbor.bodyKey)) continue;
+      visited.add(neighbor.bodyKey);
+      previous.set(neighbor.bodyKey, {
+        bodyKey,
+        jointKey: neighbor.jointKey,
+      });
+      if (neighbor.bodyKey === secondBodyKey) {
+        const jointKeys: string[] = [];
+        let cursor = secondBodyKey;
+        while (cursor !== firstBodyKey) {
+          const step = previous.get(cursor);
+          if (!step) return [];
+          jointKeys.push(step.jointKey);
+          cursor = step.bodyKey;
+        }
+        return jointKeys.reverse();
+      }
+      queue.push(neighbor.bodyKey);
+    }
+  }
+  return [];
+};
+
+interface CollisionResolutionContext {
+  readonly panelKeys: readonly [string, string];
+  readonly jointKeys: readonly string[];
+}
+
+const collisionResolutionContext = (
+  evaluation: ResolvedPlanEvaluation,
+): CollisionResolutionContext | null => {
+  const failure = collisionFailure(evaluation.report);
+  if (!failure) return null;
+  const panelIds = failure.geometryRefs
+    .filter((reference) => reference.kind === "panel")
+    .map((reference) => reference.id);
+  const firstPanelId = panelIds[0];
+  const secondPanelId = panelIds[1];
+  if (!firstPanelId || !secondPanelId) return null;
+  const firstPanelKey = panelKeyForId(evaluation.plan, firstPanelId);
+  const secondPanelKey = panelKeyForId(evaluation.plan, secondPanelId);
+  if (!firstPanelKey || !secondPanelKey) return null;
+  const firstBodyKey = bodyKeyForPanelKey(evaluation.plan, firstPanelKey);
+  const secondBodyKey = bodyKeyForPanelKey(evaluation.plan, secondPanelKey);
+  if (!firstBodyKey || !secondBodyKey) return null;
+  return {
+    panelKeys: [firstPanelKey, secondPanelKey],
+    jointKeys: jointPathBetweenBodies(
+      evaluation.plan,
+      firstBodyKey,
+      secondBodyKey,
+    ),
+  };
+};
+
+const equalLengthAttachmentPairs = (
+  plan: FabricationPlanV2,
+  jointKey: string,
+): readonly (readonly [number, number])[] => {
+  const joint = plan.joints.find((candidate) => candidate.key === jointKey);
+  if (!joint || joint.kind === "prismatic") return [];
+  const parentPanel = plan.panels.find(
+    (panel) => panel.key === joint.parentAttachment.panelKey,
+  );
+  const childPanel = plan.panels.find(
+    (panel) => panel.key === joint.childAttachment.panelKey,
+  );
+  if (!parentPanel || !childPanel) return [];
+  const parentGeometry = panelGeometry(parentPanel);
+  const childGeometry = panelGeometry(childPanel);
+  if (!parentGeometry.ok || !childGeometry.ok) return [];
+  const pairs = parentGeometry.value.localVertices.flatMap((_, parentIndex) => {
+    const parentEdge = edgeFor(parentGeometry.value, parentIndex);
+    if (!parentEdge.ok) return [];
+    return childGeometry.value.localVertices.flatMap((__, childIndex) => {
+      const childEdge = edgeFor(childGeometry.value, childIndex);
+      return childEdge.ok &&
+        Math.abs(
+          edgeLengthMm(parentEdge.value) - edgeLengthMm(childEdge.value),
+        ) <= EDGE_LENGTH_TOLERANCE_MM
+        ? ([[parentIndex, childIndex]] as const)
+        : [];
+    });
+  });
+  const current = [
+    joint.parentAttachment.edgeIndex,
+    joint.childAttachment.edgeIndex,
+  ] as const;
+  return [current, ...pairs]
+    .filter(
+      (pair, index, values) =>
+        values.findIndex(
+          (value) => value[0] === pair[0] && value[1] === pair[1],
+        ) === index,
+    )
+    .slice(0, MAXIMUM_JOINT_ATTACHMENT_PAIRS);
+};
+
+const staticJointPlanVariants = (
+  plan: FabricationPlanV2,
+  jointKey: string,
+): readonly FabricationPlanV2[] => {
+  const jointIndex = plan.joints.findIndex((joint) => joint.key === jointKey);
+  const joint = plan.joints[jointIndex];
+  if (!joint || joint.kind === "prismatic") return [];
+  const magnitudeDeg = Math.abs(joint.homeAngleDeg);
+  const angleChoices = [
+    joint.homeAngleDeg,
+    magnitudeDeg,
+    -magnitudeDeg,
+    90,
+    -90,
+  ].filter(
+    (value, index, values) =>
+      Number.isFinite(value) && values.indexOf(value) === index,
+  );
+  return equalLengthAttachmentPairs(plan, jointKey).flatMap(
+    ([parentEdgeIndex, childEdgeIndex]) =>
+      angleChoices.flatMap((homeAngleDeg) => {
+        const changed =
+          parentEdgeIndex !== joint.parentAttachment.edgeIndex ||
+          childEdgeIndex !== joint.childAttachment.edgeIndex ||
+          homeAngleDeg !== joint.homeAngleDeg ||
+          (joint.kind === "fold" &&
+            joint.foldDirection !==
+              (homeAngleDeg >= 0 ? "valley" : "mountain"));
+        if (!changed) return [];
+        return [
+          {
+            ...plan,
+            joints: plan.joints.map((candidate, index) => {
+              if (index !== jointIndex || candidate.kind === "prismatic") {
+                return candidate;
+              }
+              const updated = {
+                ...candidate,
+                parentAttachment: {
+                  ...candidate.parentAttachment,
+                  edgeIndex: parentEdgeIndex,
+                },
+                childAttachment: {
+                  ...candidate.childAttachment,
+                  edgeIndex: childEdgeIndex,
+                },
+                homeAngleDeg,
+                minimumAngleDeg: Math.min(
+                  candidate.minimumAngleDeg,
+                  homeAngleDeg,
+                ),
+                maximumAngleDeg: Math.max(
+                  candidate.maximumAngleDeg,
+                  homeAngleDeg,
+                ),
+              };
+              return updated.kind === "fold"
+                ? {
+                    ...updated,
+                    foldDirection: homeAngleDeg >= 0 ? "valley" : "mountain",
+                  }
+                : updated;
+            }),
+          },
+        ];
+      }),
+  );
+};
+
+const connectorPlanVariants = (
+  plan: FabricationPlanV2,
+  relevantPanelKeys: ReadonlySet<string> | null,
+): readonly {
+  readonly groupKey: string;
+  readonly plan: FabricationPlanV2;
+}[] => {
+  const variants: { groupKey: string; plan: FabricationPlanV2 }[] = [];
+  for (const [
+    relationshipIndex,
+    relationship,
+  ] of plan.connectorRelationships.entries()) {
+    if (
+      relevantPanelKeys &&
+      !relevantPanelKeys.has(relationship.tabAttachment.panelKey) &&
+      !relevantPanelKeys.has(relationship.slotAttachment.panelKey)
+    ) {
+      continue;
+    }
+    const tabPanel = plan.panels.find(
+      (panel) => panel.key === relationship.tabAttachment.panelKey,
+    );
+    const slotPanel = plan.panels.find(
+      (panel) => panel.key === relationship.slotAttachment.panelKey,
+    );
+    if (!tabPanel || !slotPanel) continue;
+    const tabChoices = edgeChoiceIndexes(
+      tabPanel,
+      relationship.tabAttachment.edgeIndex,
+      relationship.spanMm + LAYOUT_GAP_MM,
+    );
+    const slotChoices = edgeChoiceIndexes(
+      slotPanel,
+      relationship.slotAttachment.edgeIndex,
+      relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
+    );
+    for (const tabEdgeIndex of tabChoices) {
+      for (const slotEdgeIndex of slotChoices) {
+        if (
+          tabEdgeIndex === relationship.tabAttachment.edgeIndex &&
+          slotEdgeIndex === relationship.slotAttachment.edgeIndex
+        ) {
+          continue;
+        }
+        variants.push({
+          groupKey: `connector:${relationship.key}`,
+          plan: {
+            ...plan,
+            connectorRelationships: plan.connectorRelationships.map(
+              (candidate, index) =>
+                index === relationshipIndex
+                  ? {
+                      ...candidate,
+                      tabAttachment: {
+                        ...candidate.tabAttachment,
+                        edgeIndex: tabEdgeIndex,
+                      },
+                      slotAttachment: {
+                        ...candidate.slotAttachment,
+                        edgeIndex: slotEdgeIndex,
+                      },
+                    }
+                  : candidate,
+            ),
+          },
+        });
+      }
+    }
+  }
+  return variants;
+};
+
+const structuralCollisionError = (
+  evaluation: ResolvedPlanEvaluation,
+): StructuralCollisionError => {
+  const failure = collisionFailure(evaluation.report);
+  const panelIds = failure?.geometryRefs
+    .filter((reference) => reference.kind === "panel")
+    .map((reference) => reference.id);
+  const firstPanelId = panelIds?.[0] ?? "panel-unknown-a";
+  const secondPanelId = panelIds?.[1] ?? "panel-unknown-b";
+  const actualClearanceMm =
+    typeof failure?.actual.value === "number" ? failure.actual.value : 0;
+  const requiredClearanceMm =
+    typeof failure?.expected.value === "number" ? failure.expected.value : 0;
+  return {
+    kind: "structural_collision",
+    code: "collision.minimum_clearance",
+    path: ["collision", firstPanelId, secondPanelId],
+    panelIds: [firstPanelId, secondPanelId],
+    actualClearanceMm,
+    requiredClearanceMm,
+    report: evaluation.report,
+    message: `${failure?.message ?? "The generated panels collide."} The model-selected topology could not be assembled without overlap using bounded attachment, fold-orientation, and home-angle choices.`,
+  };
+};
+
+interface ResolutionCandidate {
+  readonly evaluation: ResolvedPlanEvaluation;
+  readonly groupKey: string;
+  readonly serializedPlan: string;
+}
+
+const compareResolutionCandidates = (
+  left: ResolutionCandidate,
+  right: ResolutionCandidate,
+): number => {
+  if (reportIsBetter(left.evaluation.report, right.evaluation.report))
+    return -1;
+  if (reportIsBetter(right.evaluation.report, left.evaluation.report)) return 1;
+  return left.serializedPlan.localeCompare(right.serializedPlan);
+};
+
+const selectCollisionSearchBeam = (
+  candidates: readonly ResolutionCandidate[],
+): readonly ResolvedPlanEvaluation[] => {
+  const sorted = candidates.toSorted(compareResolutionCandidates);
+  const selected: ResolutionCandidate[] = [];
+  const selectedPlans = new Set<string>();
+  const selectedGroups = new Set<string>();
+  for (const candidate of sorted) {
+    if (selectedGroups.has(candidate.groupKey)) continue;
+    selected.push(candidate);
+    selectedPlans.add(candidate.serializedPlan);
+    selectedGroups.add(candidate.groupKey);
+    if (selected.length >= COLLISION_SEARCH_BEAM_WIDTH) break;
+  }
+  for (const candidate of sorted) {
+    if (selected.length >= COLLISION_SEARCH_BEAM_WIDTH) break;
+    if (selectedPlans.has(candidate.serializedPlan)) continue;
+    selected.push(candidate);
+    selectedPlans.add(candidate.serializedPlan);
+  }
+  return selected.map((candidate) => candidate.evaluation);
+};
+
 /**
  * Sol chooses semantic topology and local attachments. For a static fold tree,
- * edge numbering and fold sign are discrete authoring choices that code can
- * resolve exhaustively inside a small budget. This pass never changes panel
- * dimensions, bodies, topology, or requested semantics; every accepted choice
- * must make the deterministic report strictly better.
+ * edge numbering, fold orientation, and a fixed orthogonal home pose are
+ * discrete authoring choices that code can search inside a small budget. The
+ * search follows the joint path between the measured colliding panels and
+ * never changes panel dimensions, bodies, topology, or requested semantics.
  */
 export const expandResolvedSemanticFabricationPlan = (
   intentInput: unknown,
@@ -1783,80 +2150,62 @@ export const expandResolvedSemanticFabricationPlan = (
 
   let evaluationCount = 1;
   let best = initialEvaluation.value;
-  const consider = (candidatePlan: FabricationPlanV2): void => {
-    if (evaluationCount >= MAXIMUM_PLAN_RESOLUTION_EVALUATIONS) return;
-    evaluationCount += 1;
-    const candidate = evaluate(candidatePlan);
-    if (candidate.ok && reportIsBetter(candidate.value.report, best.report)) {
-      best = candidate.value;
-    }
-  };
+  let frontier: readonly ResolvedPlanEvaluation[] = [initialEvaluation.value];
+  const seenPlans = new Set([canonicalSerialize(initialEvaluation.value.plan)]);
 
-  consider(withDirectionConsistentStaticFolds(best.plan));
-
-  for (let pass = 0; pass < 2 && !best.report.valid; pass += 1) {
-    for (
-      let relationshipIndex = 0;
-      relationshipIndex < best.plan.connectorRelationships.length &&
-      evaluationCount < MAXIMUM_PLAN_RESOLUTION_EVALUATIONS;
-      relationshipIndex += 1
-    ) {
-      const relationship = best.plan.connectorRelationships[relationshipIndex];
-      if (!relationship) continue;
-      const tabPanel = best.plan.panels.find(
-        (panel) => panel.key === relationship.tabAttachment.panelKey,
-      );
-      const slotPanel = best.plan.panels.find(
-        (panel) => panel.key === relationship.slotAttachment.panelKey,
-      );
-      if (!tabPanel || !slotPanel) continue;
-      const tabChoices = edgeChoiceIndexes(
-        tabPanel,
-        relationship.tabAttachment.edgeIndex,
-        relationship.spanMm + LAYOUT_GAP_MM,
-      );
-      const slotChoices = edgeChoiceIndexes(
-        slotPanel,
-        relationship.slotAttachment.edgeIndex,
-        relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
-      );
-      const basePlan = best.plan;
-      for (const tabEdgeIndex of tabChoices) {
-        for (const slotEdgeIndex of slotChoices) {
-          if (
-            tabEdgeIndex === relationship.tabAttachment.edgeIndex &&
-            slotEdgeIndex === relationship.slotAttachment.edgeIndex
-          ) {
-            continue;
-          }
-          consider({
-            ...basePlan,
-            connectorRelationships: basePlan.connectorRelationships.map(
-              (value, index) =>
-                index === relationshipIndex
-                  ? {
-                      ...value,
-                      tabAttachment: {
-                        ...value.tabAttachment,
-                        edgeIndex: tabEdgeIndex,
-                      },
-                      slotAttachment: {
-                        ...value.slotAttachment,
-                        edgeIndex: slotEdgeIndex,
-                      },
-                    }
-                  : value,
-            ),
-          });
-          if (best.report.valid) break;
+  for (
+    let depth = 0;
+    depth < MAXIMUM_COLLISION_SEARCH_DEPTH &&
+    evaluationCount < MAXIMUM_PLAN_RESOLUTION_EVALUATIONS &&
+    !best.report.valid;
+    depth += 1
+  ) {
+    const nextCandidates: ResolutionCandidate[] = [];
+    for (const current of frontier) {
+      const context = collisionResolutionContext(current);
+      const relevantPanelKeys = context ? new Set(context.panelKeys) : null;
+      const variants: {
+        readonly groupKey: string;
+        readonly plan: FabricationPlanV2;
+      }[] = [
+        {
+          groupKey: "fold:direction-consistency",
+          plan: withDirectionConsistentStaticFolds(current.plan),
+        },
+        ...(context?.jointKeys.flatMap((jointKey) =>
+          staticJointPlanVariants(current.plan, jointKey).map((variant) => ({
+            groupKey: `joint:${jointKey}`,
+            plan: variant,
+          })),
+        ) ?? []),
+        ...connectorPlanVariants(current.plan, relevantPanelKeys),
+      ];
+      for (const variant of variants) {
+        if (evaluationCount >= MAXIMUM_PLAN_RESOLUTION_EVALUATIONS) break;
+        const serializedPlan = canonicalSerialize(variant.plan);
+        if (seenPlans.has(serializedPlan)) continue;
+        seenPlans.add(serializedPlan);
+        evaluationCount += 1;
+        const candidate = evaluate(variant.plan);
+        if (!candidate.ok) continue;
+        if (candidate.value.report.valid) {
+          return { ok: true, value: candidate.value.program };
         }
-        if (best.report.valid) break;
+        if (reportIsBetter(candidate.value.report, best.report)) {
+          best = candidate.value;
+        }
+        nextCandidates.push({
+          evaluation: candidate.value,
+          groupKey: variant.groupKey,
+          serializedPlan,
+        });
       }
     }
-    if (!best.report.valid) {
-      consider(withDirectionConsistentStaticFolds(best.plan));
-    }
+    if (nextCandidates.length === 0) break;
+    frontier = selectCollisionSearchBeam(nextCandidates);
   }
 
-  return { ok: true, value: best.program };
+  return collisionFailure(best.report)
+    ? { ok: false, error: structuralCollisionError(best) }
+    : { ok: true, value: best.program };
 };

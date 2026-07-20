@@ -188,6 +188,21 @@ export const modelFailureDiagnostic = (
         ],
       });
     }
+    if (
+      error.code === "invalid_plan" &&
+      detail?.code === "collision.minimum_clearance" &&
+      typeof detail.message === "string"
+    ) {
+      return forgeDiagnostic({
+        stage,
+        kind: "verification",
+        code: "STRUCTURAL_COLLISION",
+        message: detail.message,
+        modelCall: "attempted",
+        failureIds: ["collision.minimum_clearance"],
+        failedAtStage: "collision",
+      });
+    }
     return forgeDiagnostic({
       stage,
       kind: "contract",
