@@ -298,6 +298,29 @@ describe("semantic FabricationPlanV2", () => {
     ).toMatchObject({ valid: true, failures: [] });
   });
 
+  it("never returns a program rejected by its internal compile preflight", () => {
+    const intent = liveBoxIntent();
+    const resolved = expandResolvedSemanticFabricationPlan(
+      {
+        ...intent,
+        fabricationBudget: {
+          ...intent.fabricationBudget,
+          cutsAllowed: false,
+        },
+      },
+      fixtureLiveAcceptancePlan(),
+      1,
+    );
+
+    expect(resolved).toMatchObject({
+      ok: false,
+      error: {
+        kind: "contract_validation",
+        contract: "FabricationProgramV1",
+      },
+    });
+  });
+
   it("strictly excludes model-authored global and reciprocal geometry", () => {
     const plan = fixtureSemanticPlan();
     expect(FabricationPlanV2Schema.safeParse(plan).success).toBe(true);
@@ -541,7 +564,15 @@ describe("semantic FabricationPlanV2", () => {
   });
 
   it("maps a static rectangular box without model-authored placement", () => {
-    const intent = { ...fixtureIntent(), behavior: "static" as const };
+    const baseIntent = fixtureIntent();
+    const intent = {
+      ...baseIntent,
+      behavior: "static" as const,
+      fabricationBudget: {
+        ...baseIntent.fabricationBudget,
+        maximumPanels: 5,
+      },
+    };
     const plan = {
       ...fixtureSemanticPlan(),
       candidateLabel: "Five-panel open box",
@@ -1544,8 +1575,16 @@ describe("semantic FabricationPlanV2", () => {
   it("selects the declared prismatic guide when unrelated connectors precede it", () => {
     const slider = guidedSliderPlan();
     const guide = slider.connectorRelationships[0]!;
+    const baseIntent = fixtureIntent();
     const mapped = semanticPlanToFabricationPlanV1(
-      { ...fixtureIntent(), behavior: "slide" },
+      {
+        ...baseIntent,
+        behavior: "slide",
+        fabricationBudget: {
+          ...baseIntent.fabricationBudget,
+          maximumJointAndConnectorCount: 5,
+        },
+      },
       {
         ...slider,
         connectorRelationships: [

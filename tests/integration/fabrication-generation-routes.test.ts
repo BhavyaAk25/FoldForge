@@ -312,6 +312,32 @@ describe("POST /api/compile", () => {
       },
     });
     expect(JSON.stringify(compileErrorBody)).not.toContain("intent-other");
+
+    const limitExceeded = await compilePost(
+      compileRequest({
+        ...compileBody(),
+        intent: {
+          ...fixtureIntent(),
+          fabricationBudget: {
+            ...fixtureIntent().fabricationBudget,
+            maximumJointAndConnectorCount: 0,
+          },
+        },
+      }),
+    );
+    expect(await limitExceeded.json()).toMatchObject({
+      status: "compile_error",
+      diagnostic: {
+        code: "PROGRAM_LIMIT_EXCEEDED",
+        message:
+          "The generated program uses 1 combined joint or connector; the permitted maximum is 0. Limit: intent.maximumJointAndConnectorCount.",
+        failureIds: [
+          "compile.limit_exceeded",
+          "compile.limit_exceeded#intent.maximumJointAndConnectorCount",
+        ],
+      },
+    });
+
     expect(mocks.generateProgram).not.toHaveBeenCalled();
     expect(mocks.diagnoseRepair).not.toHaveBeenCalled();
   });

@@ -1,4 +1,5 @@
 import { canonicalSerialize } from "@/core/canonical";
+import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import {
   expandFabricationPlan,
   FABRICATION_PLAN_EXPANDER_VERSION,
@@ -28,6 +29,11 @@ export interface FabricationProgramFailureDetail {
   readonly phase: "decoding" | "schema" | "expansion";
   readonly code: string;
   readonly path: readonly string[];
+  readonly limit?: {
+    readonly name: string;
+    readonly actual: number;
+    readonly maximum: number;
+  };
 }
 
 export class FabricationProgramModelError extends FabricationModelContractError {
@@ -72,6 +78,17 @@ const expansionFailureDetail = (
       : null;
   const directPath = Array.isArray(record.path) ? record.path : null;
   const issuePath = Array.isArray(issueRecord?.path) ? issueRecord.path : null;
+  const limit =
+    record.kind === "limit_exceeded" &&
+    typeof record.limit === "string" &&
+    typeof record.actual === "number" &&
+    typeof record.maximum === "number"
+      ? {
+          name: record.limit,
+          actual: record.actual,
+          maximum: record.maximum,
+        }
+      : null;
   return {
     phase: "expansion",
     code:
@@ -81,6 +98,7 @@ const expansionFailureDetail = (
           ? record.kind
           : "unknown",
     path: (directPath ?? issuePath ?? []).map(String).slice(0, 12),
+    ...(limit ? { limit } : {}),
   };
 };
 
@@ -172,6 +190,14 @@ export const fabricationProgramProposalFromResponse = (input: {
       "invalid_plan",
       "GPT-5.6 Sol returned an invalid fabrication plan.",
       expansionFailureDetail(expanded.error),
+    );
+  }
+  const compiled = compileFabricationProgram(input.intent, expanded.value);
+  if (!compiled.ok) {
+    throw new FabricationProgramModelError(
+      "invalid_plan",
+      "GPT-5.6 Sol returned a fabrication plan that did not compile.",
+      expansionFailureDetail(compiled.error),
     );
   }
   return ProgramProposalV1Schema.parse({

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { FABRICATION_LIMITS } from "./limits";
+import { semanticPlanResourceCounts } from "./resource-counts";
 
 const KEY_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]{0,39}$/u;
 const finite = z.number().finite();
@@ -478,6 +479,7 @@ export const FabricationPlanV2Schema = z
   })
   .strict()
   .superRefine((plan, context) => {
+    const resourceCounts = semanticPlanResourceCounts(plan);
     addDuplicateKeyIssues(plan.panels, "panels", context);
     addDuplicateKeyIssues(plan.bodies, "bodies", context);
     addDuplicateKeyIssues(plan.joints, "joints", context);
@@ -490,7 +492,7 @@ export const FabricationPlanV2Schema = z
     addDuplicateKeyIssues(plan.couplings, "couplings", context);
     addDuplicateKeyIssues(plan.landmarks, "landmarks", context);
     if (
-      plan.joints.length + plan.connectorRelationships.length * 2 >
+      resourceCounts.mechanismFeatureCount >
       FABRICATION_LIMITS.maximumJointAndConnectorCount
     ) {
       context.addIssue({
