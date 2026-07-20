@@ -604,6 +604,8 @@ const pointAlong = (edge: Edge2Mm, distanceMm: number): Point2Mm => {
   };
 };
 
+const CONNECTOR_ENGAGEMENT_MARGIN_MM = 1;
+
 const deriveConnectors = (
   intent: FabricationIntentV1,
   plan: FabricationPlanV2,
@@ -659,7 +661,8 @@ const deriveConnectors = (
     // A paper tab is represented as a three-sided internal flap. Its root is
     // inset from the perimeter and the free edge stops one minimum feature
     // before the panel boundary, so the derived cut retains real material.
-    const tabRootInsetMm = relationship.tabDepthMm + 1;
+    const tabRootInsetMm =
+      relationship.tabDepthMm + CONNECTOR_ENGAGEMENT_MARGIN_MM;
     const tabStart = {
       xMm: boundaryTabStart.xMm + tabNormal.xMm * tabRootInsetMm,
       yMm: boundaryTabStart.yMm + tabNormal.yMm * tabRootInsetMm,
@@ -691,25 +694,30 @@ const deriveConnectors = (
     }
     const slotNormal = inwardNormal(slotPanel, slotEdge);
     const slotEdgeCenter = pointAlong(slotEdge, edgeLengthMm(slotEdge) / 2);
-    const slotCenter = {
-      xMm: slotEdgeCenter.xMm + slotNormal.xMm * relationship.slotInsetMm,
-      yMm: slotEdgeCenter.yMm + slotNormal.yMm * relationship.slotInsetMm,
-    };
     const slotTangent = {
       xMm: (slotEdge.end.xMm - slotEdge.start.xMm) / edgeLengthMm(slotEdge),
       yMm: (slotEdge.end.yMm - slotEdge.start.yMm) / edgeLengthMm(slotEdge),
     };
-    const slotStart = {
-      xMm: slotCenter.xMm - (slotTangent.xMm * slotLengthMm) / 2,
-      yMm: slotCenter.yMm - (slotTangent.yMm * slotLengthMm) / 2,
+    const slotSegmentAtInset = (insetMm: number) => {
+      const center = {
+        xMm: slotEdgeCenter.xMm + slotNormal.xMm * insetMm,
+        yMm: slotEdgeCenter.yMm + slotNormal.yMm * insetMm,
+      };
+      return {
+        start: {
+          xMm: center.xMm - (slotTangent.xMm * slotLengthMm) / 2,
+          yMm: center.yMm - (slotTangent.yMm * slotLengthMm) / 2,
+        },
+        end: {
+          xMm: center.xMm + (slotTangent.xMm * slotLengthMm) / 2,
+          yMm: center.yMm + (slotTangent.yMm * slotLengthMm) / 2,
+        },
+      };
     };
-    const slotEnd = {
-      xMm: slotCenter.xMm + (slotTangent.xMm * slotLengthMm) / 2,
-      yMm: slotCenter.yMm + (slotTangent.yMm * slotLengthMm) / 2,
-    };
+    const requestedSlot = slotSegmentAtInset(relationship.slotInsetMm);
     if (
-      !pointInPolygon(slotStart, slotPanel.localVertices, false) ||
-      !pointInPolygon(slotEnd, slotPanel.localVertices, false)
+      !pointInPolygon(requestedSlot.start, slotPanel.localVertices, false) ||
+      !pointInPolygon(requestedSlot.end, slotPanel.localVertices, false)
     ) {
       return mappingError(
         "unsupported_mapping",
@@ -717,6 +725,20 @@ const deriveConnectors = (
         `Connector ${relationship.key} produces a slot outside its panel.`,
       );
     }
+    // A slot inset equal to or deeper than the whole tab leaves no material
+    // available to engage the receiving panel. Treat the model value as an
+    // authoring preference and cap the derived geometry so code preserves a
+    // minimum landing length. The original plan remains unchanged for trace
+    // provenance; only the code-owned reciprocal connector geometry is
+    // normalized.
+    const usableSlotInsetMm = Math.min(
+      relationship.slotInsetMm,
+      Math.max(
+        CONNECTOR_ENGAGEMENT_MARGIN_MM,
+        relationship.tabDepthMm - CONNECTOR_ENGAGEMENT_MARGIN_MM,
+      ),
+    );
+    const slotSegment = slotSegmentAtInset(usableSlotInsetMm);
     const ids = relationshipConnectorIds(relationship.key);
     // Panel sheet references are validated before connector derivation.
     const stock = intent.stockOptions[tabPanel.semantic.sheetIndex]!;
@@ -736,7 +758,7 @@ const deriveConnectors = (
         kind: "slot",
         panelId: canonicalId("panel", slotPanel.semantic.key),
         mateConnectorId: ids.tab,
-        centerline: { start: slotStart, end: slotEnd },
+        centerline: slotSegment,
         widthMm: Math.max(
           1.01,
           stock.material.thicknessMm + relationship.clearanceMm + 0.01,

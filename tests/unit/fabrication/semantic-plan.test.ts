@@ -639,9 +639,12 @@ describe("semantic FabricationPlanV2", () => {
           tabAttachment: { panelKey: "lid", edgeIndex: 2 },
           slotAttachment: { panelKey: "front", edgeIndex: 0 },
           spanMm: 14,
-          tabDepthMm: 6,
-          slotInsetMm: 2,
-          clearanceMm: 0.6,
+          // These are the exact values returned by the first clean live-Sol
+          // acceptance run. The mapper must preserve an engagement margin
+          // instead of deriving an unreachable 8 mm inset from an 8 mm tab.
+          tabDepthMm: 8,
+          slotInsetMm: 8,
+          clearanceMm: 0.4,
         },
       ],
       driver: null,
@@ -686,6 +689,14 @@ describe("semantic FabricationPlanV2", () => {
         value.kind === "prismatic" ? null : value.axis,
       ),
     );
+    const derivedSlot = expanded.value.blueprint.connectors.find(
+      (connector) => connector.connectorId === "connector-lid-lock-slot",
+    );
+    expect(derivedSlot).toMatchObject({ kind: "slot" });
+    if (derivedSlot?.kind === "slot") {
+      expect(derivedSlot.centerline.start.yMm).toBeCloseTo(7, 9);
+      expect(derivedSlot.centerline.end.yMm).toBeCloseTo(7, 9);
+    }
     const compiled = compileFabricationProgram(intent, expanded.value);
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) return;
