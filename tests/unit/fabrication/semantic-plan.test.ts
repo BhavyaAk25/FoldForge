@@ -298,6 +298,148 @@ describe("semantic FabricationPlanV2", () => {
     ).toMatchObject({ valid: true, failures: [] });
   });
 
+  it("resolves a measured static collision along the causal joint path", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const plan: FabricationPlanV2 = {
+      ...source,
+      connectorRelationships: [],
+      assemblyStrategy: "fold_only",
+      joints: source.joints.map((joint) =>
+        joint.key === "front" && joint.kind === "fold"
+          ? {
+              ...joint,
+              foldDirection: "mountain",
+              homeAngleDeg: -90,
+              minimumAngleDeg: -90,
+              maximumAngleDeg: -90,
+            }
+          : joint,
+      ),
+    };
+
+    const unresolved = expandSemanticFabricationPlan(liveBoxIntent(), plan, 1);
+    expect(unresolved.ok).toBe(true);
+    if (!unresolved.ok) return;
+    const unresolvedIr = compileFabricationProgram(
+      liveBoxIntent(),
+      unresolved.value,
+    );
+    expect(unresolvedIr.ok).toBe(true);
+    if (!unresolvedIr.ok) return;
+    expect(
+      verifyFabricationIr(unresolvedIr.value, "candidate-colliding").failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          failureId: "collision.minimum_clearance",
+          message:
+            "Panels panel-front and panel-left collide or violate clearance at the static home state: actual clearance 0 mm; required clearance 0.5 mm.",
+        }),
+      ]),
+    );
+
+    const resolved = expandResolvedSemanticFabricationPlan(
+      liveBoxIntent(),
+      plan,
+      1,
+    );
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const resolvedIr = compileFabricationProgram(
+      liveBoxIntent(),
+      resolved.value,
+    );
+    expect(resolvedIr.ok).toBe(true);
+    if (!resolvedIr.ok) return;
+    expect(
+      verifyFabricationIr(resolvedIr.value, "candidate-collision-resolved"),
+    ).toMatchObject({ valid: true, failures: [] });
+  });
+
+  it("composes a base-to-wall-to-lid chain in the parent coordinate frame", () => {
+    const expanded = expandSemanticFabricationPlan(
+      liveBoxIntent(),
+      fixtureLiveAcceptancePlan(),
+      1,
+    );
+    expect(expanded.ok).toBe(true);
+    if (!expanded.ok) return;
+    const compiled = compileFabricationProgram(liveBoxIntent(), expanded.value);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const state = evaluateMotionState(compiled.value);
+    expect(state.ok).toBe(true);
+    if (!state.ok) return;
+
+    expect(state.value.maximumClosureResidualMm).toBeLessThan(1e-9);
+    expect(
+      state.value.panelVertices["panel-back"]?.every(
+        (point) => Math.abs(point.xMm - 125) < 1e-9,
+      ),
+    ).toBe(true);
+    expect(
+      state.value.panelVertices["panel-lid"]?.every(
+        (point) => Math.abs(point.zMm + 25) < 1e-9,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns a typed structural collision instead of its best invalid program", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const intent: FabricationIntentV1 = {
+      ...liveBoxIntent(),
+      requestedSize: { widthMm: 75, heightMm: 95, depthMm: 25 },
+      stockOptions: liveBoxIntent().stockOptions.map((stock) => ({
+        ...stock,
+        widthMm: 210,
+        heightMm: 297,
+        printableMarginMm: 5,
+        material: { ...stock.material, thicknessMm: 0.4 },
+      })),
+    };
+    const plan: FabricationPlanV2 = {
+      ...source,
+      panels: source.panels.map((panel) =>
+        panel.key === "lid"
+          ? {
+              ...panel,
+              widthMm: 80,
+              outline: {
+                kind: "polygon",
+                vertices: [
+                  { u: 0.0625, v: 0 },
+                  { u: 0.9375, v: 0 },
+                  { u: 0.9375, v: 1 },
+                  { u: 0.0625, v: 1 },
+                  { u: 0.0625, v: 15 / 19 },
+                  { u: 0, v: 15 / 19 },
+                  { u: 0, v: 4 / 19 },
+                  { u: 0.0625, v: 4 / 19 },
+                ],
+              },
+            }
+          : panel,
+      ),
+    };
+
+    const resolved = expandResolvedSemanticFabricationPlan(intent, plan, 1);
+    expect(resolved).toMatchObject({
+      ok: false,
+      error: {
+        kind: "structural_collision",
+        code: "collision.minimum_clearance",
+        path: ["collision", "panel-left", "panel-lid"],
+        panelIds: ["panel-left", "panel-lid"],
+        actualClearanceMm: 0,
+        requiredClearanceMm: 0.5,
+        report: {
+          valid: false,
+          failedAtStage: "collision",
+        },
+      },
+    });
+  }, 15_000);
+
   it("never returns a program rejected by its internal compile preflight", () => {
     const intent = liveBoxIntent();
     const resolved = expandResolvedSemanticFabricationPlan(

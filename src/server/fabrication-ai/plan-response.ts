@@ -29,6 +29,7 @@ export interface FabricationProgramFailureDetail {
   readonly phase: "decoding" | "schema" | "expansion";
   readonly code: string;
   readonly path: readonly string[];
+  readonly message?: string;
   readonly limit?: {
     readonly name: string;
     readonly actual: number;
@@ -98,6 +99,9 @@ const expansionFailureDetail = (
           ? record.kind
           : "unknown",
     path: (directPath ?? issuePath ?? []).map(String).slice(0, 12),
+    ...(typeof record.message === "string"
+      ? { message: record.message.slice(0, 500) }
+      : {}),
     ...(limit ? { limit } : {}),
   };
 };

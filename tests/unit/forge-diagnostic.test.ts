@@ -50,4 +50,28 @@ describe("safe fabrication diagnostics", () => {
       modelCall: "attempted",
     });
   });
+
+  it("preserves safe structural collision measurements at the program boundary", () => {
+    const message =
+      "Panels panel-left and panel-lid collide or violate clearance at the static home state: actual clearance 0 mm; required clearance 0.5 mm.";
+    const error = new FabricationProgramModelError(
+      "invalid_plan",
+      "private model detail",
+      {
+        phase: "expansion",
+        code: "collision.minimum_clearance",
+        path: ["collision", "panel-left", "panel-lid"],
+        message,
+      },
+    );
+
+    expect(modelFailureDiagnostic("program", error)).toMatchObject({
+      kind: "verification",
+      code: "STRUCTURAL_COLLISION",
+      message,
+      failureIds: ["collision.minimum_clearance"],
+      failedAtStage: "collision",
+      modelCall: "attempted",
+    });
+  });
 });
