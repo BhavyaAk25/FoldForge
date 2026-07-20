@@ -1861,7 +1861,10 @@ const validateConnections = (
               geometryRef("panel", tabPanel.panelId),
               geometryRef("panel", slotPanel.panelId),
             ],
-            repairableProgramPaths: [],
+            // Assembly reach depends on the relative home pose of the two
+            // panels. Expose only the already allowlisted motion parameters;
+            // connector coordinates remain compiler-owned.
+            repairableProgramPaths: motionRepairPaths(ir),
           });
         }
       }
@@ -3040,23 +3043,57 @@ const coincidentSegmentOverlap3 = (
   return [pointAt(overlapStartMm), pointAt(overlapEndMm)];
 };
 
+const panelBoundarySegments = (
+  panelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Segment3Mm[] => {
+  const vertices = motionState.panelVertices[panelId] ?? [];
+  return vertices.map(
+    (point, index) =>
+      [point, vertices[(index + 1) % vertices.length]!] as const,
+  );
+};
+
 const coincidentPanelBoundarySegments = (
   firstPanelId: string,
   secondPanelId: string,
   motionState: EvaluatedMotionState,
 ): readonly Segment3Mm[] => {
-  const boundarySegments = (panelId: string): readonly Segment3Mm[] => {
-    const vertices = motionState.panelVertices[panelId] ?? [];
-    return vertices.map(
-      (point, index) =>
-        [point, vertices[(index + 1) % vertices.length]!] as const,
-    );
-  };
-  return boundarySegments(firstPanelId).flatMap((first) =>
-    boundarySegments(secondPanelId).flatMap((second) => {
+  return panelBoundarySegments(firstPanelId, motionState).flatMap((first) =>
+    panelBoundarySegments(secondPanelId, motionState).flatMap((second) => {
       const overlap = coincidentSegmentOverlap3(first, second);
       return overlap ? [overlap] : [];
     }),
+  );
+};
+
+const isolatedBoundaryPointContact = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean => {
+  if (
+    witnesses.length === 0 ||
+    panelIntersectionSegments(firstPanelId, secondPanelId, motionState).length >
+      0
+  ) {
+    return false;
+  }
+  const firstBoundary = panelBoundarySegments(firstPanelId, motionState);
+  const secondBoundary = panelBoundarySegments(secondPanelId, motionState);
+  return witnesses.every(
+    (point) =>
+      firstBoundary.some(
+        ([start, end]) =>
+          distancePointToSegment3Mm(point, start, end) <=
+          CONTACT_LOCUS_TOLERANCE_MM,
+      ) &&
+      secondBoundary.some(
+        ([start, end]) =>
+          distancePointToSegment3Mm(point, start, end) <=
+          CONTACT_LOCUS_TOLERANCE_MM,
+      ),
   );
 };
 
@@ -3413,11 +3450,25 @@ const validateCollision = (
               motionState,
               witnesses,
             );
+          // A static faceted assembly can bring two non-adjacent panel
+          // vertices to the same point. That is valid boundary contact when
+          // there is no positive-length intersection and every witness lies
+          // on both contours; a vertex piercing an interior still fails.
+          const allowedIsolatedPointContact =
+            isSingleStateStaticDesign &&
+            zeroAreaCenterlineContact &&
+            isolatedBoundaryPointContact(
+              first.panelId,
+              second.panelId,
+              motionState,
+              witnesses,
+            );
           const allowedBoundaryContact =
             zeroAreaCenterlineContact &&
             (locusBoundFoldSeam ||
               locusBoundBoundaryContact ||
-              locusBoundConnectorContact);
+              locusBoundConnectorContact ||
+              allowedIsolatedPointContact);
           if (allowedBoundaryContact) continue;
           const clearanceMm =
             overlapAreaMm2 > 1e-6
@@ -3484,7 +3535,7 @@ const validateCollision = (
         "mm",
       ),
       geometryRefs: collisionRefs,
-      repairableProgramPaths: [],
+      repairableProgramPaths: motionRepairPaths(ir),
     });
   }
   addCheck(

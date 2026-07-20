@@ -2,7 +2,6 @@ import { FABRICATION_KINEMATIC_LIMITS, FABRICATION_LIMITS } from "./limits";
 import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { buildDirectedBodyTopology } from "./topology";
 import type {
-  ConnectorV1,
   FabricationPlanV1,
   JointV1,
   PlannedPanelBlueprintV1,
@@ -513,138 +512,6 @@ const withoutUnusedConnectors = (
   };
 };
 
-const localSpanIsHorizontal = (transform: Transform2Mm): boolean =>
-  transform.rotationDeg % 180 === 0;
-
-/**
- * Connector coordinates authored for a discarded flat placement are no
- * longer meaningful. For retained semantic tab/slot pairs, derive a compact
- * internal flap and receiver from the preserved panel dimensions and IDs.
- */
-const normalizedConnectorPairs = (
-  connectors: readonly ConnectorV1[],
-  panels: readonly PlannedPanelBlueprintV1[],
-  sheetById: ReadonlyMap<string, SheetV1>,
-): readonly ConnectorV1[] => {
-  const panelById = new Map(panels.map((panel) => [panel.panelId, panel]));
-  const connectorById = new Map(
-    connectors.map((connector) => [connector.connectorId, connector]),
-  );
-  const normalized = new Map<string, ConnectorV1>();
-
-  for (const connector of connectors) {
-    if (connector.kind !== "tab" || normalized.has(connector.connectorId)) {
-      continue;
-    }
-    const slot = connectorById.get(connector.mateConnectorId);
-    const tabPanel = panelById.get(connector.panelId);
-    const slotPanel = slot ? panelById.get(slot.panelId) : undefined;
-    if (
-      slot?.kind !== "slot" ||
-      slot.mateConnectorId !== connector.connectorId ||
-      !tabPanel ||
-      !slotPanel
-    ) {
-      continue;
-    }
-    const tabHorizontal = localSpanIsHorizontal(tabPanel.flatTransform);
-    const slotHorizontal = localSpanIsHorizontal(slotPanel.flatTransform);
-    const tabSpanCapacityMm =
-      (tabHorizontal ? tabPanel.widthMm : tabPanel.heightMm) - 4;
-    const slotSpanCapacityMm =
-      (slotHorizontal ? slotPanel.widthMm : slotPanel.heightMm) - 4;
-    const clearanceMm = Math.max(
-      FABRICATION_LIMITS.minimumFeatureMm / 5,
-      connector.clearanceMm,
-      slot.clearanceMm,
-    );
-    const spanMm = Math.min(
-      10,
-      tabSpanCapacityMm,
-      slotSpanCapacityMm - clearanceMm - 0.1,
-    );
-    const tabDepthCapacityMm =
-      (tabHorizontal ? tabPanel.heightMm : tabPanel.widthMm) - 4;
-    const depthMm = Math.min(6, tabDepthCapacityMm);
-    if (
-      spanMm < FABRICATION_LIMITS.minimumFeatureMm ||
-      depthMm < FABRICATION_LIMITS.minimumFeatureMm
-    ) {
-      continue;
-    }
-
-    const tabCenter = { xMm: tabPanel.widthMm / 2, yMm: tabPanel.heightMm / 2 };
-    const rootStart = tabHorizontal
-      ? { xMm: tabCenter.xMm - spanMm / 2, yMm: tabCenter.yMm - depthMm / 2 }
-      : { xMm: tabCenter.xMm - depthMm / 2, yMm: tabCenter.yMm - spanMm / 2 };
-    const rootEnd = tabHorizontal
-      ? { xMm: rootStart.xMm + spanMm, yMm: rootStart.yMm }
-      : { xMm: rootStart.xMm, yMm: rootStart.yMm + spanMm };
-    const tabContour = tabHorizontal
-      ? [
-          rootStart,
-          rootEnd,
-          { xMm: rootEnd.xMm, yMm: rootEnd.yMm + depthMm },
-          { xMm: rootStart.xMm, yMm: rootStart.yMm + depthMm },
-        ]
-      : [
-          rootStart,
-          rootEnd,
-          { xMm: rootEnd.xMm + depthMm, yMm: rootEnd.yMm },
-          { xMm: rootStart.xMm + depthMm, yMm: rootStart.yMm },
-        ];
-    const slotLengthMm = spanMm + clearanceMm + 0.1;
-    const slotCenter = {
-      xMm: slotPanel.widthMm / 2,
-      yMm: slotPanel.heightMm / 2,
-    };
-    const centerline = slotHorizontal
-      ? {
-          start: {
-            xMm: slotCenter.xMm - slotLengthMm / 2,
-            yMm: slotCenter.yMm,
-          },
-          end: {
-            xMm: slotCenter.xMm + slotLengthMm / 2,
-            yMm: slotCenter.yMm,
-          },
-        }
-      : {
-          start: {
-            xMm: slotCenter.xMm,
-            yMm: slotCenter.yMm - slotLengthMm / 2,
-          },
-          end: {
-            xMm: slotCenter.xMm,
-            yMm: slotCenter.yMm + slotLengthMm / 2,
-          },
-        };
-    const thicknessMm =
-      sheetById.get(tabPanel.sheetId)?.material.thicknessMm ?? 0;
-    normalized.set(connector.connectorId, {
-      ...connector,
-      contour: { vertices: tabContour },
-      rootEdge: { start: rootStart, end: rootEnd },
-      insertionDirection: { x: 0, y: 0, z: 1 },
-      clearanceMm,
-    });
-    normalized.set(slot.connectorId, {
-      ...slot,
-      centerline,
-      widthMm: Math.max(
-        FABRICATION_LIMITS.minimumFeatureMm,
-        thicknessMm + clearanceMm,
-      ),
-      insertionDirection: { x: 0, y: 0, z: -1 },
-      clearanceMm,
-    });
-  }
-
-  return connectors.map(
-    (connector) => normalized.get(connector.connectorId) ?? connector,
-  );
-};
-
 const normalizedContour = (
   panel: PlannedPanelBlueprintV1,
   transform: Transform2Mm,
@@ -1034,11 +901,10 @@ export const normalizeFoldOnlyPlan = (
       ...plan,
       panels: normalizedPanels,
       joints: normalizedJoints,
-      connectors: normalizedConnectorPairs(
-        plan.connectors,
-        normalizedPanels,
-        sheetById,
-      ),
+      // Connector geometry is panel-local. Repacking changes only each
+      // panel's flat transform, so preserving these coordinates keeps the
+      // tab and slot bound to the semantic edges selected by the compiler.
+      connectors: plan.connectors,
     },
     normalizedJoints,
     topology.value.rootBodyId,
