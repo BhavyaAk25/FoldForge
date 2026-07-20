@@ -367,6 +367,50 @@ export interface ProgramBlueprintV1 {
   readonly assemblyOperations: readonly AssemblyOperationV1[];
 }
 
+/**
+ * The model authors this compact, geometric plan. Code supplies every field
+ * that is copied from the intent or can be derived without design judgment.
+ */
+export interface PlannedPanelBlueprintV1 {
+  readonly panelId: string;
+  readonly sheetId: string;
+  readonly bodyId: string;
+  readonly label: string;
+  readonly role:
+    "structural" | "decorative" | "guide" | "slider" | "driver" | "output";
+  readonly widthMm: number;
+  readonly heightMm: number;
+  readonly contour: NormalizedPolygonContourV1;
+  readonly innerCutContours: readonly NormalizedPolygonContourV1[];
+  readonly flatTransform: Transform2Mm;
+  readonly semanticPartIds: readonly string[];
+}
+
+export interface PlannedRigidBodyV1 {
+  readonly bodyId: string;
+  readonly label: string;
+  readonly panelIds: readonly string[];
+  readonly initialTransform: Transform3Mm;
+  readonly grounded: boolean;
+  readonly semanticPartIds: readonly string[];
+}
+
+export interface FabricationPlanV1 {
+  readonly version: "1";
+  readonly candidateLabel: string;
+  readonly topologyId: string;
+  readonly panels: readonly PlannedPanelBlueprintV1[];
+  readonly bodies: readonly PlannedRigidBodyV1[];
+  readonly joints: readonly JointV1[];
+  readonly connectors: readonly ConnectorV1[];
+  readonly driver: DriverV1 | null;
+  readonly outputs: readonly MotionOutputV1[];
+  readonly couplings: readonly CouplingV1[];
+  readonly semanticParts: readonly SemanticPartV1[];
+  readonly assemblyStrategy: "fold_only" | "tab_slot" | "articulated_tab_slot";
+  readonly designSummary: string;
+}
+
 export interface FabricationProgramV1 {
   readonly version: "1";
   readonly programId: string;
@@ -725,6 +769,8 @@ export interface CandidateProvenanceV2 {
   readonly irHash: string;
   readonly modelId: string | null;
   readonly modelResponseId: string | null;
+  readonly modelPlanHash: string | null;
+  readonly planExpanderVersion: string | null;
   readonly generatedAtIso: string;
   readonly deterministicSeed: number;
   readonly parentCandidateId: string | null;

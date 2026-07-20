@@ -352,6 +352,16 @@
   padding: 7px 6px 4px 0;
 }
 
+.exampleImageLabel {
+  margin-bottom: 7px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .exampleCard h3 {
   margin: 0;
   font-size: 1rem;

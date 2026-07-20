@@ -1,6 +1,7 @@
 {
   "name": "foldforge",
   "version": "0.1.0",
+  "packageManager": "pnpm@11.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,6 +25,8 @@
     "eval:e2e": "tsx scripts/run-e2e-evals.ts",
     "eval:ablation": "tsx scripts/run-ablation.ts",
     "eval:live": "tsx scripts/run-live-readiness.ts",
+    "eval:live:replay": "tsx scripts/run-live-response-replay.ts",
+    "eval:continue-ledger": "tsx scripts/prepare-paid-eval-continuation.ts",
     "test:e2e": "playwright test",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test && pnpm run validate:consumers && pnpm run build"
   },
@@ -35,7 +38,7 @@
     "openai": "6.46.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "three": "0.185.1",
+    "three": "0.182.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -44,7 +47,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "0.185.1",
+    "@types/three": "0.182.0",
     "@vitest/coverage-v8": "4.1.10",
     "dxf-parser": "1.1.2",
     "eslint": "^9",

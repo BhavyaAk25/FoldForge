@@ -8,8 +8,7 @@ export const API_BODY_LIMIT_BYTES = {
   exports: 256 * 1024,
 } as const;
 
-export type LiveOperation =
-  "intent" | "programs" | "compile" | "repair" | "finalize";
+export type LiveOperation = "intent" | "programs" | "repair" | "finalize";
 
 export type LiveOperationQuotaGroup = "generation" | "repair" | "finalize";
 
@@ -25,42 +24,55 @@ export const LIVE_OPERATION_POLICIES: Readonly<
 > = {
   intent: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.intent,
-    maximumOutputTokens: 3_000,
+    maximumOutputTokens: 4_000,
     maximumRequestsPerHour: 20,
     quotaGroup: "generation",
   },
   programs: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.programs,
-    maximumOutputTokens: 8_000,
-    maximumRequestsPerHour: 20,
-    quotaGroup: "generation",
-  },
-  compile: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.compile,
-    maximumOutputTokens: 3_000,
+    maximumOutputTokens: 4_000,
     maximumRequestsPerHour: 20,
     quotaGroup: "generation",
   },
   repair: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.repair,
     maximumOutputTokens: 2_500,
-    maximumRequestsPerHour: 6,
+    maximumRequestsPerHour: 5,
     quotaGroup: "repair",
   },
   finalize: {
     bodyLimitBytes: API_BODY_LIMIT_BYTES.finalize,
     maximumOutputTokens: 2_000,
-    maximumRequestsPerHour: 20,
+    maximumRequestsPerHour: 2,
     quotaGroup: "finalize",
   },
 };
 
 export const LIVE_SESSION_LIMITS = {
   windowMs: 60 * 60 * 1_000,
-  maximumRequests: 30,
-  maximumReservedTokens: 70_000,
-  maximumConcurrentPerSession: 2,
+  maximumRequests: 10,
+  // The public forge uses one intent, one program, at most five repairs, and
+  // one final narrative. This ceiling admits that complete workflow while
+  // bounding the cost and preventing parallel duplicate generations.
+  maximumReservedTokens: 140_000,
+  maximumConcurrentPerSession: 1,
   maximumConcurrentGlobal: 8,
+} as const;
+
+/**
+ * Best-effort aggregate protection for one warm deployment process. Session
+ * limits keep judges independent; this separate ceiling still bounds repeated
+ * access-code logins on that process.
+ */
+export const LIVE_DEPLOYMENT_LIMITS = {
+  windowMs: 60 * 60 * 1_000,
+  maximumRequests: 40,
+  maximumReservedTokens: 560_000,
+} as const;
+
+export const LIVE_ATTEMPT_LIMITS = {
+  windowMs: 60 * 60 * 1_000,
+  maximumEntries: 2_000,
 } as const;
 
 export const DETERMINISTIC_ROUTE_LIMITS = {

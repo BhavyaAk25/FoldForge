@@ -28,13 +28,14 @@ Reject honestly when a request requires arbitrary smooth solids, deformable surf
 - API routes authenticate, enforce origin/body/quota/concurrency controls, call typed services, and translate typed results to HTTP responses.
 - The UI renders typed application state. It never invents a successful result, mutates canonical geometry, or exports a different candidate from the one selected.
 
-GPT-5.6 Sol may author a normalized intent, bounded fabrication programs, semantic critiques, causal diagnoses, and typed patches. Every response is validated before use. The model may not declare a design valid, edit compiled coordinates or export bytes, suppress a verifier failure, override deterministic ranking, or expose chain-of-thought.
+GPT-5.6 Sol may author a normalized intent, compact bounded fabrication plans, semantic critiques, causal diagnoses, and typed patches. Pure code expands each plan into the canonical fabrication program before compilation. Every response is validated before use. The model may not declare a design valid, edit compiled coordinates or export bytes, suppress a verifier failure, override deterministic ranking, or expose chain-of-thought.
 
 ## Canonical contracts
 
 Keep versioned Zod and TypeScript definitions for:
 
 - `FabricationIntentV1`
+- `FabricationPlanV1`
 - `FabricationProgramV1`
 - `FabricationIRV1`
 - `VerificationReportV2`
@@ -63,7 +64,7 @@ Hard kinematic limits are a closure residual of at most 0.1 mm, no collision, at
 
 ## Candidate and repair rules
 
-Generate at most three visible candidates, aimed at fabrication efficiency, mechanical simplicity, and visual expression. At least two must be topology-distinct when the intent admits more than one topology. Rank only verified candidates.
+The public live forge generates one visible candidate per prompt. This keeps the paid path short and prevents a later alternative from discarding an already verified design. The candidate is shown only after deterministic verification passes; a hard-invalid candidate can never be displayed, recommended, finalized, or exported as valid.
 
 The repair loop permits five cycles and at most three typed patch operations per cycle. Reject unknown paths, unrelated changes, invalid references, out-of-range values, repeated canonical tool inputs, and patches that change the user intent. Recompile and rerun every hard check after each patch. Exhaustion returns a clear infeasible result.
 

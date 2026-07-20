@@ -15,11 +15,12 @@ import type {
   FabricationProgramV1,
 } from "@/core/fabrication/types";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
+import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 
 import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
 
 interface StudioMockOptions {
-  readonly duplicateSecondFingerprint?: boolean;
+  readonly failIntentAfterFirst?: boolean;
   readonly liveAiEnabled?: boolean;
   readonly malformedIntent?: boolean;
   readonly requireAccessOnce?: boolean;
@@ -57,6 +58,33 @@ interface StudioMockState {
   readonly unexpectedPaths: string[];
 }
 
+const consoleMessagesByPage = new WeakMap<Page, string[]>();
+
+const isAllowedBrowserDiagnostic = (entry: string): boolean =>
+  entry.includes("401") ||
+  entry ===
+    "Failed to load resource: the server responded with a status of 502 (Bad Gateway)" ||
+  /^\[\.WebGL-[^\]]+\]GL Driver Message .*GPU stall due to ReadPixels/.test(
+    entry,
+  );
+
+test.beforeEach(({ page }) => {
+  const messages: string[] = [];
+  consoleMessagesByPage.set(page, messages);
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      messages.push(message.text());
+    }
+  });
+});
+
+test.afterEach(({ page }) => {
+  const unexpectedMessages = (consoleMessagesByPage.get(page) ?? []).filter(
+    (entry) => !isAllowedBrowserDiagnostic(entry),
+  );
+  expect(unexpectedMessages).toEqual([]);
+});
+
 const respondJson = (
   route: Route,
   json: unknown,
@@ -65,7 +93,7 @@ const respondJson = (
 
 const programFor = (ordinal: number): FabricationProgramV1 => {
   const base = fixtureProgram();
-  const labels = ["Direct fold", "Repaired narrow wing", "Wide fold"];
+  const labels = ["Repaired narrow wing", "Direct fold", "Wide fold"];
   const suffixes = ["a", "b", "c"];
   const panels = base.blueprint.panels.map((panel) => {
     if (panel.panelId === "panel-base") {
@@ -83,7 +111,7 @@ const programFor = (ordinal: number): FabricationProgramV1 => {
         ],
       };
     }
-    return ordinal === 2 && panel.panelId === "panel-wing"
+    return ordinal === 1 && panel.panelId === "panel-wing"
       ? { ...panel, widthMm: 0.5 }
       : panel;
   });
@@ -119,6 +147,21 @@ const evaluateProgram = (body: CompileRequestBody) => {
     ir: compiled.value,
     report,
     score,
+    diagnostic: report.valid
+      ? null
+      : forgeDiagnostic({
+          stage: "compile",
+          kind: "verification",
+          code: "DESIGN_INVALID",
+          message:
+            report.failures[0]?.message ??
+            "The generated design did not pass deterministic verification.",
+          failureIds: report.failures
+            .filter((failure) => failure.severity === "hard")
+            .slice(0, 24)
+            .map((failure) => failure.failureId),
+          failedAtStage: report.failedAtStage,
+        }),
   };
 };
 
@@ -182,6 +225,28 @@ const installStudioMocks = async (
         );
         return;
       }
+      if (options.failIntentAfterFirst && state.intentPrompts.length > 1) {
+        const diagnostic = forgeDiagnostic({
+          stage: "intent",
+          kind: "provider",
+          code: "MODEL_PROVIDER_ERROR",
+          message: "The live model request failed safely.",
+          modelCall: "attempted",
+        });
+        await respondJson(
+          route,
+          {
+            error: {
+              code: diagnostic.code,
+              message: diagnostic.message,
+              details: [],
+              diagnostic,
+            },
+          },
+          502,
+        );
+        return;
+      }
       state.endpointOrder.push("intent");
       if (options.malformedIntent) {
         await respondJson(route, { scopeStatus: "supported" });
@@ -198,16 +263,18 @@ const installStudioMocks = async (
       const body = request.postDataJSON() as ProgramRequestBody;
       state.programRequests.push(body);
       state.endpointOrder.push(`programs:${body.candidateOrdinal}`);
-      const fingerprintOrdinal =
-        options.duplicateSecondFingerprint && body.candidateOrdinal === 2
-          ? 1
-          : body.candidateOrdinal;
       await respondJson(route, {
         proposal: {
           diversityClaim: `Topology ${body.candidateOrdinal} uses a distinct panel program.`,
           program: programFor(body.candidateOrdinal),
+          provenance: {
+            modelId: "gpt-5.6-sol",
+            modelResponseId: `resp-e2e-program-${body.candidateOrdinal}`,
+            planHash: String(body.candidateOrdinal).repeat(64),
+            expanderVersion: "3",
+          },
         },
-        programStructureFingerprint: String(fingerprintOrdinal).repeat(64),
+        programStructureFingerprint: String(body.candidateOrdinal).repeat(64),
       });
       return;
     }
@@ -261,6 +328,7 @@ const installStudioMocks = async (
         ir: evaluation.ir,
         report: evaluation.report,
         score: evaluation.score,
+        diagnostic: null,
       });
       return;
     }
@@ -321,14 +389,10 @@ const installStudioMocks = async (
   return state;
 };
 
-test("runs access, sequential forge, real repair evidence, checkpoint, and exact exports", async ({
+test("runs access, single-design forge, real repair evidence, checkpoint, and exact exports", async ({
   page,
 }) => {
   const state = await installStudioMocks(page, { requireAccessOnce: true });
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
 
   await page.goto("/");
   await expect(
@@ -338,7 +402,7 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await prompt.fill(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
 
   const access = page.getByLabel("Demo access code");
   await expect(access).toBeVisible();
@@ -348,36 +412,29 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   await expect(
     page.getByText("Access granted.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Compare your designs." }),
+    page.getByRole("heading", { name: "Inspect your design." }),
   ).toBeFocused();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   await expect(page.getByTestId("fabrication-3d-preview")).toBeVisible();
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
-    ["two-panel-fold-a"],
-    ["two-panel-fold-a", "two-panel-fold-b"],
   ]);
-  expect(state.endpointOrder.slice(0, 11)).toEqual([
+  expect(state.endpointOrder.slice(0, 7)).toEqual([
     "health",
     "intent:access-required",
     "access",
     "intent",
     "programs:1",
     "compile:candidate-1-two-panel-fold-a",
-    "programs:2",
-    "compile:candidate-2-two-panel-fold-b",
-    "repair:candidate-2-two-panel-fold-b:1",
-    "programs:3",
-    "compile:candidate-3-two-panel-fold-c",
+    "repair:candidate-1-two-panel-fold-a:1",
   ]);
   expect(state.intentPrompts.at(-1)).toBe(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
 
-  await page.getByTestId("candidate-card").nth(1).click();
   await expect(
     page.getByText("What FoldForge fixed", { exact: true }),
   ).toBeVisible();
@@ -488,31 +545,37 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
     "json",
   ]);
   for (const request of state.exportRequests) {
-    expect(request.candidate.candidateId).toBe("candidate-2-two-panel-fold-b");
+    expect(request.candidate.candidateId).toBe("candidate-1-two-panel-fold-a");
     expect(request.candidate.selectionStatus).toBe("selected");
     expect(request.candidate.program.programId).toBe(
-      "program-winged-display-b",
+      "program-winged-display-a",
     );
     expect(request.candidate.provenance.appliedPatchIds).toEqual([
       "patch-wing-width-1",
     ]);
+    expect(request.candidate.provenance).toMatchObject({
+      modelId: "gpt-5.6-sol",
+      modelResponseId: "resp-e2e-program-1",
+      modelPlanHash: "1".repeat(64),
+      planExpanderVersion: "3",
+    });
   }
 
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
       ),
     )
     .not.toBeNull();
   const checkpoint = await page.evaluate(() =>
-    window.localStorage.getItem("foldforge.studio.checkpoint.v4"),
+    window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
   );
   expect(checkpoint).not.toContain("e2e-secret");
 
   await page.reload();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
-  await expect(page.getByTestId("candidate-card").nth(1)).toHaveAttribute(
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
+  await expect(page.getByTestId("candidate-card")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -523,23 +586,6 @@ test("runs access, sequential forge, real repair evidence, checkpoint, and exact
   ).toBeVisible();
   expect(state.accessCodes).toEqual(["e2e-secret"]);
   expect(state.unexpectedPaths).toEqual([]);
-  expect(consoleErrors.filter((entry) => !entry.includes("401"))).toEqual([]);
-});
-
-test("rejects duplicate program fingerprints before compile", async ({
-  page,
-}) => {
-  const state = await installStudioMocks(page, {
-    duplicateSecondFingerprint: true,
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(2);
-  expect(state.compileRequests.map((request) => request.candidateId)).toEqual([
-    "candidate-1-two-panel-fold-a",
-    "candidate-3-two-panel-fold-c",
-  ]);
-  expect(state.repairRequests).toEqual([]);
 });
 
 test("keeps prompt examples honest and provides a saved result when live generation is off", async ({
@@ -547,18 +593,35 @@ test("keeps prompt examples honest and provides a saved result when live generat
 }) => {
   const state = await installStudioMocks(page, { liveAiEnabled: false });
   await page.goto("/");
+  const starterIllustrations = page.locator("article img");
+  await expect(starterIllustrations).toHaveCount(3);
+  expect(
+    await starterIllustrations.evaluateAll((images) =>
+      images.every(
+        (image) =>
+          image instanceof HTMLImageElement &&
+          image.complete &&
+          image.naturalWidth > 0,
+      ),
+    ),
+  ).toBe(true);
   const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill("A completely arbitrary paper mechanism.");
   const flowerExample = page.locator("article").filter({
-    hasText: "Pop-up flower card",
+    hasText: "Flower mechanisms",
   });
-  await flowerExample.getByRole("button", { name: "Use this prompt" }).click();
+  await expect(
+    page.getByText("Prompt inspiration", { exact: true }),
+  ).toHaveCount(3);
+  await flowerExample
+    .getByRole("button", { name: "Load future prompt" })
+    .click();
   await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
-    "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+    "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope.",
   );
   await expect(
-    page.getByRole("button", { name: "Create 3 designs" }),
+    page.getByRole("button", { name: "Create design" }),
   ).toBeDisabled();
   await expect(
     page.getByText(
@@ -568,10 +631,12 @@ test("keeps prompt examples honest and provides a saved result when live generat
   ).toBeVisible();
 
   await page
-    .getByRole("button", { name: "Explore a finished example" })
+    .getByRole("button", { name: "Explore a prepared vertical-lift study" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Explore the pop-up flower card." }),
+    page.getByRole("heading", {
+      name: "Explore the vertical-lift flower study.",
+    }),
   ).toBeFocused();
   await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   await expect(
@@ -580,13 +645,13 @@ test("keeps prompt examples honest and provides a saved result when live generat
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("horizontal-to-vertical paper linkage", { exact: false }),
+    page.getByText("directly driven vertical tab", { exact: false }),
   ).toBeVisible();
   const savedAssembledPreview = page.getByTestId("fabrication-3d-preview");
   const savedInitialSignature = await savedAssembledPreview.getAttribute(
     "data-state-signature",
   );
-  await page.getByLabel("Open and close the design").fill("0.4");
+  await page.getByLabel("Lower and lift the design").fill("0.4");
   await expect(page.getByText("40%", { exact: true })).toBeVisible();
   await expect
     .poll(() => savedAssembledPreview.getAttribute("data-state-signature"))
@@ -598,7 +663,7 @@ test("keeps prompt examples honest and provides a saved result when live generat
   );
   await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
   const savedPatternPreview = page.getByRole("img", {
-    name: /Pop-up flower card pattern preview/iu,
+    name: /Vertical-lift flower study pattern preview/iu,
   });
   await expect(savedPatternPreview).toBeVisible();
   await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
@@ -625,14 +690,23 @@ test("keeps prompt examples honest and provides a saved result when live generat
   expect(savedDownload.suggestedFilename()).toMatch(/\.svg$/u);
 
   const duckExample = page.locator("article").filter({
-    hasText: "Duck-shaped gift box",
+    hasText: "Static duck crease pattern",
   });
   await duckExample
-    .getByRole("button", { name: "Open finished design" })
+    .getByRole("button", { name: "Open prepared crease study" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Explore the duck-shaped gift box." }),
+    page.getByRole("heading", {
+      name: "Explore the static duck crease pattern.",
+    }),
   ).toBeFocused();
+  await expect(
+    page.getByText("no open-and-close motion is modeled", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Download GLB" }),
+  ).toContainText("This static model has no animation clip.");
   const foldDownload = page.getByRole("button", { name: "Download FOLD" });
   await expect(foldDownload).toBeEnabled();
   const foldDownloadPromise = page.waitForEvent("download");
@@ -649,12 +723,12 @@ test("keeps prompt examples honest and provides a saved result when live generat
 test("fails safely on malformed strict API data", async ({ page }) => {
   await installStudioMocks(page, { malformedIntent: true });
   await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
   await expect(
     page.getByRole("alert").filter({
-      hasText: "could not be checked safely",
+      hasText: "intent response did not satisfy its strict contract",
     }),
-  ).toContainText("could not be checked safely");
+  ).toContainText("intent response did not satisfy its strict contract");
   await expect(
     page.getByRole("heading", {
       name: "Turn an idea into a buildable paper design.",
@@ -663,14 +737,65 @@ test("fails safely on malformed strict API data", async ({ page }) => {
   await expect(page.getByTestId("candidate-card")).toHaveCount(0);
 });
 
+test("never shows or exports prompt A after prompt B fails", async ({
+  page,
+}) => {
+  await installStudioMocks(page, { failIntentAfterFirst: true });
+  await page.goto("/");
+  const prompt = page.getByLabel("What do you want to make?");
+
+  await prompt.fill("Prompt A: make a folding display.");
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
+
+  await prompt.fill("Prompt B: make a different folding box.");
+  await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download SVG" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "The live model request failed safely.",
+    }),
+  ).toContainText("The live model request failed safely.");
+  await expect(page.getByTestId("candidate-card")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download SVG" })).toHaveCount(
+    0,
+  );
+
+  await expect
+    .poll(async () => {
+      const raw = await page.evaluate(() =>
+        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
+      );
+      if (!raw) return null;
+      const checkpoint = JSON.parse(raw) as {
+        readonly candidates: readonly unknown[];
+        readonly prompt: string;
+        readonly resultBinding: unknown;
+      };
+      return {
+        candidateCount: checkpoint.candidates.length,
+        prompt: checkpoint.prompt,
+        resultBinding: checkpoint.resultBinding,
+      };
+    })
+    .toEqual({
+      candidateCount: 0,
+      prompt: "Prompt B: make a different folding box.",
+      resultBinding: null,
+    });
+});
+
 test("has no horizontal overflow with results at required widths", async ({
   page,
 }) => {
   await installStudioMocks(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
 
   for (const width of [390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -705,7 +830,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
     await prompt.evaluate((element) => getComputedStyle(element).outlineWidth),
   ).not.toBe("0px");
   const duckExample = page.locator("article").filter({
-    hasText: "Duck-shaped gift box",
+    hasText: "Static duck crease pattern",
   });
   const duckPromptButton = duckExample.getByRole("button", {
     name: "Use this prompt",
@@ -713,7 +838,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
   await duckPromptButton.focus();
   await page.keyboard.press("Enter");
   await expect(prompt).toHaveValue(
-    "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
+    "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.",
   );
 
   const styles = await page.evaluate(() => {
@@ -748,7 +873,7 @@ test("has no serious accessibility violations before or after forging", async ({
 
   expect(await seriousViolations()).toEqual([]);
 
-  await page.getByRole("button", { name: "Create 3 designs" }).click();
-  await expect(page.getByTestId("candidate-card")).toHaveCount(3);
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   expect(await seriousViolations()).toEqual([]);
 });

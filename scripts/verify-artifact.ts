@@ -88,6 +88,8 @@ for (const entry of manifest.showcases) {
       deterministicSeed: manifest.seed + index,
       modelId: null,
       modelResponseId: null,
+      modelPlanHash: null,
+      planExpanderVersion: null,
       parentCandidateId: null,
       appliedPatchIds: [],
       repairCycle: 0,

@@ -1200,7 +1200,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
         label: "Hard form",
         semanticPartIds: ["part-base"],
         requiredLandmarks: ["base"],
-        evaluation: "landmark_geometry",
+        evaluation: "human_review",
       },
       {
         constraintId: "constraint-soft-form",
@@ -1388,7 +1388,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
         source: "user",
         geometryRefs: [
           { kind: "panel", id: "panel-base" },
-          { kind: "body", id: "body-base" },
+          { kind: "body", id: "body-wing" },
         ],
         minimumAreaMm2: 0,
         during: "rest",
@@ -1406,7 +1406,7 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
       {
         constraintId: "constraint-form-pass",
         kind: "recognizable_form",
-        hard: false,
+        hard: true,
         source: "user",
         label: "Known parts",
         semanticPartIds: ["part-base", "part-wing"],
@@ -1480,6 +1480,31 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
       "semantics",
       "semantics.requested_size#width",
     );
+  });
+
+  it("matches requested envelope dimensions independently of world orientation", () => {
+    const ir = compile();
+    const report = verifyFabricationIr(
+      {
+        ...ir,
+        requestedSize: {
+          widthMm: ir.requestedSize.widthMm,
+          heightMm: ir.requestedSize.depthMm ?? 1,
+          depthMm: ir.requestedSize.heightMm,
+        },
+      },
+      "candidate-rotated-envelope",
+    );
+    expect(report.valid).toBe(true);
+    expect(
+      report.metrics
+        .filter((metric) => metric.metricId.startsWith("requested_size_"))
+        .map((metric) => metric.value),
+    ).toEqual([
+      ir.requestedSize.widthMm,
+      ir.requestedSize.depthMm,
+      ir.requestedSize.heightMm,
+    ]);
   });
 });
 

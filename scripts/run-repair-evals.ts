@@ -308,7 +308,7 @@ const repairedWithinThree = results.filter(
     result.status === "passed" && result.finalValid && result.cycles <= 3,
 ).length;
 const report = {
-  reportVersion: 1,
+  reportVersion: 2,
   mode: "fabrication-bounded-repair-offline",
   fixtureCount: results.length,
   categoryCounts: Object.fromEntries(
@@ -340,10 +340,11 @@ const report = {
         result.traceSources.includes("CODE"),
     ),
     adversarialPatchesRejected: acceptedAdversarialPatchCount === 0,
-    infeasibleOnDuplicateState: nonRepairableResults.every(
+    infeasibleOnNoProgressState: nonRepairableResults.every(
       (result) =>
         result.status === "infeasible" &&
-        result.reason === "Duplicate canonical repair input was blocked.",
+        (result.reason === "Duplicate canonical repair input was blocked." ||
+          result.reason === "Deterministic patch rejection: patch.noop."),
     ),
   },
 };

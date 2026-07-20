@@ -1,0 +1,86 @@
+{
+  "version": 5,
+  "evidenceStatus": "partial_live_failure_with_compiler_source_gap",
+  "model": "gpt-5.6-sol",
+  "paidBuildSha": "1041e136c6233ab8eb04512d3087178b3d548266",
+  "workingTreeWasClean": true,
+  "sourceArtifactHashes": {
+    "readinessSha256": "549745ea06919363b17a67fee220809fed26420c5685060601e07fbcf9576be5",
+    "originalSealedLedgerSha256": "7992cf2258b3b67501a7019d11d44d6fa7eb2b6af502f4f2f951605f1564bfa7",
+    "firstContinuationLedgerSha256": "fd463647ee8e49028b7c18fdf443dadb329f45e4fcb7bbe30397296d026b6d4f",
+    "secondContinuationLedgerSha256": "2c74d880f342cf8ebb30f5a5e36a356813e0e3ba5a58ab02429a50ad2cbf55f2",
+    "thirdContinuationLedgerSha256": "dd52b2d2d7d409c157b86f8893bd1f0d7b4b1c43e2a8d0ecd7b6e9df1ad8b106",
+    "originalToFirstContinuationClaimSha256": "1dcf54e6b58bc301aff8397390148c34bff8046d67be82e7dca57cbdd5e90682",
+    "firstToSecondContinuationClaimSha256": "6fc587f16e05a6648d774c0c6fefb1cb4e0aa4bbd85084910e989da9b7c3ee5a",
+    "secondToThirdContinuationClaimSha256": "9cbe81f4bbe823f13c12d6fd318021d892607dfd4b7550b1dc49cd07e298a808"
+  },
+  "sourceAvailability": {
+    "compilerReport": {
+      "status": "unavailable_overwritten_by_offline_run",
+      "historicalSha256": "161f44f0f405a0566618dfb8ec50d338ce7f2d5fb88901060ea35c72fd3c101b",
+      "claimBoundary": "The retained metrics are a sanitized summary backed by the cumulative paid ledger, not a currently reproducible raw compiler report."
+    },
+    "readinessAndLedgerArtifacts": "available_locally_ignored_not_public"
+  },
+  "compilerContract": {
+    "passed": true,
+    "evidenceClass": "summary_only_source_report_unavailable",
+    "sourceReportAvailable": false,
+    "caseCount": 3,
+    "completedCaseCount": 3,
+    "supportedCaseCount": 1,
+    "boundaryCaseCount": 2,
+    "schemaValidityRate": 1,
+    "explicitConstraintRecallRate": 1,
+    "unitNormalizationAccuracyRate": 1,
+    "correctStatusRate": 1,
+    "correctRefusalOrClarificationRate": 1,
+    "chargedCostUsd": 0.11435875
+  },
+  "readinessAttempt": {
+    "startedAtIso": "2026-07-18T00:30:04.276Z",
+    "selectedCaseCount": 1,
+    "passedCount": 0,
+    "releaseGatePassed": false,
+    "failedCaseId": "live-hinged-counter-display",
+    "failureStage": "first_program_proposal",
+    "failureCode": "budget_usage_invalid",
+    "programResponseStatus": "incomplete",
+    "programIncompleteReason": "max_output_tokens",
+    "intentChargedCostUsd": 0.08897875,
+    "programConservativeChargeUsd": 0.687725,
+    "durationMs": 198498.084,
+    "explicitConstraintChecksPassed": 18,
+    "explicitConstraintCheckCount": 18,
+    "generatedCandidateCount": 0,
+    "verifiedCandidateCount": 0,
+    "repairedCandidateCount": 0,
+    "exportFormats": []
+  },
+  "sealedBudget": {
+    "builderAuthorizedBudgetUsd": 4,
+    "preRequestReservationCeilingUsd": 3.7,
+    "carriedCostBeforeFinalContinuationUsd": 2.722365,
+    "conservativeChargedCostUsd": 3.6134275,
+    "remainingUnderReservationCeilingUsd": 0.0865725,
+    "requestCount": 24,
+    "successfulIntentRequestCount": 20,
+    "failedOrUnsettledProgramRequestCount": 4,
+    "continuationCount": 3,
+    "haltedReason": "usage_invalid",
+    "furtherPaidRequestsAllowedUnderEnforcedMaximum": false
+  },
+  "privacy": {
+    "containsPrompts": false,
+    "containsModelBodies": false,
+    "containsResponseIds": false,
+    "containsCredentials": false
+  },
+  "claimsNotEstablished": [
+    "live program generation",
+    "live verifier-grounded repair",
+    "live selected artifact export",
+    "live end-to-end prompt-to-fabrication success",
+    "sealed release readiness"
+  ]
+}

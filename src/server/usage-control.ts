@@ -1,6 +1,104 @@
-import type { AccessSessionSubject } from "@/server/access";
-
 const DEFAULT_MAXIMUM_SESSIONS = 2_000;
+
+export interface UsageControlSubject {
+  readonly value: string;
+}
+
+export interface RecentOperationPolicy {
+  readonly windowMs: number;
+  readonly maximumEntries?: number;
+}
+
+interface RecentOperationEntry {
+  readonly operationKeys: Set<string>;
+  readonly resetsAtMs: number;
+}
+
+export type RecentOperationDecision =
+  | {
+      readonly allowed: true;
+      readonly reservation: RecentOperationReservation;
+    }
+  | {
+      readonly allowed: false;
+      readonly reason: "capacity" | "duplicate";
+      readonly retryAfterMs: number;
+    };
+
+export interface RecentOperationReservation {
+  rollback(): void | Promise<void>;
+}
+
+/**
+ * A best-effort server-instance guard against replaying a paid operation in the
+ * same user-visible forge attempt. Durable account limits remain the outer cap.
+ */
+export class BestEffortRecentOperationGuard {
+  private readonly entries = new Map<string, RecentOperationEntry>();
+  private readonly maximumEntries: number;
+  private readonly windowMs: number;
+
+  constructor(policy: RecentOperationPolicy) {
+    this.windowMs = positiveInteger(policy.windowMs, "Operation window");
+    this.maximumEntries = positiveInteger(
+      policy.maximumEntries ?? DEFAULT_MAXIMUM_SESSIONS,
+      "Maximum operation entries",
+    );
+  }
+
+  consume(
+    subject: UsageControlSubject,
+    attemptId: string,
+    operationKey: string,
+    nowMs = Date.now(),
+  ): RecentOperationDecision {
+    const now = nonNegativeInteger(nowMs, "Operation time");
+    this.pruneExpired(now);
+    const entryKey = `${subject.value}:${attemptId}`;
+    const current = this.entries.get(entryKey);
+    if (current?.operationKeys.has(operationKey)) {
+      return {
+        allowed: false,
+        reason: "duplicate",
+        retryAfterMs: Math.max(1, current.resetsAtMs - now),
+      };
+    }
+    if (!current && this.entries.size >= this.maximumEntries) {
+      return {
+        allowed: false,
+        reason: "capacity",
+        retryAfterMs: this.windowMs,
+      };
+    }
+    const entry = current ?? {
+      operationKeys: new Set<string>(),
+      resetsAtMs: now + this.windowMs,
+    };
+    entry.operationKeys.add(operationKey);
+    this.entries.set(entryKey, entry);
+    let active = true;
+    return {
+      allowed: true,
+      reservation: {
+        rollback: () => {
+          if (!active) return;
+          active = false;
+          const reservedEntry = this.entries.get(entryKey);
+          reservedEntry?.operationKeys.delete(operationKey);
+          if (reservedEntry?.operationKeys.size === 0) {
+            this.entries.delete(entryKey);
+          }
+        },
+      },
+    };
+  }
+
+  private pruneExpired(nowMs: number): void {
+    for (const [key, entry] of this.entries) {
+      if (entry.resetsAtMs <= nowMs) this.entries.delete(key);
+    }
+  }
+}
 
 export interface SessionQuotaPolicy {
   readonly windowMs: number;
@@ -70,7 +168,7 @@ export class BestEffortSessionQuota {
   }
 
   consume(
-    subject: AccessSessionSubject,
+    subject: UsageControlSubject,
     tokenCost: number,
     nowMs = Date.now(),
   ): SessionQuotaDecision {
@@ -143,7 +241,7 @@ export interface ConcurrencyPolicy {
 }
 
 export interface ConcurrencyLease {
-  release(): void;
+  release(): void | Promise<void>;
 }
 
 export type ConcurrencyDecision =
@@ -175,7 +273,7 @@ export class BestEffortConcurrencyGate {
     }
   }
 
-  tryAcquire(subject: AccessSessionSubject): ConcurrencyDecision {
+  tryAcquire(subject: UsageControlSubject): ConcurrencyDecision {
     if (this.activeGlobal >= this.maximumGlobal) {
       return { allowed: false, reason: "global_concurrency" };
     }
@@ -202,3 +300,114 @@ export class BestEffortConcurrencyGate {
     };
   }
 }
+
+export interface QuotaStoreInput {
+  readonly bucket: string;
+  readonly policy: SessionQuotaPolicy;
+  readonly subject: UsageControlSubject;
+  readonly tokenCost: number;
+  readonly nowMs: number;
+}
+
+export interface RecentOperationStoreInput {
+  readonly bucket: string;
+  readonly policy: RecentOperationPolicy;
+  readonly subject: UsageControlSubject;
+  readonly attemptId: string;
+  readonly operationKey: string;
+  readonly nowMs: number;
+}
+
+export interface ConcurrencyStoreInput {
+  readonly bucket: string;
+  readonly policy: ConcurrencyPolicy;
+  readonly subject: UsageControlSubject;
+}
+
+/**
+ * Atomic usage-control boundary for the live routes. A deployment can inject a
+ * durable implementation without changing authorization logic. Implementations
+ * must make each method atomic for its bucket and subject.
+ */
+export interface LiveUsageControlStore {
+  consumeQuota(input: QuotaStoreInput): Promise<SessionQuotaDecision>;
+  consumeRecentOperation(
+    input: RecentOperationStoreInput,
+  ): Promise<RecentOperationDecision>;
+  tryAcquireConcurrency(
+    input: ConcurrencyStoreInput,
+  ): Promise<ConcurrencyDecision>;
+}
+
+const policyKey = (values: readonly number[]): string => values.join(":");
+
+/**
+ * Best-effort process-local implementation. It limits one warm server process,
+ * not an entire horizontally scaled deployment and therefore is not a hard
+ * account-level or dollar spending cap.
+ */
+export class BestEffortProcessUsageControlStore implements LiveUsageControlStore {
+  private readonly concurrencyBuckets = new Map<
+    string,
+    BestEffortConcurrencyGate
+  >();
+  private readonly quotaBuckets = new Map<string, BestEffortSessionQuota>();
+  private readonly recentOperationBuckets = new Map<
+    string,
+    BestEffortRecentOperationGuard
+  >();
+
+  async consumeQuota(input: QuotaStoreInput): Promise<SessionQuotaDecision> {
+    const key = `${input.bucket}:${policyKey([
+      input.policy.windowMs,
+      input.policy.maximumRequests,
+      input.policy.maximumTokens,
+      input.policy.maximumSessions ?? DEFAULT_MAXIMUM_SESSIONS,
+    ])}`;
+    let quota = this.quotaBuckets.get(key);
+    if (!quota) {
+      quota = new BestEffortSessionQuota(input.policy);
+      this.quotaBuckets.set(key, quota);
+    }
+    return quota.consume(input.subject, input.tokenCost, input.nowMs);
+  }
+
+  async consumeRecentOperation(
+    input: RecentOperationStoreInput,
+  ): Promise<RecentOperationDecision> {
+    const key = `${input.bucket}:${policyKey([
+      input.policy.windowMs,
+      input.policy.maximumEntries ?? DEFAULT_MAXIMUM_SESSIONS,
+    ])}`;
+    let guard = this.recentOperationBuckets.get(key);
+    if (!guard) {
+      guard = new BestEffortRecentOperationGuard(input.policy);
+      this.recentOperationBuckets.set(key, guard);
+    }
+    return guard.consume(
+      input.subject,
+      input.attemptId,
+      input.operationKey,
+      input.nowMs,
+    );
+  }
+
+  async tryAcquireConcurrency(
+    input: ConcurrencyStoreInput,
+  ): Promise<ConcurrencyDecision> {
+    const key = `${input.bucket}:${policyKey([
+      input.policy.maximumGlobal,
+      input.policy.maximumPerSession,
+    ])}`;
+    let gate = this.concurrencyBuckets.get(key);
+    if (!gate) {
+      gate = new BestEffortConcurrencyGate(input.policy);
+      this.concurrencyBuckets.set(key, gate);
+    }
+    return gate.tryAcquire(input.subject);
+  }
+}
+
+/** Shared only by the production route singleton; tests can inject a backend. */
+export const processUsageControlStore =
+  new BestEffortProcessUsageControlStore();

@@ -20,6 +20,8 @@ const provenance = {
   deterministicSeed: 7,
   modelId: null,
   modelResponseId: null,
+  modelPlanHash: null,
+  planExpanderVersion: null,
   parentCandidateId: null,
   appliedPatchIds: [],
   repairCycle: 0,

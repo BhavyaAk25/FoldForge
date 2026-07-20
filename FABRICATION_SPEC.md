@@ -1,6 +1,6 @@
 # FoldForge fabrication compiler specification
 
-Status: **implemented and release-tested offline; live GPT-5.6 Sol evaluation pending user activation**. This document is normative. “Must” and “must not” are release requirements.
+Status: **implemented and release-tested offline; paid intent evaluation passed, but live program-generation readiness failed and remains gated**. This document is normative. “Must” and “must not” are release requirements.
 
 ## 1. Scope
 
@@ -12,14 +12,15 @@ The compiler reasons about dimensions, connectivity, rigid transforms, collision
 
 Every external object must include an exact schema version. Unknown or partially migrated versions fail closed.
 
-| Contract               | Authority                                        | Purpose                                                                                                       |
-| ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `FabricationIntentV1`  | User constraints normalized by code              | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns            |
-| `FabricationProgramV1` | Untrusted Sol proposal validated by code         | Panels, joints, connectors, driver, couplings, outputs, semantic requirements, and design rationale           |
-| `FabricationIRV1`      | Deterministic compiler                           | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs |
-| `VerificationReportV2` | Deterministic verifier                           | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics        |
-| `ProgramPatchV1`       | Untrusted Sol proposal validated/applied by code | At most three typed, local operations against existing program identifiers                                    |
-| `CandidateV2`          | Deterministic pipeline                           | Intent/program/IR/report/score bundle with canonical hashes and provenance                                    |
+| Contract               | Authority                                        | Purpose                                                                                                                  |
+| ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `FabricationIntentV1`  | User constraints normalized by code              | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns                       |
+| `FabricationPlanV1`    | Untrusted Sol proposal validated by code         | Compact panel, transform, mechanism, semantic-part, and assembly-strategy choices                                        |
+| `FabricationProgramV1` | Deterministic plan expander                      | Canonical complete program with intent fields, provenance, assembly order, and all plan geometry                         |
+| `FabricationIRV1`      | Deterministic compiler                           | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs            |
+| `VerificationReportV2` | Deterministic verifier                           | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                   |
+| `ProgramPatchV1`       | Untrusted Sol proposal validated/applied by code | At most three typed, local operations against existing program identifiers                                               |
+| `CandidateV2`          | Deterministic pipeline                           | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, plan hash, and expander provenance |
 
 The canonical serializer must:
 

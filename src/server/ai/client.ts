@@ -1,16 +1,34 @@
 import OpenAI from "openai";
 
-import { assertLiveModelEnabled } from "@/server/live-model";
+import {
+  assertLiveEvaluationModelEnabled,
+  assertLiveModelEnabled,
+} from "@/server/live-model";
 
-let client: OpenAI | null = null;
+export const OPENAI_PRODUCTION_TIMEOUT_MS = 180_000;
+export const OPENAI_PAID_EVALUATION_TIMEOUT_MS = 180_000;
 
-export const getOpenAIClient = (): OpenAI => {
+let productionClient: OpenAI | null = null;
+let paidEvaluationClient: OpenAI | null = null;
+
+export const getOpenAIClient = (
+  options: { readonly paidEvaluation?: boolean } = {},
+): OpenAI => {
+  if (options.paidEvaluation) {
+    assertLiveEvaluationModelEnabled();
+    paidEvaluationClient ??= new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      maxRetries: 0,
+      timeout: OPENAI_PAID_EVALUATION_TIMEOUT_MS,
+    });
+    return paidEvaluationClient;
+  }
+
   assertLiveModelEnabled();
-
-  client ??= new OpenAI({
+  productionClient ??= new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     maxRetries: 0,
-    timeout: 60_000,
+    timeout: OPENAI_PRODUCTION_TIMEOUT_MS,
   });
-  return client;
+  return productionClient;
 };

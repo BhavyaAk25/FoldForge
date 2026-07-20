@@ -8,6 +8,8 @@ import type {
   FoldJointV1,
   Point2Mm,
 } from "../types";
+import { PATH_EQUIVALENCE_TOLERANCE_MM } from "../path-topology";
+import { segmentsEquivalent, transformPoint2 } from "../polygon";
 import {
   createTextArtifact,
   formatExportNumber,
@@ -58,7 +60,14 @@ export type FoldExportResult =
   | { readonly status: "omitted"; readonly reason: FoldOmissionReason }
   | { readonly status: "failed"; readonly error: FabricationExportError };
 
-type FoldAssignment = "C" | "M" | "V";
+export const FOLD_EXTENSION_KEYS = {
+  sourceCandidateId: "foldforge:sourceCandidateId",
+  sourceIrHash: "foldforge:sourceIrHash",
+  payloadSha256: "foldforge:payloadSha256",
+  edgePathIds: "edges_foldforge:pathId",
+} as const;
+
+type FoldAssignment = "B" | "C" | "M" | "V";
 
 interface FoldEdgeAccumulator {
   readonly vertices: [number, number][];
@@ -88,6 +97,29 @@ const omitCompatibility = (
 const pointKey = (point: Point2Mm): string =>
   `${formatExportNumber(point.xMm)},${formatExportNumber(point.yMm)}`;
 
+interface BoundarySegment {
+  readonly start: Point2Mm;
+  readonly end: Point2Mm;
+}
+
+const panelBoundarySegments = (
+  ir: FabricationIRV1,
+): ReadonlyMap<string, readonly BoundarySegment[]> =>
+  new Map(
+    ir.panels.map((panel) => {
+      const points = panel.contour.vertices.map((point) =>
+        transformPoint2(point, panel.flatTransform),
+      );
+      return [
+        panel.panelId,
+        points.map((start, index) => ({
+          start,
+          end: points[(index + 1) % points.length]!,
+        })),
+      ] as const;
+    }),
+  );
+
 const vertexIndex = (
   accumulator: FoldEdgeAccumulator,
   point: Point2Mm,
@@ -107,7 +139,7 @@ const vertexIndex = (
 const addPathEdges = (
   accumulator: FoldEdgeAccumulator,
   path: FabricationPathV1,
-  assignment: FoldAssignment,
+  assignmentForEdge: (start: Point2Mm, end: Point2Mm) => FoldAssignment,
   angleDeg: number,
 ): void => {
   const edgeCount = path.closed ? path.points.length : path.points.length - 1;
@@ -119,7 +151,7 @@ const addPathEdges = (
     const endIndex = vertexIndex(accumulator, end);
     if (startIndex === endIndex) continue;
     accumulator.edges.push([startIndex, endIndex]);
-    accumulator.assignments.push(assignment);
+    accumulator.assignments.push(assignmentForEdge(start, end));
     accumulator.angles.push(angleDeg);
     accumulator.pathIds.push(path.pathId);
   }
@@ -281,11 +313,31 @@ export const exportFabricationFold = (
     pathIds: [],
     vertexByPoint: new Map(),
   };
+  const boundarySegmentsByPanelId = panelBoundarySegments(ir);
   for (const path of [...ir.paths].sort((left, right) =>
     left.pathId.localeCompare(right.pathId),
   )) {
     if (path.kind === "cut") {
-      addPathEdges(accumulator, path, "C", 0);
+      const panelBoundarySegments = path.panelId
+        ? boundarySegmentsByPanelId.get(path.panelId)
+        : undefined;
+      addPathEdges(
+        accumulator,
+        path,
+        (start, end) =>
+          panelBoundarySegments?.some((boundary) =>
+            segmentsEquivalent(
+              start,
+              end,
+              boundary.start,
+              boundary.end,
+              PATH_EQUIVALENCE_TOLERANCE_MM,
+            ),
+          )
+            ? "B"
+            : "C",
+        0,
+      );
       continue;
     }
     const joint = foldByCreasePathId.get(path.pathId);
@@ -293,7 +345,7 @@ export const exportFabricationFold = (
     addPathEdges(
       accumulator,
       path,
-      joint.foldDirection === "mountain" ? "M" : "V",
+      () => (joint.foldDirection === "mountain" ? "M" : "V"),
       foldAngle(joint),
     );
   }
@@ -309,7 +361,7 @@ export const exportFabricationFold = (
     // M/V assignment in common validators. A crease-pattern frame can omit
     // this optional array when the source only declares fold direction.
     ...(hasDeclaredFoldAngle ? { edges_foldAngle: accumulator.angles } : {}),
-    edges_foldforgePathId: accumulator.pathIds,
+    [FOLD_EXTENSION_KEYS.edgePathIds]: accumulator.pathIds,
   };
   const document = {
     file_spec: 1.2,
@@ -317,11 +369,14 @@ export const exportFabricationFold = (
     file_title: prepared.sourceCandidateId,
     file_description: `Source IR SHA-256 ${prepared.sourceIrHash}`,
     frame_classes: ["creasePattern"],
-    frame_attributes: ["2D", "cuts"],
+    frame_attributes: [
+      "2D",
+      accumulator.assignments.includes("C") ? "cuts" : "noCuts",
+    ],
     frame_unit: "mm",
-    foldforge_sourceCandidateId: prepared.sourceCandidateId,
-    foldforge_sourceIrHash: prepared.sourceIrHash,
-    foldforge_payloadSha256: sha256Hex(canonicalSerialize(graph)),
+    [FOLD_EXTENSION_KEYS.sourceCandidateId]: prepared.sourceCandidateId,
+    [FOLD_EXTENSION_KEYS.sourceIrHash]: prepared.sourceIrHash,
+    [FOLD_EXTENSION_KEYS.payloadSha256]: sha256Hex(canonicalSerialize(graph)),
     ...graph,
   };
   const text = `${canonicalSerialize(document)}\n`;

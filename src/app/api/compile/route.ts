@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
+import {
+  compilationFailureDiagnostic,
+  verificationFailureDiagnostic,
+} from "@/server/api/forge-diagnostic";
 import { apiError, parseRouteJsonBody } from "@/server/api/response";
 import { API_BODY_LIMIT_BYTES } from "@/server/api/security-policy";
 import { safeSecurityError } from "@/server/api/security-response";
@@ -55,6 +59,7 @@ export const POST = async (request: Request): Promise<NextResponse> => {
           ir: null,
           report: null,
           score: null,
+          diagnostic: compilationFailureDiagnostic(compiled.error.kind),
         }),
       );
     }
@@ -68,6 +73,9 @@ export const POST = async (request: Request): Promise<NextResponse> => {
         ir: compiled.value,
         report,
         score,
+        diagnostic: report.valid
+          ? null
+          : verificationFailureDiagnostic({ stage: "compile", report }),
       }),
     );
   });

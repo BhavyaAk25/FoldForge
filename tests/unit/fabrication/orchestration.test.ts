@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import type {
   FabricationIntentModel,
   FabricationProgramModel,
@@ -14,6 +15,13 @@ import {
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 
 describe("fabrication AI orchestration", () => {
+  const proposalProvenance = {
+    modelId: "gpt-5.6-sol",
+    modelResponseId: "resp-orchestration",
+    planHash: "a".repeat(64),
+    expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+  } as const;
+
   it("validates and traces strict prompt compilation", async () => {
     const model: FabricationIntentModel = {
       compileIntent: vi.fn().mockResolvedValue(fixtureIntent()),
@@ -74,6 +82,7 @@ describe("fabrication AI orchestration", () => {
         Promise.resolve({
           diversityClaim: `Candidate ${ordinal}`,
           program: proposals[ordinal - 1],
+          provenance: proposalProvenance,
         }),
       ),
     };
@@ -93,6 +102,31 @@ describe("fabrication AI orchestration", () => {
       status: "rejected",
       reason: "The model repeated the same normalized structure.",
     });
+  });
+
+  it("publishes each completed proposal before a later request fails", async () => {
+    const completed: string[] = [];
+    const model: FabricationProgramModel = {
+      generateProgram: vi
+        .fn()
+        .mockResolvedValueOnce({
+          diversityClaim: "First",
+          program: fixtureProgram(),
+          provenance: proposalProvenance,
+        })
+        .mockRejectedValueOnce(new Error("provider failure")),
+    };
+
+    await expect(
+      generateDistinctFabricationPrograms(
+        fixtureIntent(),
+        "ff_test_subject",
+        model,
+        3,
+        (outcome) => completed.push(outcome.structureFingerprint),
+      ),
+    ).rejects.toThrow("provider failure");
+    expect(completed).toHaveLength(1);
   });
 
   it("returns immediately when deterministic verification already passes", async () => {
@@ -133,6 +167,35 @@ describe("fabrication AI orchestration", () => {
       status: "infeasible",
       ir: null,
       report: null,
+    });
+    expect(model.diagnoseRepair).not.toHaveBeenCalled();
+  });
+
+  it("does not spend a model call on failures with no bounded repair path", async () => {
+    const model: FabricationRepairModel = {
+      diagnoseRepair: vi.fn().mockRejectedValue(new Error("must not run")),
+    };
+    const source = fixtureProgram();
+    const program = {
+      ...source,
+      blueprint: {
+        ...source.blueprint,
+        driver: source.blueprint.driver
+          ? { ...source.blueprint.driver, control: "rotate" as const }
+          : null,
+      },
+    };
+    const result = await runFabricationRepairLoop(
+      fixtureIntent(),
+      program,
+      "candidate-nonrepairable",
+      "ff_test_subject",
+      model,
+    );
+
+    expect(result).toMatchObject({
+      status: "infeasible",
+      reason: "No hard verifier failure exposes a bounded repair path.",
     });
     expect(model.diagnoseRepair).not.toHaveBeenCalled();
   });

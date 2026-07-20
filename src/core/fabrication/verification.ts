@@ -37,13 +37,24 @@ import {
   transformPoint2,
   triangulatePolygonWithHoles,
 } from "./polygon";
+import { pointTriangleDistanceMm } from "./spatial";
 import {
   ExportEquivalenceCheckV2Schema,
   FabricationIRV1Schema,
   VerificationReportV2Schema,
 } from "./schemas";
-import { triangleMinimumDistanceMm } from "./spatial";
 import { buildDirectedBodyTopology } from "./topology";
+import {
+  boundsForPoints,
+  dimensionValue,
+  mirroredBodyGeometryError,
+  panelIdsForRef,
+  panelPairContactAreaMm2,
+  panelPairDistanceMm,
+  pointsForRefs,
+  statesForDuring,
+  unorderedPairKey,
+} from "./verification-geometry";
 import type {
   CheckStatus,
   ExportEquivalenceCheckV2,
@@ -69,13 +80,14 @@ const MINIMUM_CONNECTOR_CLEARANCE_MM = 0.2;
 const CONNECTION_TOLERANCE_MM = 0.1;
 const JOINT_ANCHOR_TOLERANCE_MM = 1;
 const CONNECTOR_ALIGNMENT_COSINE_TOLERANCE = 1e-6;
+const CONTACT_LOCUS_TOLERANCE_MM = 1e-5;
 const REQUESTED_SIZE_TOLERANCE_MM = 2;
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/u;
 const MAXIMUM_REPORT_CHECKS = 512;
 const MAXIMUM_REPORT_FAILURES = 256;
 
 const connectorPairMetricId = (
-  prefix: "axis" | "fit_l" | "fit_w" | "span",
+  prefix: "axis" | "fit_l" | "fit_w" | "reach" | "span",
   firstConnectorId: string,
   secondConnectorId: string,
 ): string =>
@@ -1578,6 +1590,24 @@ const connectorSpanAlignment = (
     : null;
 };
 
+const tabInsertionReachMm = (
+  tab: Extract<FabricationIRV1["connectors"][number], { readonly kind: "tab" }>,
+): number => {
+  const deltaXmm = tab.rootEdge.end.xMm - tab.rootEdge.start.xMm;
+  const deltaYmm = tab.rootEdge.end.yMm - tab.rootEdge.start.yMm;
+  const rootLengthMm = Math.hypot(deltaXmm, deltaYmm);
+  if (rootLengthMm <= 1e-12) return 0;
+  return Math.max(
+    ...tab.contour.vertices.map(
+      (point) =>
+        Math.abs(
+          deltaXmm * (tab.rootEdge.start.yMm - point.yMm) -
+            (tab.rootEdge.start.xMm - point.xMm) * deltaYmm,
+        ) / rootLengthMm,
+    ),
+  );
+};
+
 const distancePointToSegment3Mm = (
   point: Point3Mm,
   start: Point3Mm,
@@ -1783,6 +1813,57 @@ const validateConnections = (
           ],
           repairableProgramPaths: [],
         });
+      }
+      // A reciprocal pair on one panel is a repeatable external module port:
+      // each exported copy supplies one half to the next copy. Distinct-panel
+      // pairs belong to this assembly and must be reachable in its home pose.
+      if (tabPanel.panelId !== slotPanel.panelId) {
+        const tabAnchor = connectorWorldAnchor(tab, tabPanel, home.value);
+        const slotAnchor = connectorWorldAnchor(mate, slotPanel, home.value);
+        const mateDistanceMm =
+          tabAnchor && slotAnchor
+            ? Math.hypot(
+                tabAnchor.xMm - slotAnchor.xMm,
+                tabAnchor.yMm - slotAnchor.yMm,
+                tabAnchor.zMm - slotAnchor.zMm,
+              )
+            : Number.POSITIVE_INFINITY;
+        const maximumMateDistanceMm =
+          tabInsertionReachMm(tab) +
+          mate.widthMm / 2 +
+          Math.max(tab.clearanceMm, mate.clearanceMm);
+        state.metrics.push({
+          metricId: connectorPairMetricId(
+            "reach",
+            tab.connectorId,
+            mate.connectorId,
+          ),
+          value: mateDistanceMm,
+          unit: "mm",
+          geometryRefs: [
+            geometryRef("connector", tab.connectorId),
+            geometryRef("connector", mate.connectorId),
+          ],
+        });
+        if (mateDistanceMm > maximumMateDistanceMm) {
+          addFailure(state, {
+            failureId: `connections.connector_mate_reach#${tab.connectorId}:${mate.connectorId}`,
+            category: "manufacturability",
+            stage: "connections",
+            severity: "hard",
+            message:
+              "The assembled slot lies beyond the tab's available insertion reach.",
+            actual: measured(mateDistanceMm, "mm"),
+            expected: measured(maximumMateDistanceMm, "mm"),
+            geometryRefs: [
+              geometryRef("connector", tab.connectorId),
+              geometryRef("connector", mate.connectorId),
+              geometryRef("panel", tabPanel.panelId),
+              geometryRef("panel", slotPanel.panelId),
+            ],
+            repairableProgramPaths: [],
+          });
+        }
       }
     }
   }
@@ -2676,190 +2757,567 @@ const validateMotion = (
   };
 };
 
-const panelPairDistanceMm = (
-  firstPanelId: string,
-  secondPanelId: string,
-  state: EvaluatedMotionState,
-): number => {
-  const firstTriangles = state.panelTriangles[firstPanelId]!;
-  const secondTriangles = state.panelTriangles[secondPanelId]!;
-  let minimumMm = Number.POSITIVE_INFINITY;
-  for (const first of firstTriangles) {
-    for (const second of secondTriangles) {
-      minimumMm = Math.min(
-        minimumMm,
-        triangleMinimumDistanceMm(
-          { first: first[0], second: first[1], third: first[2] },
-          { first: second[0], second: second[1], third: second[2] },
-        ),
-      );
-    }
-  }
-  return minimumMm;
-};
+type PanelTriangle3 = readonly [Point3Mm, Point3Mm, Point3Mm];
+type Segment3Mm = readonly [Point3Mm, Point3Mm];
 
-type Triangle3 = readonly [Point3Mm, Point3Mm, Point3Mm];
-
-interface ProjectedPoint {
-  readonly x: number;
-  readonly y: number;
+interface ReciprocalConnectorPair {
+  readonly tab: Extract<
+    FabricationIRV1["connectors"][number],
+    { readonly kind: "tab" }
+  >;
+  readonly slot: Extract<
+    FabricationIRV1["connectors"][number],
+    { readonly kind: "slot" }
+  >;
 }
 
-const triangleNormal = (
-  triangle: Triangle3,
-): readonly [number, number, number] => {
+const triangleLike = (triangle: PanelTriangle3) => ({
+  first: triangle[0],
+  second: triangle[1],
+  third: triangle[2],
+});
+
+const pointDistance3Mm = (first: Point3Mm, second: Point3Mm): number =>
+  Math.hypot(
+    first.xMm - second.xMm,
+    first.yMm - second.yMm,
+    first.zMm - second.zMm,
+  );
+
+const segmentTriangleIntersectionPoint = (
+  segment: Segment3Mm,
+  triangle: PanelTriangle3,
+): Point3Mm | null => {
+  const [start, end] = segment;
   const [first, second, third] = triangle;
-  const firstX = second.xMm - first.xMm;
-  const firstY = second.yMm - first.yMm;
-  const firstZ = second.zMm - first.zMm;
-  const secondX = third.xMm - first.xMm;
-  const secondY = third.yMm - first.yMm;
-  const secondZ = third.zMm - first.zMm;
-  return [
-    firstY * secondZ - firstZ * secondY,
-    firstZ * secondX - firstX * secondZ,
-    firstX * secondY - firstY * secondX,
+  const direction = {
+    x: end.xMm - start.xMm,
+    y: end.yMm - start.yMm,
+    z: end.zMm - start.zMm,
+  };
+  const firstEdge = {
+    x: second.xMm - first.xMm,
+    y: second.yMm - first.yMm,
+    z: second.zMm - first.zMm,
+  };
+  const secondEdge = {
+    x: third.xMm - first.xMm,
+    y: third.yMm - first.yMm,
+    z: third.zMm - first.zMm,
+  };
+  const directionCross = {
+    x: direction.y * secondEdge.z - direction.z * secondEdge.y,
+    y: direction.z * secondEdge.x - direction.x * secondEdge.z,
+    z: direction.x * secondEdge.y - direction.y * secondEdge.x,
+  };
+  const determinant =
+    firstEdge.x * directionCross.x +
+    firstEdge.y * directionCross.y +
+    firstEdge.z * directionCross.z;
+  if (Math.abs(determinant) <= 1e-10) return null;
+  const inverse = 1 / determinant;
+  const startOffset = {
+    x: start.xMm - first.xMm,
+    y: start.yMm - first.yMm,
+    z: start.zMm - first.zMm,
+  };
+  const firstBarycentric =
+    inverse *
+    (startOffset.x * directionCross.x +
+      startOffset.y * directionCross.y +
+      startOffset.z * directionCross.z);
+  if (firstBarycentric < -1e-9 || firstBarycentric > 1 + 1e-9) {
+    return null;
+  }
+  const offsetCross = {
+    x: startOffset.y * firstEdge.z - startOffset.z * firstEdge.y,
+    y: startOffset.z * firstEdge.x - startOffset.x * firstEdge.z,
+    z: startOffset.x * firstEdge.y - startOffset.y * firstEdge.x,
+  };
+  const secondBarycentric =
+    inverse *
+    (direction.x * offsetCross.x +
+      direction.y * offsetCross.y +
+      direction.z * offsetCross.z);
+  if (
+    secondBarycentric < -1e-9 ||
+    firstBarycentric + secondBarycentric > 1 + 1e-9
+  ) {
+    return null;
+  }
+  const segmentFraction =
+    inverse *
+    (secondEdge.x * offsetCross.x +
+      secondEdge.y * offsetCross.y +
+      secondEdge.z * offsetCross.z);
+  if (segmentFraction < -1e-9 || segmentFraction > 1 + 1e-9) {
+    return null;
+  }
+  return {
+    xMm: start.xMm + direction.x * segmentFraction,
+    yMm: start.yMm + direction.y * segmentFraction,
+    zMm: start.zMm + direction.z * segmentFraction,
+  };
+};
+
+const triangleIntersectionSegment = (
+  first: PanelTriangle3,
+  second: PanelTriangle3,
+): Segment3Mm | null => {
+  const edges = (triangle: PanelTriangle3): readonly Segment3Mm[] => [
+    [triangle[0], triangle[1]],
+    [triangle[1], triangle[2]],
+    [triangle[2], triangle[0]],
   ];
-};
+  const points: Point3Mm[] = [];
+  const addPoint = (point: Point3Mm | null): void => {
+    if (
+      point &&
+      !points.some(
+        (candidate) =>
+          pointDistance3Mm(candidate, point) <= CONTACT_LOCUS_TOLERANCE_MM,
+      )
+    ) {
+      points.push(point);
+    }
+  };
+  for (const edge of edges(first)) {
+    addPoint(segmentTriangleIntersectionPoint(edge, second));
+  }
+  for (const edge of edges(second)) {
+    addPoint(segmentTriangleIntersectionPoint(edge, first));
+  }
+  if (points.length < 2) return null;
 
-const signedArea2 = (points: readonly ProjectedPoint[]): number =>
-  points.reduce((total, point, index) => {
-    const next = points[(index + 1) % points.length] ?? point;
-    return total + point.x * next.y - next.x * point.y;
-  }, 0) / 2;
-
-const lineIntersection = (
-  first: ProjectedPoint,
-  second: ProjectedPoint,
-  clipStart: ProjectedPoint,
-  clipEnd: ProjectedPoint,
-): ProjectedPoint => {
-  const segmentX = second.x - first.x;
-  const segmentY = second.y - first.y;
-  const clipX = clipEnd.x - clipStart.x;
-  const clipY = clipEnd.y - clipStart.y;
-  const denominator = segmentX * clipY - segmentY * clipX;
-  if (Math.abs(denominator) <= 1e-12) return second;
-  const offsetX = clipStart.x - first.x;
-  const offsetY = clipStart.y - first.y;
-  const ratio = (offsetX * clipY - offsetY * clipX) / denominator;
-  return { x: first.x + ratio * segmentX, y: first.y + ratio * segmentY };
-};
-
-const clipConvexPolygon = (
-  subject: readonly ProjectedPoint[],
-  clip: readonly ProjectedPoint[],
-): readonly ProjectedPoint[] => {
-  let output = [...subject];
-  const orientation = signedArea2(clip) >= 0 ? 1 : -1;
-  const inside = (
-    point: ProjectedPoint,
-    start: ProjectedPoint,
-    end: ProjectedPoint,
-  ): boolean =>
-    orientation *
-      ((end.x - start.x) * (point.y - start.y) -
-        (end.y - start.y) * (point.x - start.x)) >=
-    -1e-8;
-  for (let index = 0; index < clip.length; index += 1) {
-    const clipStart = clip[index]!;
-    const clipEnd = clip[(index + 1) % clip.length]!;
-    const input = output;
-    output = [];
-    for (let pointIndex = 0; pointIndex < input.length; pointIndex += 1) {
-      const current = input[pointIndex]!;
-      const previous = input[(pointIndex - 1 + input.length) % input.length]!;
-      const currentInside = inside(current, clipStart, clipEnd);
-      const previousInside = inside(previous, clipStart, clipEnd);
-      if (currentInside) {
-        if (!previousInside) {
-          output.push(lineIntersection(previous, current, clipStart, clipEnd));
-        }
-        output.push(current);
-      } else if (previousInside) {
-        output.push(lineIntersection(previous, current, clipStart, clipEnd));
+  let farthest: Segment3Mm | null = null;
+  let farthestDistanceMm = 0;
+  for (let firstIndex = 0; firstIndex < points.length; firstIndex += 1) {
+    const firstPoint = points[firstIndex];
+    if (!firstPoint) continue;
+    for (
+      let secondIndex = firstIndex + 1;
+      secondIndex < points.length;
+      secondIndex += 1
+    ) {
+      const secondPoint = points[secondIndex];
+      if (!secondPoint) continue;
+      const distanceMm = pointDistance3Mm(firstPoint, secondPoint);
+      if (distanceMm > farthestDistanceMm) {
+        farthest = [firstPoint, secondPoint];
+        farthestDistanceMm = distanceMm;
       }
     }
-    if (output.length === 0) break;
   }
-  return output;
+  return farthestDistanceMm > CONTACT_LOCUS_TOLERANCE_MM ? farthest : null;
 };
 
-const coplanarTriangleOverlapAreaMm2 = (
-  first: Triangle3,
-  second: Triangle3,
-): number => {
-  const firstNormal = triangleNormal(first);
-  const secondNormal = triangleNormal(second);
-  const firstLength = Math.hypot(...firstNormal);
-  const secondLength = Math.hypot(...secondNormal);
-  if (firstLength <= 1e-10 || secondLength <= 1e-10) return 0;
-  const normalCrossLength = Math.hypot(
-    firstNormal[1] * secondNormal[2] - firstNormal[2] * secondNormal[1],
-    firstNormal[2] * secondNormal[0] - firstNormal[0] * secondNormal[2],
-    firstNormal[0] * secondNormal[1] - firstNormal[1] * secondNormal[0],
-  );
-  if (normalCrossLength / (firstLength * secondLength) > 1e-7) return 0;
-  const origin = first[0];
-  if (
-    second.some(
-      (point) =>
-        Math.abs(
-          firstNormal[0] * (point.xMm - origin.xMm) +
-            firstNormal[1] * (point.yMm - origin.yMm) +
-            firstNormal[2] * (point.zMm - origin.zMm),
-        ) /
-          firstLength >
-        1e-6,
-    )
-  ) {
-    return 0;
-  }
-  const dominant = [0, 1, 2].sort(
-    (left, right) =>
-      Math.abs(firstNormal[right]!) - Math.abs(firstNormal[left]!),
-  )[0]!;
-  const project = (point: Point3Mm): ProjectedPoint =>
-    dominant === 0
-      ? { x: point.yMm, y: point.zMm }
-      : dominant === 1
-        ? { x: point.xMm, y: point.zMm }
-        : { x: point.xMm, y: point.yMm };
-  const clipped = clipConvexPolygon(first.map(project), second.map(project));
-  const projectedArea = Math.abs(signedArea2(clipped));
-  const projectionScale = Math.abs(firstNormal[dominant]!) / firstLength;
-  return projectionScale <= 1e-12 ? 0 : projectedArea / projectionScale;
-};
-
-const panelPairContactAreaMm2 = (
+const panelIntersectionSegments = (
   firstPanelId: string,
   secondPanelId: string,
   motionState: EvaluatedMotionState,
-): number => {
+): readonly Segment3Mm[] => {
   const firstTriangles = motionState.panelTriangles[firstPanelId] ?? [];
   const secondTriangles = motionState.panelTriangles[secondPanelId] ?? [];
-  let areaMm2 = 0;
-  for (const first of firstTriangles) {
-    for (const second of secondTriangles) {
-      areaMm2 += coplanarTriangleOverlapAreaMm2(first, second);
-    }
-  }
-  return areaMm2;
+  return firstTriangles.flatMap((first) =>
+    secondTriangles.flatMap((second) => {
+      const segment = triangleIntersectionSegment(first, second);
+      return segment ? [segment] : [];
+    }),
+  );
 };
 
-const pairKey = (first: string, second: string): string =>
-  first < second ? `${first}\u0000${second}` : `${second}\u0000${first}`;
+const panelIntersectionWitnesses = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Point3Mm[] => {
+  // A zero-area panel intersection can be a valid shared edge or an invalid
+  // line through both interiors. Triangle witnesses retain the entire measured
+  // intersection locus so a declared seam elsewhere cannot hide the crossing.
+  const witnesses: Point3Mm[] = [];
+  const firstBoundary = motionState.panelVertices[firstPanelId] ?? [];
+  const secondBoundary = motionState.panelVertices[secondPanelId] ?? [];
+  const firstTriangles = motionState.panelTriangles[firstPanelId] ?? [];
+  const secondTriangles = motionState.panelTriangles[secondPanelId] ?? [];
+  const collect = (
+    boundary: readonly Point3Mm[],
+    triangles: readonly PanelTriangle3[],
+  ): void => {
+    for (const point of boundary) {
+      for (const triangle of triangles) {
+        if (
+          pointTriangleDistanceMm(point, triangleLike(triangle)) <=
+          CONTACT_LOCUS_TOLERANCE_MM
+        ) {
+          witnesses.push(point);
+        }
+      }
+    }
+    for (const [start, end] of boundary.map(
+      (point, index) =>
+        [point, boundary[(index + 1) % boundary.length]!] as const,
+    )) {
+      for (const triangle of triangles) {
+        const witness = segmentTriangleIntersectionPoint(
+          [start, end],
+          triangle,
+        );
+        if (witness) {
+          witnesses.push(witness);
+        }
+      }
+    }
+  };
+  collect(firstBoundary, secondTriangles);
+  collect(secondBoundary, firstTriangles);
+  return witnesses;
+};
+
+const coincidentSegmentOverlap3 = (
+  first: Segment3Mm,
+  second: Segment3Mm,
+): Segment3Mm | null => {
+  const firstDirection = {
+    x: first[1].xMm - first[0].xMm,
+    y: first[1].yMm - first[0].yMm,
+    z: first[1].zMm - first[0].zMm,
+  };
+  const secondDirection = {
+    x: second[1].xMm - second[0].xMm,
+    y: second[1].yMm - second[0].yMm,
+    z: second[1].zMm - second[0].zMm,
+  };
+  const firstLengthMm = Math.hypot(
+    firstDirection.x,
+    firstDirection.y,
+    firstDirection.z,
+  );
+  const secondLengthMm = Math.hypot(
+    secondDirection.x,
+    secondDirection.y,
+    secondDirection.z,
+  );
+  if (
+    firstLengthMm <= CONTACT_LOCUS_TOLERANCE_MM ||
+    secondLengthMm <= CONTACT_LOCUS_TOLERANCE_MM
+  ) {
+    return null;
+  }
+  const crossLength = Math.hypot(
+    firstDirection.y * secondDirection.z - firstDirection.z * secondDirection.y,
+    firstDirection.z * secondDirection.x - firstDirection.x * secondDirection.z,
+    firstDirection.x * secondDirection.y - firstDirection.y * secondDirection.x,
+  );
+  if (crossLength / (firstLengthMm * secondLengthMm) > 1e-8) return null;
+  if (
+    distancePointToLine3Mm(second[0], first[0], firstDirection) >
+      CONTACT_LOCUS_TOLERANCE_MM ||
+    distancePointToLine3Mm(second[1], first[0], firstDirection) >
+      CONTACT_LOCUS_TOLERANCE_MM
+  ) {
+    return null;
+  }
+  const unit = {
+    x: firstDirection.x / firstLengthMm,
+    y: firstDirection.y / firstLengthMm,
+    z: firstDirection.z / firstLengthMm,
+  };
+  const project = (point: Point3Mm): number =>
+    (point.xMm - first[0].xMm) * unit.x +
+    (point.yMm - first[0].yMm) * unit.y +
+    (point.zMm - first[0].zMm) * unit.z;
+  const secondProjections = [project(second[0]), project(second[1])] as const;
+  const overlapStartMm = Math.max(0, Math.min(...secondProjections));
+  const overlapEndMm = Math.min(firstLengthMm, Math.max(...secondProjections));
+  if (overlapEndMm - overlapStartMm <= CONTACT_LOCUS_TOLERANCE_MM) {
+    return null;
+  }
+  const pointAt = (distanceMm: number): Point3Mm => ({
+    xMm: first[0].xMm + unit.x * distanceMm,
+    yMm: first[0].yMm + unit.y * distanceMm,
+    zMm: first[0].zMm + unit.z * distanceMm,
+  });
+  return [pointAt(overlapStartMm), pointAt(overlapEndMm)];
+};
+
+const coincidentPanelBoundarySegments = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): readonly Segment3Mm[] => {
+  const boundarySegments = (panelId: string): readonly Segment3Mm[] => {
+    const vertices = motionState.panelVertices[panelId] ?? [];
+    return vertices.map(
+      (point, index) =>
+        [point, vertices[(index + 1) % vertices.length]!] as const,
+    );
+  };
+  return boundarySegments(firstPanelId).flatMap((first) =>
+    boundarySegments(secondPanelId).flatMap((second) => {
+      const overlap = coincidentSegmentOverlap3(first, second);
+      return overlap ? [overlap] : [];
+    }),
+  );
+};
+
+const witnessesAreConfinedToSegments = (
+  witnesses: readonly Point3Mm[],
+  segments: readonly Segment3Mm[],
+  toleranceMm = CONTACT_LOCUS_TOLERANCE_MM,
+): boolean =>
+  witnesses.length > 0 &&
+  segments.length > 0 &&
+  witnesses.every((point) =>
+    segments.some(
+      ([start, end]) =>
+        distancePointToSegment3Mm(point, start, end) <= toleranceMm,
+    ),
+  );
+
+const segmentIsCoveredByCoincidentSegments = (
+  segment: Segment3Mm,
+  coincidentSegments: readonly Segment3Mm[],
+): boolean => {
+  const direction = {
+    x: segment[1].xMm - segment[0].xMm,
+    y: segment[1].yMm - segment[0].yMm,
+    z: segment[1].zMm - segment[0].zMm,
+  };
+  const lengthMm = Math.hypot(direction.x, direction.y, direction.z);
+  if (lengthMm <= CONTACT_LOCUS_TOLERANCE_MM) return true;
+  const unit = {
+    x: direction.x / lengthMm,
+    y: direction.y / lengthMm,
+    z: direction.z / lengthMm,
+  };
+  const project = (point: Point3Mm): number =>
+    (point.xMm - segment[0].xMm) * unit.x +
+    (point.yMm - segment[0].yMm) * unit.y +
+    (point.zMm - segment[0].zMm) * unit.z;
+  const intervals = coincidentSegments
+    .flatMap(([start, end]) => {
+      if (
+        distancePointToLine3Mm(start, segment[0], direction) >
+          CONTACT_LOCUS_TOLERANCE_MM ||
+        distancePointToLine3Mm(end, segment[0], direction) >
+          CONTACT_LOCUS_TOLERANCE_MM
+      ) {
+        return [];
+      }
+      const startMm = Math.max(0, Math.min(project(start), project(end)));
+      const endMm = Math.min(lengthMm, Math.max(project(start), project(end)));
+      return endMm - startMm > CONTACT_LOCUS_TOLERANCE_MM
+        ? ([[startMm, endMm]] as const)
+        : [];
+    })
+    .toSorted((left, right) => left[0] - right[0]);
+  const firstInterval = intervals[0];
+  if (!firstInterval || firstInterval[0] > CONTACT_LOCUS_TOLERANCE_MM) {
+    return false;
+  }
+  let coveredUntilMm = firstInterval[1];
+  for (const [startMm, endMm] of intervals.slice(1)) {
+    if (startMm > coveredUntilMm + CONTACT_LOCUS_TOLERANCE_MM) return false;
+    coveredUntilMm = Math.max(coveredUntilMm, endMm);
+  }
+  return coveredUntilMm >= lengthMm - CONTACT_LOCUS_TOLERANCE_MM;
+};
+
+const boundaryContactIsLocusBound = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean => {
+  const coincidentSegments = coincidentPanelBoundarySegments(
+    firstPanelId,
+    secondPanelId,
+    motionState,
+  );
+  if (!witnessesAreConfinedToSegments(witnesses, coincidentSegments)) {
+    return false;
+  }
+  // Endpoint witnesses alone are insufficient for concave panels: a line can
+  // enter both interiors between two genuine seam fragments. Require every
+  // measured triangle-intersection interval to be continuously covered by the
+  // coincident contour seams.
+  return panelIntersectionSegments(
+    firstPanelId,
+    secondPanelId,
+    motionState,
+  ).every((segment) =>
+    segmentIsCoveredByCoincidentSegments(segment, coincidentSegments),
+  );
+};
+
+const positiveBoundarySeamExists = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+): boolean =>
+  coincidentPanelBoundarySegments(firstPanelId, secondPanelId, motionState)
+    .length > 0;
+
+const tabTrianglesAtState = (
+  pair: ReciprocalConnectorPair,
+  tabPanel: PanelV1,
+  motionState: EvaluatedMotionState,
+): readonly PanelTriangle3[] => {
+  const triangulation = triangulatePolygonWithHoles(
+    pair.tab.contour.vertices,
+    [],
+  );
+  const vertices = triangulation.vertices.flatMap((point) => {
+    const transformed = connectorWorldPoint(point, tabPanel, motionState);
+    return transformed ? [transformed] : [];
+  });
+  if (vertices.length !== triangulation.vertices.length) return [];
+  return triangulation.triangles.map(
+    (triangle) =>
+      [
+        vertices[triangle.a]!,
+        vertices[triangle.b]!,
+        vertices[triangle.c]!,
+      ] as const,
+  );
+};
+
+const connectorContactIsLocusBound = (
+  pairs: readonly ReciprocalConnectorPair[],
+  panelById: ReadonlyMap<string, PanelV1>,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean =>
+  witnesses.length > 0 &&
+  pairs.some((pair) => {
+    if (!connectorInsertionDirectionsCompatible(pair.tab, pair.slot)) {
+      return false;
+    }
+    const tabPanel = panelById.get(pair.tab.panelId);
+    const slotPanel = panelById.get(pair.slot.panelId);
+    if (!tabPanel || !slotPanel) return false;
+    const slotStart = connectorWorldPoint(
+      pair.slot.centerline.start,
+      slotPanel,
+      motionState,
+    );
+    const slotEnd = connectorWorldPoint(
+      pair.slot.centerline.end,
+      slotPanel,
+      motionState,
+    );
+    if (!slotStart || !slotEnd) return false;
+    const tabTriangles = tabTrianglesAtState(pair, tabPanel, motionState);
+    // Slot material is removed from the collision mesh. Any remaining
+    // zero-clearance contact is allowed only at that aperture and within the
+    // actual tab contour, never across the rest of either connector panel.
+    const slotLocusToleranceMm =
+      pair.slot.widthMm / 2 + CONTACT_LOCUS_TOLERANCE_MM;
+    return (
+      tabTriangles.length > 0 &&
+      witnesses.every(
+        (point) =>
+          distancePointToSegment3Mm(point, slotStart, slotEnd) <=
+            slotLocusToleranceMm &&
+          tabTriangles.some(
+            (triangle) =>
+              pointTriangleDistanceMm(point, triangleLike(triangle)) <=
+              CONTACT_LOCUS_TOLERANCE_MM,
+          ),
+      )
+    );
+  });
 
 const validateCollision = (
   ir: FabricationIRV1,
   state: VerificationState,
   baseMotion: NonNullable<ReturnType<typeof validateMotion>>,
 ): MotionEvaluation => {
+  const isSingleStateStaticDesign =
+    ir.driver === null && baseMotion.baseStates.length === 1;
   const foldAdjacentBodies = new Set(
     ir.joints
       .filter((joint) => joint.kind === "fold")
-      .map((joint) => pairKey(joint.parentBodyId, joint.childBodyId)),
+      .map((joint) => unorderedPairKey(joint.parentBodyId, joint.childBodyId)),
   );
+  const panelById = new Map(ir.panels.map((panel) => [panel.panelId, panel]));
+  const bodyById = new Map(ir.bodies.map((body) => [body.bodyId, body]));
+  const foldAdjacentPanelPairs = new Set(
+    ir.joints.flatMap((joint) => {
+      if (joint.kind !== "fold") return [];
+      const parentPanelId = bodyById.get(joint.parentBodyId)?.panelIds[0];
+      const childPanelId = bodyById.get(joint.childBodyId)?.panelIds[0];
+      return parentPanelId && childPanelId
+        ? [unorderedPairKey(parentPanelId, childPanelId)]
+        : [];
+    }),
+  );
+  const connectorById = new Map(
+    ir.connectors.map((connector) => [connector.connectorId, connector]),
+  );
+  const reciprocalConnectorsByPanelPair = new Map<
+    string,
+    ReciprocalConnectorPair[]
+  >();
+  for (const connector of ir.connectors) {
+    if (connector.kind !== "tab") continue;
+    const mate = connectorById.get(connector.mateConnectorId);
+    const firstPanel = panelById.get(connector.panelId);
+    const secondPanel = mate ? panelById.get(mate.panelId) : undefined;
+    if (
+      mate?.mateConnectorId === connector.connectorId &&
+      mate.kind === "slot" &&
+      firstPanel &&
+      secondPanel
+    ) {
+      const panelPairKey = unorderedPairKey(
+        firstPanel.panelId,
+        secondPanel.panelId,
+      );
+      const pairs = reciprocalConnectorsByPanelPair.get(panelPairKey) ?? [];
+      pairs.push({ tab: connector, slot: mate });
+      reciprocalConnectorsByPanelPair.set(panelPairKey, pairs);
+    }
+  }
+  const declaredContactDuringByPanelPair = new Map<
+    string,
+    Set<"rest" | "all_states" | "open" | "closed">
+  >();
+  for (const constraint of ir.semanticConstraints) {
+    if (constraint.kind !== "contact" || !constraint.hard) continue;
+    const [firstRef, ...otherRefs] = constraint.geometryRefs;
+    if (!firstRef) continue;
+    const firstPanelIds = panelIdsForRef(ir, firstRef);
+    const otherPanelIds = otherRefs.flatMap((reference) =>
+      panelIdsForRef(ir, reference),
+    );
+    for (const firstPanelId of firstPanelIds) {
+      for (const otherPanelId of otherPanelIds) {
+        if (firstPanelId === otherPanelId) continue;
+        const key = unorderedPairKey(firstPanelId, otherPanelId);
+        const during = declaredContactDuringByPanelPair.get(key) ?? new Set();
+        during.add(constraint.during);
+        declaredContactDuringByPanelPair.set(key, during);
+      }
+    }
+  }
+  const declaredContactApplies = (
+    pairKey: string,
+    motionState: EvaluatedMotionState,
+  ): boolean => {
+    const during = declaredContactDuringByPanelPair.get(pairKey);
+    if (!during) return false;
+    if (during.has("all_states") || ir.driver === null) return true;
+    const value = motionState.driverValue;
+    return (
+      value !== null &&
+      ((during.has("rest") && Math.abs(value - ir.driver.homeValue) <= 1e-8) ||
+        (during.has("open") &&
+          Math.abs(value - ir.driver.maximumValue) <= 1e-8) ||
+        (during.has("closed") &&
+          Math.abs(value - ir.driver.minimumValue) <= 1e-8))
+    );
+  };
   let minimumClearanceMm = Number.POSITIVE_INFINITY;
   let minimumStateIndex = 0;
   let collisionRefs: readonly GeometryRefV1[] = [];
@@ -2890,11 +3348,76 @@ const validateCollision = (
               : 0;
           const intentionallyAdjacent =
             first.bodyId === second.bodyId ||
-            foldAdjacentBodies.has(pairKey(first.bodyId, second.bodyId));
+            foldAdjacentBodies.has(
+              unorderedPairKey(first.bodyId, second.bodyId),
+            );
+          const panelPairKey = unorderedPairKey(first.panelId, second.panelId);
+          const declaredContact = declaredContactApplies(
+            panelPairKey,
+            motionState,
+          );
+          const reciprocalConnectorPairs =
+            reciprocalConnectorsByPanelPair.get(panelPairKey) ?? [];
+          const contactRelationshipExists =
+            intentionallyAdjacent ||
+            declaredContact ||
+            reciprocalConnectorPairs.length > 0;
+          const zeroAreaCenterlineContact =
+            centerlineDistanceMm <= 1e-6 && overlapAreaMm2 <= 1e-6;
+          // A verified fold's two source edges are the joint axis. For two
+          // rigid planes, every non-coplanar intersection lies on that axis;
+          // coplanar interior overlap is already measured as positive area.
+          // This proof avoids rebuilding triangle witnesses at 201 states.
+          const locusBoundFoldSeam =
+            !isSingleStateStaticDesign &&
+            zeroAreaCenterlineContact &&
+            foldAdjacentPanelPairs.has(panelPairKey) &&
+            positiveBoundarySeamExists(
+              first.panelId,
+              second.panelId,
+              motionState,
+            );
+          // A static assembly has exactly one measured pose. At that pose a
+          // positive-length contour seam is sufficient physical evidence for
+          // edge contact, even when the two walls are connected through the
+          // fold tree rather than by a direct joint. The witness confinement
+          // below is deliberately mandatory: neither a whole-panel relation
+          // nor an authored contact declaration can excuse an interior line
+          // crossing elsewhere on the same panel pair.
+          const boundaryWitnessProofEligible =
+            contactRelationshipExists || isSingleStateStaticDesign;
+          const witnesses =
+            boundaryWitnessProofEligible &&
+            zeroAreaCenterlineContact &&
+            !locusBoundFoldSeam
+              ? panelIntersectionWitnesses(
+                  first.panelId,
+                  second.panelId,
+                  motionState,
+                )
+              : [];
+          const locusBoundBoundaryContact =
+            boundaryWitnessProofEligible &&
+            !locusBoundFoldSeam &&
+            boundaryContactIsLocusBound(
+              first.panelId,
+              second.panelId,
+              motionState,
+              witnesses,
+            );
+          const locusBoundConnectorContact =
+            reciprocalConnectorPairs.length > 0 &&
+            connectorContactIsLocusBound(
+              reciprocalConnectorPairs,
+              panelById,
+              motionState,
+              witnesses,
+            );
           const allowedBoundaryContact =
-            intentionallyAdjacent &&
-            centerlineDistanceMm <= 1e-6 &&
-            overlapAreaMm2 <= 1e-6;
+            zeroAreaCenterlineContact &&
+            (locusBoundFoldSeam ||
+              locusBoundBoundaryContact ||
+              locusBoundConnectorContact);
           if (allowedBoundaryContact) continue;
           const clearanceMm =
             overlapAreaMm2 > 1e-6
@@ -2982,293 +3505,6 @@ const validateCollision = (
     collisionFree,
     collisionRefs,
   };
-};
-
-interface Bounds3 {
-  readonly minimumXmm: number;
-  readonly maximumXmm: number;
-  readonly minimumYmm: number;
-  readonly maximumYmm: number;
-  readonly minimumZmm: number;
-  readonly maximumZmm: number;
-}
-
-const boundsForPoints = (points: readonly Point3Mm[]): Bounds3 | null => {
-  if (points.length === 0) return null;
-  return {
-    minimumXmm: Math.min(...points.map((point) => point.xMm)),
-    maximumXmm: Math.max(...points.map((point) => point.xMm)),
-    minimumYmm: Math.min(...points.map((point) => point.yMm)),
-    maximumYmm: Math.max(...points.map((point) => point.yMm)),
-    minimumZmm: Math.min(...points.map((point) => point.zMm)),
-    maximumZmm: Math.max(...points.map((point) => point.zMm)),
-  };
-};
-
-const panelIdsForRef = (
-  ir: FabricationIRV1,
-  ref: GeometryRefV1,
-): readonly string[] => {
-  switch (ref.kind) {
-    case "panel":
-      return ir.panels.some((panel) => panel.panelId === ref.id)
-        ? [ref.id]
-        : [];
-    case "body":
-      return ir.bodies.find((body) => body.bodyId === ref.id)!.panelIds;
-    case "semantic_part": {
-      const part = ir.semanticParts.find(
-        (item) => item.semanticPartId === ref.id,
-      );
-      return part!.geometryRefs.flatMap((partRef) =>
-        panelIdsForRef(ir, partRef),
-      );
-    }
-    default:
-      return [];
-  }
-};
-
-const pointsForRefs = (
-  ir: FabricationIRV1,
-  motionState: EvaluatedMotionState,
-  refs: readonly GeometryRefV1[],
-): readonly Point3Mm[] =>
-  refs.flatMap((ref) =>
-    panelIdsForRef(ir, ref).flatMap(
-      (panelId) => motionState.panelVertices[panelId]!,
-    ),
-  );
-
-const statesForDuring = (
-  states: readonly EvaluatedMotionState[],
-  during: "rest" | "all_states" | "open" | "closed",
-  homeValue: number | null,
-): readonly EvaluatedMotionState[] => {
-  if (during === "all_states") return states;
-  if (during === "open") return states.length > 0 ? [states.at(-1)!] : [];
-  if (during === "closed") return states.length > 0 ? [states[0]!] : [];
-  const home = states.reduce<EvaluatedMotionState | null>(
-    (closest, current) => {
-      if (!closest) return current;
-      const target = homeValue ?? 0;
-      return Math.abs((current.driverValue ?? 0) - target) <
-        Math.abs((closest.driverValue ?? 0) - target)
-        ? current
-        : closest;
-    },
-    null,
-  );
-  return home ? [home] : [];
-};
-
-const dimensionValue = (
-  bounds: Bounds3,
-  dimension: "width" | "height" | "depth" | "length",
-): number => {
-  const spans = [
-    bounds.maximumXmm - bounds.minimumXmm,
-    bounds.maximumYmm - bounds.minimumYmm,
-    bounds.maximumZmm - bounds.minimumZmm,
-  ] as const;
-  switch (dimension) {
-    case "width":
-      return spans[0];
-    case "height":
-      return spans[1];
-    case "depth":
-      return spans[2];
-    case "length":
-      return Math.max(...spans);
-  }
-};
-
-interface PanelSurfaceGeometry {
-  readonly panelId: string;
-  readonly outer: readonly Point3Mm[];
-  readonly holes: readonly (readonly Point3Mm[])[];
-  readonly normal: readonly [number, number, number] | null;
-}
-
-const reflectedPoint3 = (point: Point3Mm, normalAxis: 0 | 1 | 2): Point3Mm => ({
-  xMm: normalAxis === 0 ? -point.xMm : point.xMm,
-  yMm: normalAxis === 1 ? -point.yMm : point.yMm,
-  zMm: normalAxis === 2 ? -point.zMm : point.zMm,
-});
-
-const cyclicContourErrorMm = (
-  actual: readonly Point3Mm[],
-  expected: readonly Point3Mm[],
-): number => {
-  if (actual.length !== expected.length || actual.length === 0) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let minimumErrorMm = Number.POSITIVE_INFINITY;
-  for (let offset = 0; offset < actual.length; offset += 1) {
-    for (const direction of [1, -1] as const) {
-      let maximumErrorMm = 0;
-      for (let index = 0; index < actual.length; index += 1) {
-        const actualIndex =
-          (offset + direction * index + actual.length * 2) % actual.length;
-        const first = actual[actualIndex]!;
-        const second = expected[index]!;
-        maximumErrorMm = Math.max(
-          maximumErrorMm,
-          Math.hypot(
-            first.xMm - second.xMm,
-            first.yMm - second.yMm,
-            first.zMm - second.zMm,
-          ),
-        );
-      }
-      minimumErrorMm = Math.min(minimumErrorMm, maximumErrorMm);
-    }
-  }
-  return minimumErrorMm;
-};
-
-const panelSurfaceGeometry = (
-  home: EvaluatedMotionState,
-  panel: PanelV1,
-  connectors: FabricationIRV1["connectors"],
-): PanelSurfaceGeometry | null => {
-  const bodyMatrix = home.bodyMatrices[panel.bodyId];
-  if (!bodyMatrix) return null;
-  const transformContour3 = (
-    points: readonly Point2Mm[],
-  ): readonly Point3Mm[] =>
-    points.map((point) =>
-      transformPoint3(bodyMatrix, {
-        ...transformPoint2(point, panel.flatTransform),
-        zMm: 0,
-      }),
-    );
-  const triangle = home.panelTriangles[panel.panelId]?.[0];
-  const unnormalized = triangle ? triangleNormal(triangle) : null;
-  const normalLength = unnormalized ? Math.hypot(...unnormalized) : 0;
-  return {
-    panelId: panel.panelId,
-    outer: transformContour3(panel.contour.vertices),
-    holes: panelMaterialHoles(panel, connectors).map((hole) =>
-      transformContour3(hole.vertices),
-    ),
-    normal:
-      unnormalized && normalLength > 1e-12
-        ? [
-            unnormalized[0] / normalLength,
-            unnormalized[1] / normalLength,
-            unnormalized[2] / normalLength,
-          ]
-        : null,
-  };
-};
-
-const panelMirrorError = (
-  first: PanelSurfaceGeometry,
-  second: PanelSurfaceGeometry,
-  normalAxis: 0 | 1 | 2,
-): { readonly linearMm: number; readonly angularDeg: number } => {
-  if (first.holes.length !== second.holes.length) {
-    return {
-      linearMm: Number.POSITIVE_INFINITY,
-      angularDeg: Number.POSITIVE_INFINITY,
-    };
-  }
-  const reflectedOuter = first.outer.map((point) =>
-    reflectedPoint3(point, normalAxis),
-  );
-  let linearMm = cyclicContourErrorMm(reflectedOuter, second.outer);
-  const unmatchedHoles = new Set(second.holes.map((_, index) => index));
-  for (const firstHole of first.holes) {
-    const reflectedHole = firstHole.map((point) =>
-      reflectedPoint3(point, normalAxis),
-    );
-    const best = [...unmatchedHoles]
-      .map((index) => ({
-        index,
-        errorMm: cyclicContourErrorMm(reflectedHole, second.holes[index]!),
-      }))
-      .sort(
-        (left, right) =>
-          left.errorMm - right.errorMm || left.index - right.index,
-      )[0];
-    if (!best) {
-      linearMm = Number.POSITIVE_INFINITY;
-      break;
-    }
-    unmatchedHoles.delete(best.index);
-    linearMm = Math.max(linearMm, best.errorMm);
-  }
-  let angularDeg = Number.POSITIVE_INFINITY;
-  if (first.normal && second.normal) {
-    const reflectedNormal = [...first.normal] as [number, number, number];
-    reflectedNormal[normalAxis] *= -1;
-    const cosine = Math.min(
-      1,
-      Math.max(
-        -1,
-        Math.abs(
-          reflectedNormal[0] * second.normal[0] +
-            reflectedNormal[1] * second.normal[1] +
-            reflectedNormal[2] * second.normal[2],
-        ),
-      ),
-    );
-    angularDeg = (Math.acos(cosine) * 180) / Math.PI;
-  }
-  return { linearMm, angularDeg };
-};
-
-const mirroredBodyGeometryError = (
-  ir: FabricationIRV1,
-  home: EvaluatedMotionState,
-  firstBodyId: string,
-  secondBodyId: string,
-  normalAxis: 0 | 1 | 2,
-): { readonly linearMm: number; readonly angularDeg: number } => {
-  const surfacesForBody = (bodyId: string): readonly PanelSurfaceGeometry[] =>
-    ir.panels
-      .filter((panel) => panel.bodyId === bodyId)
-      .map((panel) => panelSurfaceGeometry(home, panel, ir.connectors))
-      .filter((surface): surface is PanelSurfaceGeometry => surface !== null)
-      .sort((left, right) => left.panelId.localeCompare(right.panelId));
-  const firstSurfaces = surfacesForBody(firstBodyId);
-  const secondSurfaces = surfacesForBody(secondBodyId);
-  if (
-    firstSurfaces.length === 0 ||
-    firstSurfaces.length !== secondSurfaces.length
-  ) {
-    return {
-      linearMm: Number.POSITIVE_INFINITY,
-      angularDeg: Number.POSITIVE_INFINITY,
-    };
-  }
-  const unmatched = new Set(secondSurfaces.map((_, index) => index));
-  let linearMm = 0;
-  let angularDeg = 0;
-  for (const first of firstSurfaces) {
-    const best = [...unmatched]
-      .map((index) => ({
-        index,
-        error: panelMirrorError(first, secondSurfaces[index]!, normalAxis),
-      }))
-      .sort(
-        (left, right) =>
-          left.error.linearMm - right.error.linearMm ||
-          left.error.angularDeg - right.error.angularDeg ||
-          left.index - right.index,
-      )[0];
-    if (!best) {
-      return {
-        linearMm: Number.POSITIVE_INFINITY,
-        angularDeg: Number.POSITIVE_INFINITY,
-      };
-    }
-    unmatched.delete(best.index);
-    linearMm = Math.max(linearMm, best.error.linearMm);
-    angularDeg = Math.max(angularDeg, best.error.angularDeg);
-  }
-  return { linearMm, angularDeg };
 };
 
 const semanticFailure = (
@@ -3451,13 +3687,41 @@ const validateSemanticConstraint = (
         ),
       );
       const areaMm2 = areas.length > 0 ? Math.min(...areas) : 0;
-      if (areaMm2 < constraint.minimumAreaMm2) {
+      const boundarySeamRequired = constraint.minimumAreaMm2 <= 1e-6;
+      const boundarySeamPresent =
+        !boundarySeamRequired ||
+        (selectedStates.length > 0 &&
+          selectedStates.every((motionState) =>
+            firstPanelIds.some((firstPanelId) =>
+              otherPanelIds.some((secondPanelId) => {
+                if (firstPanelId === secondPanelId) return false;
+                const witnesses = panelIntersectionWitnesses(
+                  firstPanelId,
+                  secondPanelId,
+                  motionState,
+                );
+                return boundaryContactIsLocusBound(
+                  firstPanelId,
+                  secondPanelId,
+                  motionState,
+                  witnesses,
+                );
+              }),
+            ),
+          ));
+      if (areaMm2 < constraint.minimumAreaMm2 || !boundarySeamPresent) {
         semanticFailure(
           state,
           constraint,
-          measured(areaMm2, "mm2"),
-          measured(constraint.minimumAreaMm2, "mm2"),
-          "Measured coplanar contact overlap is below the requested minimum.",
+          boundarySeamRequired
+            ? measured(boundarySeamPresent ? "positive boundary seam" : "none")
+            : measured(areaMm2, "mm2"),
+          boundarySeamRequired
+            ? measured("positive-length coincident panel boundaries")
+            : measured(constraint.minimumAreaMm2, "mm2"),
+          boundarySeamRequired
+            ? "Declared seam contact requires positive-length coincident boundaries at the requested state."
+            : "Measured coplanar contact overlap is below the requested minimum.",
         );
       }
       return;
@@ -3490,34 +3754,43 @@ const validateSemanticConstraint = (
       return;
     }
     case "recognizable_form": {
-      const partIds = new Set(
-        ir.semanticParts.map((part) => part.semanticPartId.toLowerCase()),
+      const partsById = new Map(
+        ir.semanticParts.map((part) => [
+          part.semanticPartId.toLowerCase(),
+          part,
+        ]),
       );
-      const labels = ir.semanticParts
+      const referencedParts = constraint.semanticPartIds.flatMap((partId) => {
+        const part = partsById.get(partId.toLowerCase());
+        return part ? [part] : [];
+      });
+      const labels = referencedParts
         .flatMap((part) => [part.label, part.role])
         .join(" ")
         .toLowerCase();
       const missingParts = constraint.semanticPartIds.filter(
-        (partId) => !partIds.has(partId.toLowerCase()),
+        (partId) => !partsById.has(partId.toLowerCase()),
       );
+      const partsWithoutGeometry = referencedParts
+        .filter((part) => part.geometryRefs.length === 0)
+        .map((part) => part.semanticPartId);
       const missingLandmarks = constraint.requiredLandmarks.filter(
         (landmark) => !labels.includes(landmark.toLowerCase()),
       );
       if (
-        constraint.hard ||
+        constraint.evaluation !== "landmark_geometry" ||
         missingParts.length > 0 ||
+        partsWithoutGeometry.length > 0 ||
         missingLandmarks.length > 0
       ) {
         semanticFailure(
           state,
           constraint,
           measured(
-            constraint.hard
-              ? "no auditable geometric landmark evidence"
-              : `missing parts=${missingParts.join(",")}; landmarks=${missingLandmarks.join(",")}`,
+            `evaluation=${constraint.evaluation}; missing parts=${missingParts.join(",")}; parts without geometry=${partsWithoutGeometry.join(",")}; missing landmarks=${missingLandmarks.join(",")}`,
           ),
-          measured("all landmark geometry encoded deterministically"),
-          "Hard recognizable-form evidence cannot be established by labels alone in the V1 geometry contract.",
+          measured("all named landmarks bound to validated geometry"),
+          "Recognizable-form constraints require explicit semantic landmarks bound to source-checked geometry.",
         );
       }
       return;
@@ -3579,10 +3852,35 @@ const validateSemantics = (
     },
     { width: 0, height: 0, depth: 0 },
   );
+  const spanPermutations = [
+    [maximumSpansMm.width, maximumSpansMm.height, maximumSpansMm.depth],
+    [maximumSpansMm.width, maximumSpansMm.depth, maximumSpansMm.height],
+    [maximumSpansMm.height, maximumSpansMm.width, maximumSpansMm.depth],
+    [maximumSpansMm.height, maximumSpansMm.depth, maximumSpansMm.width],
+    [maximumSpansMm.depth, maximumSpansMm.width, maximumSpansMm.height],
+    [maximumSpansMm.depth, maximumSpansMm.height, maximumSpansMm.width],
+  ] as const;
+  const requestedSpanValues = [
+    ir.requestedSize.widthMm,
+    ir.requestedSize.heightMm,
+    ir.requestedSize.depthMm,
+  ] as const;
+  const assignmentErrorMm = (candidate: readonly number[]): number =>
+    candidate.reduce(
+      (sum, value, index) =>
+        sum +
+        (requestedSpanValues[index] === null
+          ? 0
+          : Math.abs(value - requestedSpanValues[index]!)),
+      0,
+    );
+  const assignedSpansMm = spanPermutations.reduce((best, candidate) =>
+    assignmentErrorMm(candidate) < assignmentErrorMm(best) ? candidate : best,
+  );
   const requestedDimensions = [
-    ["width", maximumSpansMm.width, ir.requestedSize.widthMm],
-    ["height", maximumSpansMm.height, ir.requestedSize.heightMm],
-    ["depth", maximumSpansMm.depth, ir.requestedSize.depthMm],
+    ["width", assignedSpansMm[0], ir.requestedSize.widthMm],
+    ["height", assignedSpansMm[1], ir.requestedSize.heightMm],
+    ["depth", assignedSpansMm[2], ir.requestedSize.depthMm],
   ] as const;
   for (const [dimension, actualMm, requestedMm] of requestedDimensions) {
     if (requestedMm === null) continue;

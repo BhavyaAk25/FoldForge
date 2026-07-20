@@ -11,6 +11,7 @@ import type {
 import { LIVE_OPERATION_POLICIES } from "@/server/api/security-policy";
 import { PROMPT_MAXIMUM_CHARACTERS } from "@/server/fabrication-ai/contracts";
 import type { FabricationIntentModel } from "@/server/fabrication-ai/models";
+import { FabricationIntentModelError } from "@/server/fabrication-ai/model-contract-error";
 
 import { fixtureIntent } from "../fixtures/fabrication";
 
@@ -119,6 +120,18 @@ describe("POST /api/intent", () => {
         code: "INVALID_REQUEST",
         message: "The fabrication intent request is malformed.",
         details: [],
+        diagnostic: {
+          version: "1",
+          stage: "intent",
+          kind: "request",
+          code: "INVALID_INTENT_REQUEST",
+          message: "The fabrication intent request is malformed.",
+          retryable: false,
+          modelCall: "not_started",
+          failureIds: [],
+          failedAtStage: null,
+          repairCycle: null,
+        },
       },
     });
     expect(mocks.compileIntent).not.toHaveBeenCalled();
@@ -137,6 +150,59 @@ describe("POST /api/intent", () => {
     expect(serialized).toContain("MODEL_RESPONSE_ERROR");
     expect(serialized).not.toContain(privatePrompt);
     expect(serialized).not.toContain(providerDetail);
+  });
+
+  it("classifies exhausted provider credits without exposing provider text", async () => {
+    const privateProviderText = "private billing response payload";
+    mocks.compileIntent.mockRejectedValueOnce(
+      Object.assign(new Error(privateProviderText), {
+        code: "insufficient_quota",
+        status: 429,
+      }),
+    );
+
+    const response = await POST(requestFor({ prompt: "Build a display." }));
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      error: {
+        code: "PROVIDER_CREDITS_EXHAUSTED",
+        diagnostic: {
+          stage: "intent",
+          kind: "provider",
+          code: "PROVIDER_CREDITS_EXHAUSTED",
+          retryable: false,
+          modelCall: "attempted",
+          failureIds: [],
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(privateProviderText);
+  });
+
+  it("reports truncated intent output as a stable contract failure", async () => {
+    const privateDetail = "private partial intent content";
+    mocks.compileIntent.mockRejectedValueOnce(
+      new FabricationIntentModelError(privateDetail),
+    );
+
+    const response = await POST(requestFor({ prompt: "Build a display." }));
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      error: {
+        code: "MODEL_INCOMPLETE",
+        diagnostic: {
+          stage: "intent",
+          kind: "contract",
+          code: "MODEL_INCOMPLETE",
+          retryable: false,
+          modelCall: "attempted",
+          failureIds: [],
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(privateDetail);
   });
 
   it("rejects a non-strict model result at the route boundary", async () => {

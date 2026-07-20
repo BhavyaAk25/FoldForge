@@ -244,6 +244,33 @@ describe("fabrication program compiler", () => {
     );
   });
 
+  it("preserves an intent fold-flat constraint against program body identifiers", () => {
+    const intent = fixtureIntent();
+    const constraint = {
+      constraintId: "intent-fold-flat",
+      kind: "fold_flat",
+      hard: true,
+      source: "user",
+      bodyIds: ["body-base", "body-wing"],
+      maximumStackThicknessMm:
+        intent.stockOptions[0]!.material.thicknessMm *
+        intent.fabricationBudget.maximumPanels,
+    } as const;
+    const compiled = compileFabricationProgram(
+      { ...intent, semanticConstraints: [constraint] },
+      fixtureProgram(),
+    );
+
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    expect(compiled.value.semanticConstraints).toContainEqual(constraint);
+    expect(
+      constraint.bodyIds.every((bodyId) =>
+        compiled.value.bodies.some((body) => body.bodyId === bodyId),
+      ),
+    ).toBe(true);
+  });
+
   it("rejects duplicate intent constraints instead of collapsing one", () => {
     const intent = fixtureIntent();
     const baseConstraint = {

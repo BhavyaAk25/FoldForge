@@ -8,10 +8,21 @@ import type {
   FabricationIRV1,
   VerificationReportV2,
 } from "../types";
+import {
+  CALIBRATION_LENGTH_MM,
+  createSheetLayout,
+  type FabricationSheetLayout,
+  type SheetLayoutEntry,
+} from "../pattern-layout";
+
+export {
+  CALIBRATION_LENGTH_MM,
+  createSheetLayout,
+  type FabricationSheetLayout,
+  type SheetLayoutEntry,
+};
 
 export const FABRICATION_EXPORTER_VERSION = "1";
-export const CALIBRATION_LENGTH_MM = 50;
-
 export type ExportErrorCode =
   | "invalid_source"
   | "invalid_geometry"
@@ -54,22 +65,6 @@ export interface FabricationExportArtifact {
   readonly bytes: Uint8Array;
   readonly text?: string;
   readonly metadata: ExportArtifactMetadataV1;
-}
-
-export interface SheetLayoutEntry {
-  readonly sheetId: string;
-  readonly label: string;
-  readonly widthMm: number;
-  readonly heightMm: number;
-  readonly offsetYmm: number;
-  readonly printableMarginMm: number;
-}
-
-export interface FabricationSheetLayout {
-  readonly widthMm: number;
-  readonly heightMm: number;
-  readonly calibrationYmm: number;
-  readonly sheets: readonly SheetLayoutEntry[];
 }
 
 export const fabricationExportError = (
@@ -246,47 +241,6 @@ export const createBinaryArtifact = (
     format,
     bytes,
     metadata: artifactMetadata(format, fileName, mimeType, bytes, source),
-  };
-};
-
-const SHEET_GAP_MM = 12;
-const CALIBRATION_FOOTER_MM = 14;
-const MINIMUM_CALIBRATION_CANVAS_WIDTH_MM = CALIBRATION_LENGTH_MM + 10;
-
-export const createSheetLayout = (
-  ir: FabricationIRV1,
-): FabricationSheetLayout => {
-  const orderedSheets = [...ir.sheets].sort((left, right) =>
-    left.sheetId.localeCompare(right.sheetId),
-  );
-  let offsetYmm = 0;
-  const entries: SheetLayoutEntry[] = orderedSheets.map((sheet, index) => {
-    const entry = {
-      sheetId: sheet.sheetId,
-      label: `Sheet ${index + 1}: ${sheet.sheetId}`,
-      widthMm: sheet.widthMm,
-      heightMm: sheet.heightMm,
-      offsetYmm,
-      printableMarginMm: sheet.printableMarginMm,
-    };
-    offsetYmm += sheet.heightMm;
-    if (index < orderedSheets.length - 1) offsetYmm += SHEET_GAP_MM;
-    return entry;
-  });
-  const maximumSheetWidthMm = orderedSheets.reduce(
-    (maximum, sheet) => Math.max(maximum, sheet.widthMm),
-    0,
-  );
-  const widthMm = Math.max(
-    maximumSheetWidthMm,
-    MINIMUM_CALIBRATION_CANVAS_WIDTH_MM,
-  );
-  const calibrationYmm = offsetYmm + CALIBRATION_FOOTER_MM / 2;
-  return {
-    widthMm,
-    heightMm: offsetYmm + CALIBRATION_FOOTER_MM,
-    calibrationYmm,
-    sheets: entries,
   };
 };
 

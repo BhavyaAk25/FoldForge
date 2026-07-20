@@ -10,6 +10,7 @@ import {
   type CandidateProvenanceInput,
 } from "@/core/fabrication/candidate";
 import { createFacetedDuckGiftBoxShowcase } from "@/core/fabrication/examples";
+import { FOLD_EXTENSION_KEYS } from "@/core/fabrication/export";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type { CandidateV2 } from "@/core/fabrication/types";
 import { sha256HexBytes } from "@/core/sha256";
@@ -23,6 +24,8 @@ const provenance = {
   deterministicSeed: 2_026_071_4,
   modelId: null,
   modelResponseId: null,
+  modelPlanHash: null,
+  planExpanderVersion: null,
   parentCandidateId: null,
   appliedPatchIds: [],
   repairCycle: 0,
@@ -185,7 +188,7 @@ describe("fabrication export routes", () => {
     expect(document).toMatchObject({
       file_spec: 1.2,
       frame_unit: "mm",
-      foldforge_sourceCandidateId: "candidate-duck-fold-route",
+      [FOLD_EXTENSION_KEYS.sourceCandidateId]: "candidate-duck-fold-route",
     });
   });
 

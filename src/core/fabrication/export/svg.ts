@@ -1,7 +1,10 @@
+import {
+  createFabricationPatternLayout,
+  type FabricationPatternPath,
+} from "../pattern-layout";
 import type { FabricationPathV1 } from "../types";
 import {
   CALIBRATION_LENGTH_MM,
-  createSheetLayout,
   createTextArtifact,
   fabricationExportOk,
   formatExportNumber,
@@ -28,17 +31,17 @@ const layerForPath = (path: FabricationPathV1): SvgLayer => {
   }
 };
 
-const pathData = (path: FabricationPathV1, offsetYmm: number): string => {
+const pathData = (path: FabricationPatternPath): string => {
   const [first, ...remaining] = path.points;
   if (!first) return "";
   const commands = [
-    `M ${formatExportNumber(first.xMm)} ${formatExportNumber(first.yMm + offsetYmm)}`,
+    `M ${formatExportNumber(first.xMm)} ${formatExportNumber(first.yMm)}`,
     ...remaining.map(
       (point) =>
-        `L ${formatExportNumber(point.xMm)} ${formatExportNumber(point.yMm + offsetYmm)}`,
+        `L ${formatExportNumber(point.xMm)} ${formatExportNumber(point.yMm)}`,
     ),
   ];
-  if (path.closed) commands.push("Z");
+  if (path.path.closed) commands.push("Z");
   return commands.join(" ");
 };
 
@@ -48,12 +51,10 @@ export const exportFabricationSvg = (
   const preparedResult = prepareExportSource(source);
   if (!preparedResult.ok) return preparedResult;
   const prepared = preparedResult.value;
-  const layout = createSheetLayout(prepared.ir);
-  const layoutBySheetId = new Map(
-    layout.sheets.map((sheet) => [sheet.sheetId, sheet]),
-  );
-  const orderedPaths = [...prepared.ir.paths].sort((left, right) =>
-    left.pathId.localeCompare(right.pathId),
+  const patternLayout = createFabricationPatternLayout(prepared.ir);
+  const layout = patternLayout.sheetLayout;
+  const orderedPaths = [...patternLayout.paths].sort((left, right) =>
+    left.path.pathId.localeCompare(right.path.pathId),
   );
 
   const lines: string[] = [
@@ -86,12 +87,11 @@ export const exportFabricationSvg = (
       }
     }
 
-    for (const path of orderedPaths) {
+    for (const laidOutPath of orderedPaths) {
+      const path = laidOutPath.path;
       if (layerForPath(path) !== layer) continue;
-      const sheet = layoutBySheetId.get(path.sheetId);
-      if (!sheet) continue;
       lines.push(
-        `<path id="${xmlEscape(path.pathId)}" class="${layer}" data-source-path-id="${xmlEscape(path.pathId)}" data-sheet-id="${xmlEscape(path.sheetId)}" data-panel-id="${path.panelId ? xmlEscape(path.panelId) : ""}" data-stroke-width-mm="${formatExportNumber(path.strokeWidthMm)}" d="${pathData(path, sheet.offsetYmm)}" />`,
+        `<path id="${xmlEscape(path.pathId)}" class="${layer}" data-source-path-id="${xmlEscape(path.pathId)}" data-sheet-id="${xmlEscape(path.sheetId)}" data-panel-id="${path.panelId ? xmlEscape(path.panelId) : ""}" data-stroke-width-mm="${formatExportNumber(path.strokeWidthMm)}" d="${pathData(laidOutPath)}" />`,
       );
     }
 

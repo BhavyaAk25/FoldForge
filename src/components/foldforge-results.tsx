@@ -32,7 +32,7 @@ const EXPORT_OPTIONS: readonly ExportOption[] = [
   {
     format: "glb",
     label: "GLB model",
-    description: "Open in a 3D viewer and play “FoldForge Open Close”.",
+    description: "Open in a 3D viewer and play its animation when one exists.",
   },
   {
     format: "fold",
@@ -93,6 +93,10 @@ export function FoldForgeResults({
   rotationDeg,
   selected,
 }: FoldForgeResultsProps) {
+  const hasMotion = selected.ir.driver !== null;
+  const isPreparedVerticalLift =
+    experienceMode === "saved" &&
+    selected.intent.intentId === "intent-showcase-popup-flower";
   const foldCompatibility = inspectFabricationFoldCompatibility({
     ir: selected.ir,
     sourceCandidateId: selected.candidateId,
@@ -105,17 +109,19 @@ export function FoldForgeResults({
         <p className={styles.eyebrow}>
           {experienceMode === "saved"
             ? "Saved example · prepared in advance"
-            : "All designs passed our checks"}
+            : "Design passed our checks"}
         </p>
         <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
           {experienceMode === "saved"
             ? `Explore the ${selected.label.toLowerCase()}.`
-            : "Compare your designs."}
+            : "Inspect your design."}
         </h2>
         <p className={styles.sectionIntro}>
           {experienceMode === "saved"
-            ? "This example is not a response to your current prompt. It is a prepared design you can inspect, move, and export while live generation is off."
-            : "Choose a design, inspect the 3D result and flat pattern, then download the one you want to make."}
+            ? hasMotion
+              ? "This example is not a response to your current prompt. It is a prepared design you can inspect, move, and export while live generation is off."
+              : "This example is not a response to your current prompt. It is a prepared static crease-pattern study you can inspect, rotate, and export; no open-and-close motion is modeled."
+            : "Inspect the 3D result and flat pattern, then download the files you need."}
         </p>
       </div>
 
@@ -176,17 +182,20 @@ export function FoldForgeResults({
             rotationDeg={rotationDeg}
             label={`${selected.label} ${previewMode} preview`}
           />
-          {previewMode === "assembled" ? (
+          {previewMode === "assembled" && hasMotion ? (
             <div className={styles.controls} data-testid="motion-controls">
               <label>
-                Open and close
+                {isPreparedVerticalLift ? "Lower and lift" : "Open and close"}
                 <input
-                  aria-label="Open and close the design"
+                  aria-label={
+                    isPreparedVerticalLift
+                      ? "Lower and lift the design"
+                      : "Open and close the design"
+                  }
                   type="range"
                   min="0"
                   max="1"
                   step="0.01"
-                  disabled={!selected.ir.driver}
                   value={motionPosition}
                   aria-valuetext={`${Math.round(motionPosition * 100)} percent`}
                   onChange={(event) =>
@@ -196,19 +205,11 @@ export function FoldForgeResults({
                 <output>{Math.round(motionPosition * 100)}%</output>
               </label>
               <div className={styles.motionEndpoints}>
-                <button
-                  type="button"
-                  disabled={!selected.ir.driver}
-                  onClick={() => onMotionPositionChange(0)}
-                >
-                  Closed
+                <button type="button" onClick={() => onMotionPositionChange(0)}>
+                  {isPreparedVerticalLift ? "Lowered" : "Closed"}
                 </button>
-                <button
-                  type="button"
-                  disabled={!selected.ir.driver}
-                  onClick={() => onMotionPositionChange(1)}
-                >
-                  Open
+                <button type="button" onClick={() => onMotionPositionChange(1)}>
+                  {isPreparedVerticalLift ? "Raised" : "Open"}
                 </button>
               </div>
             </div>
@@ -294,20 +295,36 @@ export function FoldForgeResults({
                 <span>
                   {experienceMode === "saved"
                     ? "Not called for this prepared example."
-                    : `${selected.provenance.modelId ?? "The configured model"} proposed the typed design program${repairs.length > 0 ? " and bounded repair" : ""}.`}
+                    : `${selected.provenance.modelId ?? "The configured model"} proposed the compact design plan${repairs.length > 0 ? " and bounded repair" : ""}.`}
                 </span>
               </li>
               <li>
                 <strong>CODE</strong>
                 <span>
-                  Compiled the geometry, ran{" "}
+                  {selected.provenance.planExpanderVersion
+                    ? `Expanded the plan with deterministic expander ${selected.provenance.planExpanderVersion}, compiled the geometry, and ran `
+                    : "Compiled the geometry and ran "}
                   {selected.verification.checks.length}
-                  {" checks"}, applied any allowed patch, and ranked only valid
-                  candidates.
+                  {" checks"}, applied any allowed patch, and accepted the
+                  design only after every hard check passed.
                 </span>
               </li>
             </ol>
             <dl className={styles.proofHashes}>
+              {selected.provenance.modelPlanHash ? (
+                <div>
+                  <dt>AI plan hash</dt>
+                  <dd>
+                    <code>{selected.provenance.modelPlanHash}</code>
+                  </dd>
+                </div>
+              ) : null}
+              {selected.provenance.modelResponseId ? (
+                <div>
+                  <dt>AI response provenance</dt>
+                  <dd>Recorded in design data</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Selected candidate hash</dt>
                 <dd>
@@ -340,7 +357,9 @@ export function FoldForgeResults({
                 foldCompatibility.status === "omitted";
               const description = foldUnavailable
                 ? foldCompatibility.reason.message
-                : option.description;
+                : option.format === "glb" && !hasMotion
+                  ? "Open in a 3D viewer. This static model has no animation clip."
+                  : option.description;
               return (
                 <button
                   key={option.format}

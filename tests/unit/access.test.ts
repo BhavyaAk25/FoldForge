@@ -25,9 +25,8 @@ describe("access sessions and privacy identifiers", () => {
       issuedAtSeconds: 1_000,
       expiresAtSeconds: 8_200,
     });
-    expect(
-      readAccessSession(createAccessToken(1_000), 1_001)?.subject,
-    ).not.toEqual(session?.subject);
+    const reissued = readAccessSession(createAccessToken(1_000), 1_001);
+    expect(reissued?.subject).not.toEqual(session?.subject);
     expect(verifyAccessToken(token, 1_001)).toBe(true);
     expect(verifyAccessToken(`${token}.ignored`, 1_001)).toBe(false);
     expect(verifyAccessToken(token, 10_000)).toBe(false);

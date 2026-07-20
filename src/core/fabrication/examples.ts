@@ -353,7 +353,7 @@ export const createFacetedDuckGiftBoxShowcase =
             ],
             dependsOnOperationIds: ["assembly-duck-score"],
             instruction:
-              "Hand-fold the lid and beak; reopen the lid to place a flat gift.",
+              "Treat the lid and beak scores as crease annotations; this saved static study does not model articulated opening or closing.",
           },
           {
             operationId: "assembly-duck-verify",
@@ -362,7 +362,7 @@ export const createFacetedDuckGiftBoxShowcase =
             targetRefs: [{ kind: "semantic_part", id: "part-duck-lid" }],
             dependsOnOperationIds: ["assembly-duck-fold"],
             instruction:
-              "Verify that the scored lid moves freely; material durability is not simulated.",
+              "Confirm the cut and score lines match the shown pattern; lid travel and material durability are not verified.",
           },
         ],
       },
@@ -690,7 +690,7 @@ export const createModularCableOrganizerShowcase =
 export const createPullTabPopUpFlowerShowcase =
   (): OfflineFabricationShowcase => {
     const prompt =
-      "Make a pull-tab pop-up flower card whose flower rises when I pull.";
+      "Make a flower crown that rises 30 mm when I lift a vertical tab.";
     const sheet = showcaseSheet("sheet-popup-flower", 280, 190, 0.35);
     const constraints: readonly SemanticConstraintV1[] = [
       {
@@ -720,13 +720,13 @@ export const createPullTabPopUpFlowerShowcase =
         kind: "recognizable_form",
         hard: false,
         source: "program",
-        label: "Pull-tab flower lift",
+        label: "Vertical-tab flower lift",
         semanticPartIds: [
           "part-flower-base",
           "part-flower-petals",
           "part-flower-pull-tab",
         ],
-        requiredLandmarks: ["flower", "petal", "pull tab"],
+        requiredLandmarks: ["flower", "petal", "vertical lift tab"],
         evaluation: "landmark_geometry",
       },
     ];
@@ -734,12 +734,12 @@ export const createPullTabPopUpFlowerShowcase =
       version: "1",
       intentId: "intent-showcase-popup-flower",
       sourcePrompt: prompt,
-      title: "Pull-tab pop-up flower",
-      objectLabel: "moving flower card",
+      title: "Vertical-lift flower study",
+      objectLabel: "moving flower study",
       functionalGoal:
-        "Raise a rigid flower crown 30 mm above a card through a pull-tab-controlled guide.",
+        "Raise a rigid flower crown 30 mm above its base through a directly driven vertical tab.",
       visualDescription:
-        "A square card base beneath a broad eight-petal flower silhouette and guided pull-tab feature.",
+        "A square base beneath a broad eight-petal flower silhouette and guided vertical lift tab.",
       behavior: "slide",
       requestedSize: { widthMm: 90, heightMm: 90, depthMm: 30 },
       stockOptions: [sheet],
@@ -835,7 +835,7 @@ export const createPullTabPopUpFlowerShowcase =
             panelId: "panel-flower-base",
             sheetId: sheet.sheetId,
             bodyId: "body-flower-base",
-            label: "Pop-up flower card base",
+            label: "Vertical-lift flower base",
             role: "structural",
             widthMm: 90,
             heightMm: 90,
@@ -982,7 +982,7 @@ export const createPullTabPopUpFlowerShowcase =
         driver: {
           driverId: "driver-flower-pull-tab",
           jointId: "joint-flower-lift",
-          label: "Pull tab to raise flower",
+          label: "Lift vertical tab to raise flower",
           control: "pull_tab",
           minimumValue: 0,
           maximumValue: 30,
@@ -1021,8 +1021,8 @@ export const createPullTabPopUpFlowerShowcase =
           },
           {
             semanticPartId: "part-flower-pull-tab",
-            label: "Pull tab guide",
-            role: "pull tab prismatic guide",
+            label: "Vertical lift tab",
+            role: "vertical lift tab prismatic guide",
             geometryRefs: [
               { kind: "driver", id: "driver-flower-pull-tab" },
               { kind: "connector", id: "connector-flower-guide-tab" },
@@ -1077,7 +1077,7 @@ export const createPullTabPopUpFlowerShowcase =
       semanticConstraints: constraints,
       assemblyStrategy: "articulated_tab_slot",
       designSummary:
-        "Offline showcase only. The deterministic mechanism is a rigid flower crown on a 30 mm vertical prismatic guide controlled as a pull tab. The current grammar does not model a paper linkage that converts a horizontal pull into vertical lift, spring force, or material deformation.",
+        "Offline showcase only. The deterministic mechanism is a rigid flower crown on a 30 mm vertical prismatic guide controlled directly by a vertical lift tab. Spring force and material deformation are not modeled.",
     };
     return {
       showcaseId: "pull-tab-pop-up-flower",
@@ -1085,7 +1085,7 @@ export const createPullTabPopUpFlowerShowcase =
       livePromptRouting: false,
       prompt,
       limitation:
-        "Verified motion is a rigid vertical prismatic lift; horizontal-to-vertical paper linkage forces and material spring behavior are not simulated.",
+        "Verified motion is a directly driven rigid vertical prismatic lift; tab force and material spring behavior are not simulated.",
       intent,
       program,
     };

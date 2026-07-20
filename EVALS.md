@@ -2,110 +2,205 @@
 
 ## Evidence status
 
-The generalized prompt-to-fabrication compiler passes its deterministic, mocked-contract, repair, export, browser, and offline end-to-end gates. GPT-5.6 Sol live behavior is the only unrun gate and is explicitly blocked on user activation.
+The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. On clean commit `2dc57ed`, the compact semantic-plan path passed one exact paid local Sol prompt-to-artifact acceptance case. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also passed the exact hosted program, deterministic verification, and source-equivalent export confirmation described below. These exact cases are not a five-case reliability claim.
 
-All generated reports are written under ignored `artifacts/evals/`. Offline evidence never counts as live model evidence.
+Generated reports are written under ignored `artifacts/evals/`. Public evidence contains bounded metrics and hashes, never credentials, prompt bodies, model bodies, response IDs, or private reasoning. Offline evidence never counts as live-model evidence.
 
 ## Release rule
 
-Release requires:
+Release evidence must satisfy all of these:
 
-- no hard-invalid candidate labelled valid, ranked, shown, finalized, or exported;
-- exact selected-candidate source equivalence across every export;
-- no serious security, accessibility, privacy, or licensing issue;
-- at least 92/100 in the internal harsh review, with no official criterion below 22/25; and
-- a passing sealed live suite before claiming arbitrary GPT-5.6 Sol generation.
+- no hard-invalid candidate labelled, displayed, finalized, or exported as valid;
+- deterministic repeatability for identical inputs;
+- core coverage remains above 95% statements/lines/functions and 90% branches;
+- no serious unresolved security, accessibility, privacy, licensing, or export-equivalence finding;
+- the deployed build SHA matches the reviewed source and evidence;
+- exact selected-artifact bytes pass independent consumer checks; and
+- the lower independent judge score is at least 92/100 overall, with every official category at least 22/25.
 
-## Current results
+A one-case paid run is an **acceptance smoke**. It can prove that exact case works, but it is not the older five-case reliability suite and cannot by itself justify a broad reliability or 92/100 claim.
 
-### Deterministic compiler, verifier, and exports
+## Current no-cost results
 
-| Gate                                | Result                                  | Threshold | Status |
-| ----------------------------------- | --------------------------------------- | --------: | ------ |
-| Independently varied valid controls | 120/120 accepted                        |      ≥98% | Pass   |
-| Hard-invalid adversarial mutations  | 0/560 accepted                          |         0 | Pass   |
-| Correct fail-fast verifier stage    | 560/560                                 |      100% | Pass   |
-| Export source equivalence           | 120/120                                 |      100% | Pass   |
-| Canonical repeatability             | 50 programs × 10 repeats; 0 differences |      100% | Pass   |
-| Compile + verify p95                | 75.521 ms                               | ≤2,000 ms | Pass   |
-| Offline crashes                     | 0                                       |         0 | Pass   |
-| Strict coverage                     | 96.72% statements / 90.19% branches     | 95% / 90% | Pass   |
+### Test and coverage gates
 
-The 560 mutations cover schema, topology, panel geometry, connections, sheet packing, rigid transforms, motion, collision, semantics, and export equivalence with 56 cases per phase.
+| Gate             | Result                              |
+| ---------------- | ----------------------------------- |
+| Vitest           | 457/457 passing                     |
+| Statements       | 96.95%                              |
+| Branches         | 90.36%                              |
+| Functions        | 97.79%                              |
+| Lines            | 97.97%                              |
+| Chromium E2E     | 7/7 passing                         |
+| Production build | Pass                                |
+| Production audit | No known production vulnerabilities |
 
-### Intent contract
+The browser suite covers the one-design flow, success followed by a different prompt's failure, required responsive widths, keyboard use, reduced motion, accessibility, slow/malformed responses, real preview and pattern controls, checkpoint restore, conditional formats, and exact result-bound downloads. It fails on unexpected console errors or warnings.
 
-| Gate                                 | Result  | Threshold | Status |
-| ------------------------------------ | ------- | --------: | ------ |
-| Mocked strict schema validity        | 140/140 |      100% | Pass   |
-| Supported cases                      | 100     |         — | —      |
-| Boundary/refusal/clarification cases | 40      |         — | —      |
-| Explicit constraint recall           | 100%    |      ≥98% | Pass   |
-| Unit normalization                   | 100%    |      ≥99% | Pass   |
-| Correct status/refusal/clarification | 100%    |      ≥95% | Pass   |
+### Compiler, verifier, and repeatability
 
-These are mocked contract tests. They establish schema and deterministic normalization behavior, not GPT-5.6 Sol accuracy.
+| Gate                                     | Result                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| Valid in-range controls                  | 120/120 accepted; zero crashes                                                  |
+| Hard-invalid mutations                   | 0/560 accepted                                                                  |
+| Correct fail-fast stage                  | 560/560                                                                         |
+| Repeatability                            | 50 programs × 10 runs; zero canonical differences                               |
+| Seeded properties                        | 1,000 runs with `FC_SEED=20260714`                                              |
+| Static semantic playing-card-box fixture | Exact sheet, stock, panel, seam, connector, and closed-span checks pass offline |
+
+The target box fixture uses one 210 × 297 mm sheet, 5 mm margins, 0.4 mm stock, six named panels, five folds, one reciprocal tab-slot pair, and exact closed spans of 70 × 95 × 25 mm. The live acceptance contract rejects a dimension-matching two-panel shape because dimensions alone do not satisfy the requested enclosure topology.
+
+### Intent contracts
+
+| Gate                           | Result                                          |
+| ------------------------------ | ----------------------------------------------- |
+| Offline compiler contract      | 140/140 schema, recall, unit, and status checks |
+| Supported-request no-crash set | Pass                                            |
+| Unsupported scope              | Refused or clarified inside the strict schema   |
+| Prompt injection               | Cannot escape the typed response contract       |
+| Essential missing measurements | One minimal clarifying question                 |
+
+Planning input preserves the source prompt and normalized explicit constraints. The semantic-plan contract defines built-in shape edge ordering, local attachments, semantic parts, and connector relationships so the model does not author compiled coordinates or guess undocumented geometry conventions.
 
 ### Repair and ablation
 
-| Gate                                       | Result                  |      Threshold | Status |
-| ------------------------------------------ | ----------------------- | -------------: | ------ |
-| Repairable seeded failures within 3 cycles | 40/40; all in one cycle |           ≥85% | Pass   |
-| Correct non-repairable exhaustion          | 20/20                   |           100% | Pass   |
-| Adversarial patches accepted               | 0/120                   |              0 | Pass   |
-| Bounded termination                        | 100%                    |           100% | Pass   |
-| Full-report repair ablation                | 100% vs 0% / 0%         | ≥20-point lift | Pass   |
+| Gate                            | Result                                    |
+| ------------------------------- | ----------------------------------------- |
+| Seeded repairable failures      | 40/40 repaired within the evaluated cycle |
+| No-progress/infeasible cases    | 20/20 terminated explicitly               |
+| Hostile or unrelated patches    | 0/120 accepted                            |
+| Full verifier feedback          | 40/40 repaired                            |
+| Reduced pass/fail-only feedback | 0/40 repaired                             |
 
-Repair fixtures cover packing, connector clearance, and motion. Adversarial patches cover schema, base hash, failure reference, grounding, unit, and duplicate-input attacks.
+Every diagnosis must cite a real report field and repairable path. Unknown, unrelated, out-of-range, duplicate, and no-op patches are rejected. Every accepted patch triggers complete recompilation and revalidation.
 
-### End-to-end and browser
+### Offline end-to-end and export consumers
 
-| Gate                                                    | Result                         | Status |
-| ------------------------------------------------------- | ------------------------------ | ------ |
-| Offline showcase compile → verify → rank → export       | 15/15; 3 topology fingerprints | Pass   |
-| Main access/generate/repair/checkpoint/export journey   | 1/1                            | Pass   |
-| Duplicate topology rejection                            | 1/1                            | Pass   |
-| Plain-language examples and honest saved-example flow   | 1/1                            | Pass   |
-| Malformed strict API response                           | 1/1                            | Pass   |
-| 390 / 768 / 1280 / 1440 px horizontal overflow          | 0                              | Pass   |
-| Keyboard focus and reduced motion                       | 1/1                            | Pass   |
-| Axe serious or critical violations, before/after result | 0                              | Pass   |
+The sealed offline E2E suite passes **15/15**. It exercises prepared deterministic programs and model-contract fixtures; it is not evidence that an arbitrary prompt was interpreted by live Sol.
 
-The browser suite has seven passing Chromium tests. It includes the three named prompts, live-off disclosure, prepared flower and duck results, working 3D motion/orbit/pan/zoom controls, assistive view announcements, pattern-only pan/zoom/layer controls, offline SVG and FOLD downloads, exact live-result export controls, access/prompt focus, matched visual and accessible motion values, and proof that opening a saved example makes no intent-model request. The complete unit/integration suite has 284 passing tests across 37 files. The rendered in-app review also checks clipping, mobile horizontal scrolling, control behavior, export availability, and console output at the required widths.
+| Format | Independent check                                                                | Current prepared-artifact result                           |
+| ------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| SVG    | Scale, layers, printable bounds, 50 mm calibration, regenerated-byte equivalence | Pass                                                       |
+| DXF    | `dxf-parser` 1.1.2                                                               | All showcases parse in millimetres with fabrication layers |
+| GLB    | Khronos glTF Validator 2.0.0-dev.3.10                                            | All showcases: 0 errors, 0 warnings                        |
+| JSON   | Canonical selected intent/program/IR/report/score/provenance/hashes              | Pass                                                       |
+| FOLD   | Official FOLD JS library 0.12.0                                                  | Fold-only duck parses and populates faces                  |
 
-### External export-consumer checks
+FOLD is omitted with a specific reason when revolute, prismatic, connector, or other source semantics cannot be represented losslessly. Parser acceptance does not prove strength, fabrication quality, or compatibility with every downstream application.
 
-| Artifact | Independent consumer                    | Result                                                                    |
-| -------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| GLB      | Khronos glTF Validator `2.0.0-dev.3.10` | All three showcase files: 0 errors, 0 warnings                            |
-| DXF      | `dxf-parser` `1.1.2`                    | All three parsed as millimetres with CUT/SCORE/PERFORATION/ENGRAVE layers |
-| FOLD     | Official FOLD JS library `0.12.0`       | Fold-only duck parsed with all assignments and bounded faces populated    |
+## Historical paid Sol evidence
 
-These are file-level compatibility checks, not claims that every downstream GUI or fabrication machine was exercised. The motion-rich flower and organizer use revolute/prismatic semantics outside the lossless FOLD profile, so their UI and API report FOLD as unavailable with a specific reason. Their SVG, DXF, GLB, and canonical JSON exports remain available and source-checked.
+Historical evaluation used a $3.70 client reservation ceiling under an earlier $4.00 authorization. Preserve it exactly:
 
-The committed `validate:consumers` command regenerates the three canonical showcases in memory and exercises the independent parsers directly; these results are not self-certified screenshots.
+- the paid intent contract passed supported, unsupported, and prompt-injection cases;
+- the guarded complex intent eventually recalled 18/18 explicit requirements;
+- the final retained compiler summary records 3/3 for $0.11435875, but its raw report was overwritten by a later offline run and is therefore summary-only;
+- the final guarded readiness intent cost $0.08897875 and passed 18/18 checks;
+- older full-program requests failed by provider timeout, unsettled request, missing usage, or incomplete `max_output_tokens` output;
+- the last incomplete response was rejected as `budget_usage_invalid` before schema validation, compilation, repair, or export; and
+- the third immutable continuation is sealed at $3.6134275, with $0.0865725 unusable under its conservative reservation policy.
 
-### Live GPT-5.6 Sol
+Those failures show that fail-closed output and billing controls worked. They do not show that program generation worked. The old ledger, its continuations, claims, hashes, and failed reports are never deleted, reset, branched, relabelled, or reused. The sanitized historical packet is [submission/evidence/sol-live-evidence.json](./submission/evidence/sol-live-evidence.json).
 
-| Gate                                                       | Current                            |
-| ---------------------------------------------------------- | ---------------------------------- |
-| Strict response or explicit refusal                        | Blocked — user activation required |
-| Supported brief yields valid candidate or grounded failure | Blocked — user activation required |
-| Explicit constraint recall and unit normalization          | Blocked — user activation required |
-| Prompt-injection/contract escape                           | Blocked — user activation required |
-| Prompt, response, or secret content in production logs     | Blocked — user activation required |
+## Why the next contract is smaller
 
-No paid live result is claimed. After enabling model access, run:
+The failed contract asked Sol to produce too much canonical geometry and bookkeeping. The current contract asks for one compact semantic plan containing design judgment: bounded panel shapes, bodies, local-edge attachments, fold/revolute/prismatic joints, tab-slot relationships, motion, semantic landmarks, and assembly intent.
 
-```bash
-ENABLE_LIVE_OPENAI=true ENABLE_LIVE_OPENAI_EVALS=true pnpm run eval:live
-```
+Pure code then:
 
-The sealed readiness suite runs five bounded supported prompts and requires at least four complete successes. Each success requires three distinct verified candidates, bounded repair when needed, selected-candidate GLB/SVG/DXF/JSON/FOLD handling, source equivalence, and a strict final narrative. The report stores prompt hashes and bounded metrics, not prompt or response content. `eval:compiler` remains the focused intent-contract evaluation and defaults to only five supported plus five boundary calls in live mode.
+1. copies intent-owned requirements and stock;
+2. resolves documented edge indexes;
+3. derives transforms, layout, connector geometry, IDs, and assembly order;
+4. validates the canonical `FabricationProgramV1`;
+5. compiles and runs the ordered verifier; and
+6. emits exact source-bound artifacts only after a pass.
 
-Do not record or submit a live-generation claim until this report passes on the submission build.
+Representative semantic payloads fit inside the reduced 4,000-token plan ceiling, and the exact six-panel box passes offline expansion and verification. This is a tested mitigation, not live evidence.
 
-## Reproduction
+## Separately authorized $2 acceptance plan
+
+The builder has authorized a new maximum of **$2.00** for the compact path. This is separate from the sealed historical ledger.
+
+On clean commit `659e84b`, the new compiler controls passed 3/3 for $0.13202125. The exact box request then used all 3,000 intent-output tokens, 2,918 of them reasoning tokens, and returned no parsed intent. FoldForge stopped before program generation after charging the completed $0.10198375 request. The new ledger therefore records $0.234005 charged and $1.765995 remaining. This is evidence for an intent-output truncation, not a program-generation result.
+
+The targeted remedy uses medium intent reasoning, a strict 4,000-token ceiling, and a typed `MODEL_INCOMPLETE` diagnostic. It has passed every no-cost gate but must be committed and revalidated by a live response before it changes the evidence boundary.
+
+On clean commit `6537b46`, all three compiler controls passed. The exact intent passed 16/16 requirements, and Sol completed one compact program response in about 71 seconds. Deterministic expansion rejected it as `model_invalid_plan` before compilation, repair, or export. The exact intent and program calls cost $0.19071875; cumulative new-ledger spend is $0.542165 with $1.457835 remaining. This proves the compact program call can complete inside the bounded runtime, but it does not prove a valid program.
+
+The next build records only bounded invalid-plan phase/code/path diagnostics and asks Sol to audit the exact semantic plan against deterministic expansion invariants before its single function call. The failed model body remains unlogged and unrecoverable under `store:false`; no unmodified retry is permitted.
+
+On clean commit `21c82f7`, the compiler controls passed and the exact intent again passed 16/16. The complete strict program response was rejected with the newly isolated expansion detail `packing_failed` at `panels/base`: its connected flat net did not fit in the authored orientation. Those two calls cost $0.1735275, bringing cumulative spend to $0.795658 with $1.204342 remaining.
+
+The deterministic packer now evaluates both 0° and 90° orientations for every connected flat component and composes the chosen rotation into every panel transform. A focused regression proves a 110 × 60 mm connected net fits a 62 × 112 mm printable area only after the legal quarter-turn. This is a general compiler fix, not a prompt or object-specific route.
+
+On clean commit `1af1551`, the compiler controls and 16/16 exact intent checks passed. The Sol plan then passed strict schema and deterministic expansion, producing one topology fingerprint. Deterministic verification rejected the candidate before export, and no repair call ran because the failure exposed no bounded program path. These calls cost $0.1715125; cumulative spend is $1.044196 with $0.955804 remaining.
+
+Failed live evidence now retains the initial verifier stage, stable failure IDs, measured actual/expected fields, and repairable paths even when no repair cycle can begin. It still does not retain prompt bodies, model bodies, private reasoning, or arbitrary provider error text.
+
+On clean commit `0f78b02`, compiler controls and 16/16 exact intent checks passed, but OpenAI reported 4,007 output tokens against a 4,000-token model request. The guard charged the actual $0.14747 usage, sealed the ledger at $1.360834, and stopped before parsing. The ledger retains $0.639166 under the $2 ceiling but cannot continue in place.
+
+The next build reserves a separate 32-token provider accounting allowance without raising the `max_output_tokens` sent to Sol. Usage inside that allowance is charged normally; larger or structurally invalid usage still halts. Any further call must use the one-time immutable continuation carrying all $1.360834 already spent.
+
+On clean commit `f880d20`, the compiler controls passed again and the exact intent recalled 16/16 requirements. Sol completed a strict compact semantic plan, which deterministic expansion rejected as `edge_length_mismatch` at `joints/rightFold`: the chosen short child edge could not attach to the base's full-height edge. The exact intent and plan calls cost $0.1821925, bringing cumulative spend to $1.617172 with $0.382828 remaining under the unchanged $2 ceiling.
+
+The deterministic mapper now considers an alternative child edge only after the authored angular edge has a physical-length mismatch. It accepts only a same-length boundary edge whose aligned panel lies outside the parent, with deterministic tie-breaking; if none exists, the original typed failure remains. The exact six-panel box regression deliberately supplies Sol's wrong right-panel edge and still passes exact dimensions, ordered verification, SVG/DXF/GLB/JSON finalization, and source-equivalence checks offline. This fix is not a template, prompt-keyword route, or live success claim.
+
+On clean commit `2357c2f`, all three compiler responses were schema-valid and completed. The supported case and prompt-injection refusal passed, but the plain powered-robot request was classified `needs_clarification` instead of `unsupported`. The gate failed and stopped before the exact acceptance prompt. These controls cost $0.11447125, bringing cumulative spend to $1.73164325 and leaving $0.26835675. The intent instructions now make unsupported essential behavior take precedence over absent measurements; clarification is reserved for representable requests missing an essential choice. That contract correction passes offline tests but has not been paid-revalidated.
+
+Under the builder's next separate $2 authorization, clean commit `5ae9fea` passed the corrected live compiler gate 3/3 for $0.1164025. The exact intent then recalled 16/16 requirements and Sol completed one strict semantic plan. Deterministic verification rejected nine recognizable-form references at topology: semantic-part fields contained panel, joint, and connector identifiers rather than the canonical landmark-part identifiers they are required to name. The exact calls cost $0.1867375; cumulative spend in this ledger is $0.30314 with $1.69686 remaining. No repair or export was claimed.
+
+Intent normalization now converts recognizable-form references to canonical `part-*` landmark IDs, including deduplicated panel/body/joint aliases and reciprocal connector relationships. Hard `landmark_geometry` constraints pass only when every named part exists, every referenced part owns source-checked geometry, and every required landmark is present in those referenced parts; `human_review` cannot satisfy a hard gate. The exact six-panel regression includes this hard constraint and passes topology, semantics, full verification, and source-equivalent exports offline.
+
+On clean commit `446e95b`, the exact-build compiler gate passed 3/3 for $0.10987. The exact intent again recalled 16/16 requirements and Sol completed a strict plan. Verification reached semantics and measured the correct envelope span set, but the net's arbitrary world orientation exchanged Y and Z relative to the labels height and depth. The intent also duplicated the overall height/depth as panel dimension constraints and placed the prose topology requirement “exactly five fold joints connecting exactly six panels” in `requiredLandmarks`. The exact calls cost $0.170165; cumulative spend in the current $2 ledger is $0.583175 with $1.416825 remaining.
+
+Requested envelopes are now matched against the best deterministic permutation of the three world-axis spans because global preview orientation is not part of the user's fabrication request. Intent normalization removes exact dimension constraints that merely duplicate `requestedSize`, while preserving dimensions of named parts that differ from the overall envelope. Recognizable-form landmark lists retain only concise names connected to canonical semantic-part IDs; topology/count prose remains in the exact source request and acceptance contract rather than masquerading as geometry. Focused regressions cover all three rules without object-specific routing.
+
+On clean commit `e7d38af`, the live compiler gate passed 3/3 for $0.11398. The exact intent passed 16/16 and Sol completed a strict plan. All prior semantic failures were cleared; topology then rejected one duplicate `part-connector-lid-lock` because the plan explicitly declared the required lid-lock landmark while deterministic expansion also derived the same semantic part from the reciprocal connector relationship. The exact calls cost $0.16564; cumulative current-ledger spend is $0.862795 with $1.137205 remaining.
+
+Semantic expansion now merges an explicit connector-relationship landmark with its code-derived reciprocal connector part, deduplicating geometry references by kind and canonical ID. It does not discard either source, invent a new relationship, or permit duplicate semantic identifiers. The exact six-panel regression includes both sources and proves one canonical lid-lock part reaches full verification and export finalization offline.
+
+On clean commit `8f8c008`, the compiler gate passed 3/3 and Sol returned a verified six-panel candidate with source-bound SVG, DXF, GLB, and JSON. That run exposed two final deterministic issues: an 8 mm slot inset consumed the full 8 mm tab engagement, and the acceptance fixture described a shallow 70 × 95 base rather than the requested upright 70 mm wide × 95 mm high × 25 mm deep box. The mapper now retains a 1 mm connector engagement margin. The acceptance gate now requires the correct six named face dimensions, five-fold connected tree, reciprocal lid/front lock, exact envelope, A4 stock, and full consumer proof without forcing one A4-incompatible cuboid net.
+
+On clean commit `2dc57ed`, the same-build live compiler gate passed all three supported, unsupported, and injection cases. The exact intent passed 16/16 explicit checks; Sol returned one strict compact plan; deterministic code expanded, compiled, and verified one candidate. All **63/63** acceptance checks passed. SVG, DXF, GLB, and canonical JSON were source-bound to the selected IR; SVG/DXF calibration and layers passed, GLB validation returned zero errors and warnings, JSON retained assembly operations and hashes, and FOLD was honestly omitted with `connector_semantics`. The separate ledger charged **$1.6265905** and retained **$0.3734095**. `releaseGatePassed` remains false because this was intentionally one acceptance smoke, not the five-case suite.
+
+The accepted runtime was deployed to production as `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` with live generation enabled. One authenticated clean-browser request completed access, intent, program, and compile with HTTP 200; the route chain finished in about 53 seconds. The first browser assertion incorrectly waited for the intentionally visually clipped screen-reader status line to become visible, so its harness timed out after the successful route chain and is not counted as a rendered-result assertion. No automatic model retry ran.
+
+One final program-only hosted confirmation reused the already accepted strict intent to avoid paying for a second intent call. Production Sol returned a strict program; production deterministic compilation returned `passed`; verification was valid with **0 hard failures**; and the selected result contained **6 panels, 5 fold joints, and 2 reciprocal connector elements**. Local source-binding of that exact hosted program produced source-equivalent SVG (**6,753 bytes**), DXF (**4,474 bytes**), GLB (**37,688 bytes**), and canonical JSON (**45,373 bytes**). Hosted route usage is not written to the client ledger, so exact combined spend must be confirmed in the provider dashboard; the hosted evidence used one UI intent/program pair plus one program-only call and no model retry.
+
+Guardrails:
+
+- use a fresh exclusive ledger and report path tied to one clean commit;
+- run sequentially with model-generation retries disabled;
+- reserve conservatively before each call and reconcile provider-reported usage afterward;
+- charge an uncertain started request at its reservation and stop;
+- never overwrite or continue the historical ledger;
+- stop on the first provider, schema, budget, requirement, verifier, or consumer failure; and
+- do not spend remaining allowance merely because it exists.
+
+Execution order:
+
+1. one supported compiler case plus bounded refusal/injection controls;
+2. one exact playing-card-box acceptance case;
+3. deterministic expansion and full verification or report-grounded bounded repair;
+4. exact SVG/DXF/GLB/JSON generation and conditional FOLD status;
+5. independent checks on those exact live-selected bytes; and
+6. only if local acceptance passes, one clean-browser hosted run while total new spend remains below $2.00.
+
+Expected playing-card-box assertions include the original prompt requirements, six named enclosure panels, five fold relationships, one A4 sheet with 5 mm margins and 0.4 mm stock, and exact 70 × 95 × 25 mm closed spans. The verifier, not the model, decides whether they pass.
+
+The interactive app separately enforces best-effort per-session quotas, a distinct deployment-wide warm-instance ceiling, conservative token reservations, bounded concurrency, and duplicate request protection. Its default implementation is process-local and cannot be described as a durable cross-instance or account-level dollar cap.
+
+## Live acceptance classifications
+
+- **Blocked before provider start:** no live behavior and no paid model evidence.
+- **Provider started, no usable response:** record the bounded failure and charged reservation; do not retry blindly.
+- **Strict plan received, verifier failed:** evidence of plan generation only, not a valid design.
+- **Exact case passed:** a successful acceptance smoke for that prompt and build.
+- **Five-case suite with at least four full successes:** broader reliability evidence, still subject to every export, hosted-build, security, accessibility, and judge gate.
+
+No report is called broadly reliable while the five-case gate and harsh judging thresholds remain unmet. The exact hosted acceptance above proves only the bounded playing-card-box path.
+
+## Reproduction without paid calls
 
 ```bash
 pnpm run check
@@ -116,10 +211,9 @@ pnpm run eval:compiler
 pnpm run eval:repair
 pnpm run eval:e2e
 pnpm run eval:ablation
-pnpm run eval:live # zero calls and a blocked report until both live opt-ins are true
 pnpm run test:e2e
 pnpm run validate:consumers
 pnpm audit --prod
 ```
 
-Each report records its mode and evidence boundary. The offline E2E report explicitly says its showcase controls are not arbitrary-prompt results.
+Do not run paid commands from this document without the builder's explicit authorization, the required live flags, a clean committed build, and a fresh run-specific ledger.

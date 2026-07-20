@@ -16,6 +16,7 @@ import {
   exportFabricationGlb,
   exportFabricationJson,
   exportFabricationSvg,
+  FOLD_EXTENSION_KEYS,
   foldArtifactMatchesSource,
   glbArtifactMatchesSource,
   inspectFabricationFoldCompatibility,
@@ -377,6 +378,8 @@ const provenance = {
   irHash: sourceIrHash(mainIr),
   modelId: null,
   modelResponseId: null,
+  modelPlanHash: null,
+  planExpanderVersion: null,
   generatedAtIso: "2026-07-14T12:00:00.000Z",
   deterministicSeed: 20260714,
   parentCandidateId: null,
@@ -1329,26 +1332,36 @@ describe("fabrication exporters", () => {
     expect(second.status).toBe("generated");
     if (first.status !== "generated" || second.status !== "generated") return;
     const firstText = textFrom(first.artifact);
+    const rawDocument = JSON.parse(firstText) as Record<string, unknown>;
     const parsedSchema = z
       .object({
         file_spec: z.literal(1.2),
         frame_unit: z.literal("mm"),
         file_description: z.string(),
-        foldforge_sourceIrHash: z.string().length(64),
-        foldforge_payloadSha256: z.string().length(64),
+        frame_attributes: z.array(z.string()),
+        [FOLD_EXTENSION_KEYS.sourceIrHash]: z.string().length(64),
+        [FOLD_EXTENSION_KEYS.payloadSha256]: z.string().length(64),
         vertices_coords: z.array(z.tuple([z.number(), z.number()])),
         edges_vertices: z.array(z.tuple([z.number().int(), z.number().int()])),
-        edges_assignment: z.array(z.enum(["C", "M", "V"])),
+        edges_assignment: z.array(z.enum(["B", "C", "M", "V"])),
         edges_foldAngle: z.array(z.number()),
-        edges_foldforgePathId: z.array(z.string()),
+        [FOLD_EXTENSION_KEYS.edgePathIds]: z.array(z.string()),
       })
-      .parse(JSON.parse(firstText) as unknown);
+      .parse(rawDocument);
 
     expect(first.artifact.bytes).toEqual(second.artifact.bytes);
-    expect(parsedSchema.foldforge_sourceIrHash).toBe(sourceIrHash(foldIr));
+    expect(
+      Object.keys(rawDocument)
+        .filter((key) => key.includes("foldforge"))
+        .every((key) => key.includes(":")),
+    ).toBe(true);
+    expect(parsedSchema.frame_attributes).toEqual(["2D", "noCuts"]);
+    expect(parsedSchema[FOLD_EXTENSION_KEYS.sourceIrHash]).toBe(
+      sourceIrHash(foldIr),
+    );
     expect(parsedSchema.file_description).toContain(sourceIrHash(foldIr));
     expect(parsedSchema.edges_vertices).toHaveLength(5);
-    expect(parsedSchema.edges_assignment).toEqual(["C", "C", "C", "C", "M"]);
+    expect(parsedSchema.edges_assignment).toEqual(["B", "B", "B", "B", "M"]);
     expect(parsedSchema.edges_foldAngle.at(-1)).toBe(-45);
     expect(parsedSchema.edges_vertices.length).toBe(
       parsedSchema.edges_assignment.length,
@@ -1376,6 +1389,94 @@ describe("fabrication exporters", () => {
     }
   });
 
+  it("distinguishes panel boundaries from internal FOLD cuts", () => {
+    const internalPathId = "panel-a.cut.inner-test";
+    const internalCutIr: FabricationIRV1 = {
+      ...foldIr,
+      irId: "ir-fold-with-internal-cut",
+      paths: [
+        ...foldIr.paths,
+        {
+          pathId: internalPathId,
+          sheetId: sheetA.sheetId,
+          panelId: "panel-a",
+          kind: "cut",
+          points: [
+            { xMm: 30, yMm: 30 },
+            { xMm: 40, yMm: 30 },
+            { xMm: 35, yMm: 38 },
+          ],
+          closed: true,
+          strokeWidthMm: 0.1,
+        },
+      ],
+    };
+    const result = exportFabricationFold(
+      verifiedSourceFor(internalCutIr, "candidate-fold-internal-cut"),
+    );
+    expect(result.status).toBe("generated");
+    if (result.status !== "generated") return;
+    const parsed = z
+      .object({
+        edges_assignment: z.array(z.enum(["B", "C", "M", "V"])),
+        frame_attributes: z.array(z.string()),
+        [FOLD_EXTENSION_KEYS.edgePathIds]: z.array(z.string()),
+      })
+      .parse(JSON.parse(textFrom(result.artifact)) as unknown);
+    const assignmentsByPath = parsed[FOLD_EXTENSION_KEYS.edgePathIds].map(
+      (pathId, index) => ({
+        pathId,
+        assignment: parsed.edges_assignment[index],
+      }),
+    );
+
+    expect(
+      assignmentsByPath
+        .filter(({ pathId }) => pathId === "cut-a")
+        .map(({ assignment }) => assignment),
+    ).toEqual(["B", "B", "B", "B"]);
+    expect(
+      assignmentsByPath
+        .filter(({ pathId }) => pathId === internalPathId)
+        .map(({ assignment }) => assignment),
+    ).toEqual(["C", "C", "C"]);
+    expect(parsed.frame_attributes).toEqual(["2D", "cuts"]);
+  });
+
+  it("keeps verifier-equivalent perimeter segments as FOLD boundaries", () => {
+    const tolerantBoundaryIr: FabricationIRV1 = {
+      ...foldIr,
+      irId: "ir-fold-tolerant-boundary",
+      paths: foldIr.paths.map((path) =>
+        path.pathId === "cut-a"
+          ? {
+              ...path,
+              points: path.points.map((point, index) =>
+                index === 0 ? { ...point, xMm: point.xMm + 0.05 } : point,
+              ),
+            }
+          : path,
+      ),
+    };
+    const result = exportFabricationFold(
+      verifiedSourceFor(tolerantBoundaryIr, "candidate-fold-tolerant"),
+    );
+    expect(result.status).toBe("generated");
+    if (result.status !== "generated") return;
+    const parsed = z
+      .object({
+        edges_assignment: z.array(z.enum(["B", "C", "M", "V"])),
+        [FOLD_EXTENSION_KEYS.edgePathIds]: z.array(z.string()),
+      })
+      .parse(JSON.parse(textFrom(result.artifact)) as unknown);
+
+    expect(
+      parsed[FOLD_EXTENSION_KEYS.edgePathIds].flatMap((pathId, index) =>
+        pathId === "cut-a" ? [parsed.edges_assignment[index]] : [],
+      ),
+    ).toEqual(["B", "B", "B", "B"]);
+  });
+
   it("emits a shared hinge once as a fold and never as a cut", () => {
     const compiled = compileFabricationProgram(
       fixtureIntent(),
@@ -1398,18 +1499,20 @@ describe("fabrication exporters", () => {
       .object({
         vertices_coords: z.array(z.tuple([z.number(), z.number()])),
         edges_vertices: z.array(z.tuple([z.number().int(), z.number().int()])),
-        edges_assignment: z.array(z.enum(["C", "M", "V"])),
-        edges_foldforgePathId: z.array(z.string()),
+        edges_assignment: z.array(z.enum(["B", "C", "M", "V"])),
+        [FOLD_EXTENSION_KEYS.edgePathIds]: z.array(z.string()),
       })
       .parse(JSON.parse(textFrom(result.artifact)) as unknown);
-    const hingeIndices = parsed.edges_foldforgePathId.flatMap(
+    const hingeIndices = parsed[FOLD_EXTENSION_KEYS.edgePathIds].flatMap(
       (pathId, index) => (pathId === "crease-wing" ? [index] : []),
     );
     expect(hingeIndices).toHaveLength(1);
     expect(parsed.edges_assignment[hingeIndices[0]!]).toBe("V");
     const hingeEndpoints = new Set(["160,90", "160,150"]);
     const duplicateCuts = parsed.edges_vertices.filter((edge, index) => {
-      if (parsed.edges_assignment[index] !== "C") return false;
+      if (!["B", "C"].includes(parsed.edges_assignment[index] ?? "")) {
+        return false;
+      }
       const endpoints = new Set(
         edge.map((vertexIndex) =>
           parsed.vertices_coords[vertexIndex]!.join(","),

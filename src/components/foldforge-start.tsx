@@ -10,40 +10,53 @@ export interface ExamplePrompt {
   readonly description: string;
   readonly id: string;
   readonly imageAlt: string;
+  readonly imageLabel: string;
   readonly imageSrc: string;
   readonly prompt: string;
+  readonly savedActionLabel?: string;
   readonly savedExampleId?: SavedExampleId;
   readonly title: string;
 }
+
+export const DUCK_CREASE_PATTERN_PROMPT =
+  "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.";
 
 const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   {
     id: "playing-card-box",
     title: "Playing-card box",
     description: "Holds one standard deck in a simple slide-out tray.",
+    imageLabel: "Prompt inspiration",
     imageSrc: "/examples/playing-card-box.jpg",
-    imageAlt: "A paper playing-card box with its tray partly open",
+    imageAlt:
+      "Prompt-inspiration concept render of a paper playing-card box with its tray partly open",
     prompt:
-      "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible. Show me three ways to build it.",
+      "Make a small box from one sheet of cardstock that holds a standard deck of playing cards. The finished box should be about 70 mm wide, 95 mm tall, and 25 mm deep. Add a lid with a tab so it stays closed. Avoid glue if possible.",
   },
   {
     id: "pop-up-flower-card",
-    title: "Pop-up flower card",
-    description: "A flower rises when the card opens and folds flat again.",
+    title: "Flower mechanisms",
+    description:
+      "Edit a pop-up-card brief or inspect a prepared vertical-lift study.",
+    imageLabel: "Prompt inspiration",
     imageSrc: "/examples/pop-up-flower-card.jpg",
-    imageAlt: "An open paper card with a pink flower rising from its center",
+    imageAlt:
+      "Prompt-inspiration concept render of an open paper card with a pink flower rising from its center",
     prompt:
-      "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope. Show me three buildable designs.",
+      "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope.",
+    savedActionLabel: "Open vertical-lift study",
     savedExampleId: "flower",
   },
   {
     id: "duck-shaped-gift-box",
-    title: "Duck-shaped gift box",
-    description: "A small paper duck that opens to hold a gift.",
+    title: "Static duck crease pattern",
+    description: "A fold-only duck study with no open-and-close motion.",
+    imageLabel: "Prompt inspiration",
     imageSrc: "/examples/duck-shaped-gift-box.jpg",
-    imageAlt: "A faceted yellow paper duck-shaped gift box",
-    prompt:
-      "Make a small duck-shaped gift box from cardstock. It should hold a small present and look like a simple duck when assembled. Add a lid that opens from the back. Use no more than two sheets and avoid glue where possible. Show me three different designs.",
+    imageAlt:
+      "A yellow paper duck gift-box concept used as inspiration for a static crease-pattern prompt",
+    prompt: DUCK_CREASE_PATTERN_PROMPT,
+    savedActionLabel: "Open prepared crease study",
     savedExampleId: "duck",
   },
 ] as const;
@@ -87,12 +100,20 @@ export function FoldForgeStart({
     <>
       <section className={styles.compose} aria-labelledby="studio-title">
         <div className={styles.intro}>
-          <p className={styles.eyebrow}>AI cut-and-fold designer</p>
-          <h1 id="studio-title">Turn an idea into a buildable paper design.</h1>
+          <p className={styles.eyebrow}>
+            {liveGenerationAvailable
+              ? "AI cut-and-fold designer"
+              : "Prepared cut-and-fold studies"}
+          </p>
+          <h1 id="studio-title">
+            {liveGenerationAvailable
+              ? "Turn an idea into a buildable paper design."
+              : "Explore checked paper-design studies."}
+          </h1>
           <p>
-            Describe something made from paper or thin cardboard. FoldForge
-            creates three checked designs, shows how they assemble, and gives
-            you the cutting pattern.
+            {liveGenerationAvailable
+              ? "Describe something made from paper or thin cardboard. FoldForge creates one checked design, shows how it assembles, and gives you the cutting pattern."
+              : "Live AI generation is off. Open a prepared study to inspect its motion, cutting pattern, checks, and fabrication files."}
           </p>
           <ol className={styles.processSteps} aria-label="How FoldForge works">
             <li>
@@ -101,7 +122,7 @@ export function FoldForgeStart({
             </li>
             <li>
               <span>2</span>
-              Compare designs
+              Inspect the design
             </li>
             <li>
               <span>3</span>
@@ -136,14 +157,14 @@ export function FoldForgeStart({
               }
               onClick={onCreate}
             >
-              {busy ? "Creating designs…" : "Create 3 designs"}
+              {busy ? "Creating design…" : "Create design"}
             </button>
             <button
               className={styles.secondaryAction}
               type="button"
               onClick={() => onOpenSavedExample("flower")}
             >
-              Explore a finished example
+              Explore a prepared vertical-lift study
             </button>
           </div>
           {!liveGenerationAvailable && healthKnown ? (
@@ -181,11 +202,17 @@ export function FoldForgeStart({
 
       <section className={styles.examples} aria-labelledby="examples-title">
         <div className={styles.examplesHeading}>
-          <h2 id="examples-title">Try an example</h2>
-          <p>Each prompt is ready to edit.</p>
+          <h2 id="examples-title">
+            {liveGenerationAvailable ? "Try an example" : "Prompt ideas"}
+          </h2>
+          <p>
+            {liveGenerationAvailable
+              ? "Each prompt is ready to edit."
+              : "Load a prompt for a future live run, or open a prepared study now."}
+          </p>
         </div>
         <div className={styles.exampleGrid}>
-          {EXAMPLE_PROMPTS.map((example) => {
+          {EXAMPLE_PROMPTS.map((example, index) => {
             const savedExampleId = example.savedExampleId;
             return (
               <article className={styles.exampleCard} key={example.id}>
@@ -195,9 +222,13 @@ export function FoldForgeStart({
                   alt={example.imageAlt}
                   width={768}
                   height={576}
+                  loading={index === 0 ? "eager" : "lazy"}
                   sizes="(max-width: 759px) 100vw, (max-width: 1039px) 50vw, 33vw"
                 />
                 <div>
+                  <span className={styles.exampleImageLabel}>
+                    {example.imageLabel}
+                  </span>
                   <h3>{example.title}</h3>
                   <p>{example.description}</p>
                   <div className={styles.exampleActions}>
@@ -205,14 +236,16 @@ export function FoldForgeStart({
                       type="button"
                       onClick={() => onSelectExample(example)}
                     >
-                      Use this prompt
+                      {liveGenerationAvailable
+                        ? "Use this prompt"
+                        : "Load future prompt"}
                     </button>
                     {savedExampleId ? (
                       <button
                         type="button"
                         onClick={() => onOpenSavedExample(savedExampleId)}
                       >
-                        Open finished design
+                        {example.savedActionLabel ?? "Open prepared design"}
                       </button>
                     ) : null}
                   </div>

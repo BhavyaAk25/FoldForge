@@ -7,6 +7,7 @@ import type { FabricationPreviewMode } from "@/components/fabrication-preview";
 import { FoldForgeResults } from "@/components/foldforge-results";
 import {
   DEFAULT_PROMPT,
+  DUCK_CREASE_PATTERN_PROMPT,
   FoldForgeStart,
   type AccessState,
   type ExamplePrompt,
@@ -18,6 +19,7 @@ import {
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
+import { repairInputHash } from "@/core/fabrication/repair";
 import type {
   CandidateV2,
   ExportFormat,
@@ -35,35 +37,61 @@ import {
   StudioCheckpointSchema,
   type FinalizeApiResponse,
   type HealthApiResponse,
+  type ProgramsApiResponse,
   type RepairEvidence,
 } from "@/lib/api-contracts";
 import {
   downloadCandidateExport,
   FoldForgeApiError,
+  FoldForgeDiagnosticError,
   getJson,
   postJson,
 } from "@/lib/client-api";
+import {
+  forgeDiagnostic,
+  type ForgeDiagnosticV1,
+} from "@/lib/forge-diagnostics";
+import {
+  forgePromptHash,
+  forgeResultMatchesPrompt,
+  sameForgeResultBinding,
+  type ForgeResultBinding,
+} from "@/lib/forge-result-binding";
 
 import styles from "./foldforge-app.module.css";
 
 type StudioPhase = "idle" | "intent" | "programs" | "repair" | "ready";
 type ExperienceMode = "live" | "saved";
 
-const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v4";
+const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v6";
 const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 const COMPILER_VERSION = "foldforge-fabrication-v1";
-const MODEL_ID = "gpt-5.6-sol";
 const BASE_SEED = 20_260_714;
 
 const SAVED_EXAMPLE_GENERATED_AT = "2026-07-14T00:00:00.000Z";
 
 const formatFailure = (error: unknown): string => {
+  const diagnostic =
+    error instanceof FoldForgeDiagnosticError
+      ? error.diagnostic
+      : error instanceof FoldForgeApiError
+        ? error.diagnostic
+        : null;
+  if (diagnostic) {
+    const failureSuffix =
+      diagnostic.failureIds.length > 0
+        ? ` Check: ${diagnostic.failureIds.slice(0, 3).join(", ")}.`
+        : "";
+    return `${diagnostic.message}${failureSuffix}`;
+  }
   if (error instanceof FoldForgeApiError) return error.message;
   if (error instanceof z.ZodError) {
     return "The response could not be checked safely. Please try again.";
   }
   return "FoldForge stopped safely. Your saved work is unchanged.";
 };
+
+const newForgeAttemptId = (): string => crypto.randomUUID();
 
 const candidateIdFor = (ordinal: number, program: FabricationProgramV1) =>
   `candidate-${ordinal}-${program.topologyId.slice(0, 48)}`;
@@ -86,7 +114,7 @@ const buildCandidate = (
   generatedAtIso: string,
   appliedPatchIds: readonly string[],
   repairCycle: number,
-  modelId: string | null = MODEL_ID,
+  generationProvenance: ProgramsApiResponse["proposal"]["provenance"] | null,
 ): CandidateV2 | null => {
   const built = buildFabricationCandidate({
     candidateId,
@@ -98,8 +126,10 @@ const buildCandidate = (
       compilerVersion: COMPILER_VERSION,
       generatedAtIso,
       deterministicSeed: BASE_SEED + ordinal,
-      modelId,
-      modelResponseId: null,
+      modelId: generationProvenance?.modelId ?? null,
+      modelResponseId: generationProvenance?.modelResponseId ?? null,
+      modelPlanHash: generationProvenance?.planHash ?? null,
+      planExpanderVersion: generationProvenance?.expanderVersion ?? null,
       parentCandidateId: null,
       appliedPatchIds,
       repairCycle,
@@ -135,6 +165,9 @@ export function FoldForgeApp() {
   const [accessState, setAccessState] = useState<AccessState>("unknown");
   const [accessCode, setAccessCode] = useState("");
   const [prompt, setPrompt] = useState<string>(DEFAULT_PROMPT);
+  const [resultBinding, setResultBinding] = useState<ForgeResultBinding | null>(
+    null,
+  );
   const [intent, setIntent] = useState<FabricationIntentV1 | null>(null);
   const [candidates, setCandidates] = useState<readonly CandidateV2[]>([]);
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("live");
@@ -162,15 +195,24 @@ export function FoldForgeApp() {
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusResultsRef = useRef(false);
+  const forgeInFlightRef = useRef(false);
+  const latestPromptRef = useRef(prompt);
+  const activeForgeBindingRef = useRef<ForgeResultBinding | null>(null);
+  const resultBindingRef = useRef<ForgeResultBinding | null>(null);
 
   const busy = phase === "intent" || phase === "programs" || phase === "repair";
   const solAvailable = health?.liveAiEnabled === true;
   const baseSelected = useMemo(
     () =>
-      candidates.find((candidate) => candidate.candidateId === selectedId) ??
-      candidates[0] ??
-      null,
-    [candidates, selectedId],
+      experienceMode === "saved" ||
+      forgeResultMatchesPrompt(resultBinding, prompt)
+        ? (candidates.find(
+            (candidate) => candidate.candidateId === selectedId,
+          ) ??
+          candidates[0] ??
+          null)
+        : null,
+    [candidates, experienceMode, prompt, resultBinding, selectedId],
   );
   const exportCandidate = useMemo(
     () => (baseSelected ? selectedCandidate(baseSelected) : null),
@@ -212,6 +254,9 @@ export function FoldForgeApp() {
       if (restored) {
         setExperienceMode("live");
         setPrompt(restored.prompt);
+        latestPromptRef.current = restored.prompt;
+        setResultBinding(restored.resultBinding);
+        resultBindingRef.current = restored.resultBinding;
         setIntent(restored.intent);
         setCandidates(restored.candidates);
         setSelectedId(restored.selectedId);
@@ -230,9 +275,10 @@ export function FoldForgeApp() {
   useEffect(() => {
     if (!checkpointReady || experienceMode === "saved") return;
     const checkpoint = StudioCheckpointSchema.parse({
-      version: 3,
+      version: 4,
       savedAt: new Date().toISOString(),
       prompt,
+      resultBinding,
       intent,
       candidates,
       selectedId,
@@ -252,6 +298,7 @@ export function FoldForgeApp() {
     narrative,
     prompt,
     repairEvidence,
+    resultBinding,
     selectedId,
   ]);
 
@@ -300,10 +347,34 @@ export function FoldForgeApp() {
   };
 
   const forge = async () => {
-    if (!solAvailable || busy || prompt.trim().length === 0) return;
+    if (
+      !solAvailable ||
+      busy ||
+      forgeInFlightRef.current ||
+      prompt.trim().length === 0
+    ) {
+      return;
+    }
+    forgeInFlightRef.current = true;
+    const requestedPrompt = prompt.trim();
+    const forgeAttemptId = newForgeAttemptId();
+    const forgeBinding: ForgeResultBinding = {
+      attemptId: forgeAttemptId,
+      promptHash: forgePromptHash(requestedPrompt),
+    };
+    activeForgeBindingRef.current = forgeBinding;
+    latestPromptRef.current = requestedPrompt;
+    setPrompt(requestedPrompt);
     setError("");
     setExperienceMode("live");
     setSavedLimitation(null);
+    setIntent(null);
+    setCandidates([]);
+    setSelectedId("");
+    setRepairEvidence({});
+    setNarrative(null);
+    setResultBinding(null);
+    resultBindingRef.current = null;
     setPhase("intent");
     setStatusMessage("Understanding your request…");
     const generatedAtIso = new Date().toISOString();
@@ -311,8 +382,9 @@ export function FoldForgeApp() {
     try {
       const nextIntent = await postJson(
         "/api/intent",
-        { prompt },
+        { prompt: requestedPrompt },
         IntentApiResponseSchema,
+        { attemptId: forgeAttemptId, stage: "intent" },
       );
       if (nextIntent.scopeStatus !== "supported") {
         setPhase("idle");
@@ -324,125 +396,213 @@ export function FoldForgeApp() {
         return;
       }
 
-      const usedTopologyIds: string[] = [];
-      const fingerprints = new Set<string>();
-      const accepted: CandidateV2[] = [];
       const evidenceByCandidate: Record<string, RepairEvidence[]> = {};
+      const ordinal = 1;
+      setPhase("programs");
+      setStatusMessage("Creating your design…");
+      const generated = await postJson(
+        "/api/programs",
+        {
+          intent: nextIntent,
+          candidateOrdinal: ordinal,
+          usedTopologyIds: [],
+        },
+        ProgramsApiResponseSchema,
+        { attemptId: forgeAttemptId, stage: "program" },
+      );
 
-      for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
-        setPhase("programs");
-        setStatusMessage(`Creating design ${ordinal} of 3…`);
-        const generated = await postJson(
-          "/api/programs",
+      const candidateId = candidateIdFor(ordinal, generated.proposal.program);
+      let currentProgram = generated.proposal.program;
+      let evaluation = await postJson(
+        "/api/compile",
+        { intent: nextIntent, program: currentProgram, candidateId },
+        CompileApiResponseSchema,
+        { stage: "compile" },
+      );
+      const evidence: RepairEvidence[] = [];
+      const appliedPatchIds: string[] = [];
+      const seenRepairInputs = new Set<string>();
+      let repairCycle = 0;
+      let passed = evaluation.status === "passed";
+      let terminalDiagnostic: ForgeDiagnosticV1 | null =
+        evaluation.status === "passed" ? null : evaluation.diagnostic;
+
+      for (
+        let cycle = 1;
+        evaluation.status === "invalid" && cycle <= 5;
+        cycle += 1
+      ) {
+        const repairableHardFailure = evaluation.report.failures.find(
+          (failure) =>
+            failure.severity === "hard" &&
+            failure.repairableProgramPaths.length > 0,
+        );
+        if (!repairableHardFailure) {
+          terminalDiagnostic = forgeDiagnostic({
+            stage: "repair",
+            kind: "repair",
+            code: "REPAIR_INFEASIBLE",
+            message:
+              evaluation.diagnostic.message +
+              " No paid repair was attempted because this failure has no bounded repair path.",
+            modelCall: "not_started",
+            failureIds: evaluation.diagnostic.failureIds,
+            failedAtStage: evaluation.diagnostic.failedAtStage,
+            repairCycle: cycle,
+          });
+          break;
+        }
+        const canonicalRepairInput = repairInputHash(
+          currentProgram,
+          evaluation.report,
+        );
+        if (seenRepairInputs.has(canonicalRepairInput)) {
+          terminalDiagnostic = forgeDiagnostic({
+            stage: "repair",
+            kind: "repair",
+            code: "DUPLICATE_REPAIR_INPUT",
+            message:
+              "The same checked design reached repair twice, so no additional paid repair was attempted.",
+            modelCall: "not_started",
+            failureIds: evaluation.diagnostic.failureIds,
+            failedAtStage: evaluation.diagnostic.failedAtStage,
+            repairCycle: cycle,
+          });
+          break;
+        }
+        seenRepairInputs.add(canonicalRepairInput);
+        setPhase("repair");
+        setStatusMessage("Checking and improving your design…");
+        const failure =
+          evaluation.report.failures.find(
+            (entry) => entry.severity === "hard",
+          ) ?? evaluation.report.failures[0];
+        const repaired = await postJson(
+          "/api/repair",
           {
             intent: nextIntent,
-            candidateOrdinal: ordinal,
-            usedTopologyIds,
-          },
-          ProgramsApiResponseSchema,
-        );
-        usedTopologyIds.push(generated.proposal.program.topologyId);
-        if (fingerprints.has(generated.programStructureFingerprint)) continue;
-        fingerprints.add(generated.programStructureFingerprint);
-
-        const candidateId = candidateIdFor(ordinal, generated.proposal.program);
-        let currentProgram = generated.proposal.program;
-        let evaluation = await postJson(
-          "/api/compile",
-          { intent: nextIntent, program: currentProgram, candidateId },
-          CompileApiResponseSchema,
-        );
-        const evidence: RepairEvidence[] = [];
-        const appliedPatchIds: string[] = [];
-        let repairCycle = 0;
-        let passed = evaluation.status === "passed";
-
-        for (
-          let cycle = 1;
-          evaluation.status === "invalid" && cycle <= 5;
-          cycle += 1
-        ) {
-          setPhase("repair");
-          setStatusMessage(`Checking and improving design ${ordinal}…`);
-          const failure =
-            evaluation.report.failures.find(
-              (entry) => entry.severity === "hard",
-            ) ?? evaluation.report.failures[0];
-          const repaired = await postJson(
-            "/api/repair",
-            {
-              intent: nextIntent,
-              program: currentProgram,
-              candidateId,
-              repairCycle: cycle,
-            },
-            RepairApiResponseSchema,
-          );
-          if (
-            repaired.patch &&
-            (repaired.status === "passed" ||
-              repaired.status === "still_invalid")
-          ) {
-            evidence.push({
-              cycle,
-              beforeFailureId: failure?.failureId ?? "verification.failure",
-              beforeFailureMessage:
-                failure?.message ?? "A hard verifier check failed.",
-              patch: repaired.patch,
-              result: repaired.status,
-            });
-            appliedPatchIds.push(repaired.patch.patchId);
-          }
-          if (repaired.status === "infeasible") break;
-          currentProgram = repaired.program;
-          repairCycle = cycle;
-          if (repaired.status === "passed") {
-            passed = true;
-            break;
-          }
-          if (!repaired.ir || !repaired.report || !repaired.score) break;
-          evaluation = {
-            status: "invalid",
+            program: currentProgram,
             candidateId,
-            ir: repaired.ir,
-            report: repaired.report,
-            score: repaired.score,
-          };
-        }
-
-        if (!passed) continue;
-        const candidate = buildCandidate(
-          candidateId,
-          nextIntent,
-          currentProgram,
-          ordinal,
-          generatedAtIso,
-          appliedPatchIds,
-          repairCycle,
+            repairCycle: cycle,
+          },
+          RepairApiResponseSchema,
+          { attemptId: forgeAttemptId, stage: "repair" },
         );
-        if (!candidate) continue;
-        accepted.push(candidate);
-        if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
+        terminalDiagnostic = repaired.diagnostic;
+        if (
+          repaired.patch &&
+          (repaired.status === "passed" || repaired.status === "still_invalid")
+        ) {
+          evidence.push({
+            cycle,
+            beforeFailureId: failure?.failureId ?? "verification.failure",
+            beforeFailureMessage:
+              failure?.message ?? "A hard verifier check failed.",
+            patch: repaired.patch,
+            result: repaired.status,
+          });
+          appliedPatchIds.push(repaired.patch.patchId);
+        }
+        if (repaired.status === "infeasible") break;
+        currentProgram = repaired.program;
+        repairCycle = cycle;
+        if (repaired.status === "passed") {
+          passed = true;
+          break;
+        }
+        if (!repaired.ir || !repaired.report || !repaired.score) break;
+        evaluation = {
+          status: "invalid",
+          candidateId,
+          ir: repaired.ir,
+          report: repaired.report,
+          score: repaired.score,
+          diagnostic: repaired.diagnostic,
+        };
       }
 
-      const ranked = rankedCandidates(accepted).slice(0, 3);
-      if (ranked.length === 0) {
-        throw new Error("No checked designs were produced.");
+      if (!passed) {
+        throw new FoldForgeDiagnosticError(
+          terminalDiagnostic ??
+            forgeDiagnostic({
+              stage: "compile",
+              kind: "unknown",
+              code: "DESIGN_NOT_VERIFIED",
+              message: "The generated design did not pass verification.",
+            }),
+        );
+      }
+      const candidate = buildCandidate(
+        candidateId,
+        nextIntent,
+        currentProgram,
+        ordinal,
+        generatedAtIso,
+        appliedPatchIds,
+        repairCycle,
+        generated.proposal.provenance,
+      );
+      if (!candidate) {
+        throw new FoldForgeDiagnosticError(
+          forgeDiagnostic({
+            stage: "compile",
+            kind: "compilation",
+            code: "CANDIDATE_BUILD_FAILED",
+            message:
+              "The verified program could not be assembled into a source-equivalent candidate.",
+          }),
+        );
+      }
+      if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
+
+      const ranked = rankedCandidates([candidate]);
+      const checkedDesign = ranked[0];
+      if (!checkedDesign) {
+        throw new FoldForgeDiagnosticError(
+          forgeDiagnostic({
+            stage: "compile",
+            kind: "compilation",
+            code: "CANDIDATE_SELECTION_FAILED",
+            message: "The verified candidate could not be selected safely.",
+          }),
+        );
+      }
+      if (
+        !sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding) ||
+        !forgeResultMatchesPrompt(forgeBinding, latestPromptRef.current)
+      ) {
+        throw new FoldForgeDiagnosticError(
+          forgeDiagnostic({
+            stage: "compile",
+            kind: "request",
+            code: "STALE_FORGE_RESULT",
+            message:
+              "The prompt changed before this design completed, so the result was discarded.",
+            modelCall: "not_applicable",
+          }),
+        );
       }
       setIntent(nextIntent);
-      setCandidates(ranked);
-      setSelectedId(ranked[0]?.candidateId ?? "");
+      setCandidates([checkedDesign]);
+      setSelectedId(checkedDesign.candidateId);
       setRepairEvidence(evidenceByCandidate);
       setNarrative(null);
+      setResultBinding(forgeBinding);
+      resultBindingRef.current = forgeBinding;
       shouldFocusResultsRef.current = true;
       setPhase("ready");
       setAccessState("granted");
-      setStatusMessage(
-        `${ranked.length} checked design${ranked.length === 1 ? " is" : "s are"} ready.`,
-      );
+      setStatusMessage("Your checked design is ready.");
     } catch (forgeError) {
-      setPhase(candidates.length > 0 ? "ready" : "idle");
-      if (!requireAccess(forgeError)) setError(formatFailure(forgeError));
+      if (sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)) {
+        setPhase("idle");
+        if (!requireAccess(forgeError)) setError(formatFailure(forgeError));
+      }
+    } finally {
+      if (sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)) {
+        activeForgeBindingRef.current = null;
+      }
+      forgeInFlightRef.current = false;
     }
   };
 
@@ -455,11 +615,14 @@ export function FoldForgeApp() {
 
   const applyExamplePrompt = (example: ExamplePrompt) => {
     setPrompt(example.prompt);
+    latestPromptRef.current = example.prompt;
     setIntent(null);
     setCandidates([]);
     setSelectedId("");
     setRepairEvidence({});
     setNarrative(null);
+    setResultBinding(null);
+    resultBindingRef.current = null;
     setExperienceMode("live");
     setSavedLimitation(null);
     setPhase("idle");
@@ -476,10 +639,12 @@ export function FoldForgeApp() {
     const isDuck = exampleId === "duck";
     const program: FabricationProgramV1 = {
       ...showcase.program,
-      candidateLabel: isDuck ? "Duck-shaped gift box" : "Pop-up flower card",
+      candidateLabel: isDuck
+        ? "Static duck crease pattern"
+        : "Vertical-lift flower study",
       designSummary: isDuck
-        ? showcase.program.designSummary
-        : "A prepared motion study: a rigid flower crown moves 30 mm on a vertical guide. The paper linkage that would turn a card opening or horizontal pull into lift is not modeled.",
+        ? "A prepared static crease-pattern study with a faceted duck silhouette. The verified file contains cut and score geometry only; no lid motion or open-and-close animation is modeled."
+        : "A prepared motion study: a directly driven vertical tab moves a rigid flower crown 30 mm along its guide.",
     };
     const candidate = buildCandidate(
       `saved-example-${exampleId}`,
@@ -497,12 +662,20 @@ export function FoldForgeApp() {
     }
 
     const ranked = rankedCandidates([candidate]);
-    setPrompt(showcase.prompt);
+    const savedPrompt = isDuck ? DUCK_CREASE_PATTERN_PROMPT : showcase.prompt;
+    const savedBinding: ForgeResultBinding = {
+      attemptId: newForgeAttemptId(),
+      promptHash: forgePromptHash(savedPrompt),
+    };
+    setPrompt(savedPrompt);
+    latestPromptRef.current = savedPrompt;
     setIntent(showcase.intent);
     setCandidates(ranked);
     setSelectedId(ranked[0]?.candidateId ?? "");
     setRepairEvidence({});
     setNarrative(null);
+    setResultBinding(savedBinding);
+    resultBindingRef.current = savedBinding;
     setExperienceMode("saved");
     setSavedLimitation(showcase.limitation);
     setPreviewMode("assembled");
@@ -511,7 +684,7 @@ export function FoldForgeApp() {
     shouldFocusResultsRef.current = true;
     setPhase("ready");
     setStatusMessage(
-      `Saved ${isDuck ? "duck gift-box" : "pop-up flower"} example opened.`,
+      `Saved ${isDuck ? "static duck crease-pattern" : "vertical-lift flower"} example opened.`,
     );
   };
 
@@ -531,7 +704,16 @@ export function FoldForgeApp() {
   };
 
   const finalizeNarrative = async () => {
-    if (!exportCandidate || finalizing || !solAvailable) return;
+    if (
+      !exportCandidate ||
+      !resultBinding ||
+      !forgeResultMatchesPrompt(resultBinding, prompt) ||
+      finalizing ||
+      !solAvailable
+    ) {
+      return;
+    }
+    const finalizingBinding = resultBinding;
     setFinalizing(true);
     setError("");
     setStatusMessage("Writing concise build notes…");
@@ -540,12 +722,25 @@ export function FoldForgeApp() {
         "/api/finalize",
         { candidate: exportCandidate },
         FinalizeApiResponseSchema,
+        { attemptId: finalizingBinding.attemptId, stage: "finalize" },
       );
+      if (
+        !sameForgeResultBinding(resultBindingRef.current, finalizingBinding) ||
+        !forgeResultMatchesPrompt(finalizingBinding, latestPromptRef.current)
+      ) {
+        return;
+      }
       setNarrative(result.narrative);
       setAccessState("granted");
       setStatusMessage("Build notes ready.");
     } catch (finalizeError) {
-      if (!requireAccess(finalizeError)) setError(formatFailure(finalizeError));
+      if (
+        sameForgeResultBinding(resultBindingRef.current, finalizingBinding) &&
+        forgeResultMatchesPrompt(finalizingBinding, latestPromptRef.current) &&
+        !requireAccess(finalizeError)
+      ) {
+        setError(formatFailure(finalizeError));
+      }
     } finally {
       setFinalizing(false);
     }
@@ -609,7 +804,25 @@ export function FoldForgeApp() {
           onAccessCodeChange={setAccessCode}
           onCreate={() => void forge()}
           onOpenSavedExample={openSavedExample}
-          onPromptChange={setPrompt}
+          onPromptChange={(nextPrompt) => {
+            latestPromptRef.current = nextPrompt;
+            setPrompt(nextPrompt);
+            if (candidates.length > 0) {
+              setIntent(null);
+              setCandidates([]);
+              setSelectedId("");
+              setRepairEvidence({});
+              setNarrative(null);
+              setResultBinding(null);
+              resultBindingRef.current = null;
+              setExperienceMode("live");
+              setSavedLimitation(null);
+              setPhase("idle");
+              setStatusMessage(
+                "Prompt changed. Create a new design to continue.",
+              );
+            }
+          }}
           onSelectExample={applyExamplePrompt}
           onSubmitAccess={() => void unlock()}
           prompt={prompt}

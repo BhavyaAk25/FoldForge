@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 
+import type { ForgeDiagnosticV1 } from "@/lib/forge-diagnostics";
+
 export const apiError = (
   code: string,
   message: string,
   status: number,
   details: readonly string[] = [],
+  diagnostic?: ForgeDiagnosticV1,
 ): NextResponse =>
-  NextResponse.json({ error: { code, message, details } }, { status });
+  NextResponse.json(
+    {
+      error: {
+        code,
+        message,
+        details,
+        ...(diagnostic ? { diagnostic } : {}),
+      },
+    },
+    { status },
+  );
 
 const DEFAULT_MAXIMUM_JSON_BODY_BYTES = 64 * 1024;
 const ABSOLUTE_MAXIMUM_JSON_BODY_BYTES = 1024 * 1024;

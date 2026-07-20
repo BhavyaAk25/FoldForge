@@ -35,6 +35,8 @@ for (let index = 0; index < caseCount; index += 1) {
         deterministicSeed: 20_260_714 + index,
         modelId: null,
         modelResponseId: null,
+        modelPlanHash: null,
+        planExpanderVersion: null,
         parentCandidateId: null,
         appliedPatchIds: [],
         repairCycle: 0,

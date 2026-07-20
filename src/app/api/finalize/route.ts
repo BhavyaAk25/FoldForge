@@ -9,6 +9,7 @@ import { FinalizeFabricationRequestSchema } from "@/server/fabrication-ai/contra
 import { OpenAIFabricationNarrativeModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 240;
 
 const noStore = <T>(response: NextResponse<T>): NextResponse<T> => {
   response.headers.set("Cache-Control", "no-store");

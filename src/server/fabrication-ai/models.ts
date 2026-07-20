@@ -1,4 +1,10 @@
 import { zodResponsesFunction, zodTextFormat } from "openai/helpers/zod";
+import type { ResponseCreateParamsWithTools } from "openai/lib/ResponsesParser";
+import type {
+  Response as OpenAIResponse,
+  ResponseCreateParamsNonStreaming,
+  ResponseUsage,
+} from "openai/resources/responses/responses";
 
 import { canonicalSerialize } from "@/core/canonical";
 import {
@@ -9,25 +15,155 @@ import type {
   CandidateV2,
   FabricationIntentV1,
   FabricationProgramV1,
+  GeometryRefKind,
   ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
 import { getOpenAIClient } from "@/server/ai/client";
+import type {
+  PaidEvalBudget,
+  PaidEvalOperation,
+} from "@/server/ai/paid-eval-budget";
 
 import {
+  FabricationPlanProposalV2Schema,
   FabricationNarrativeV1Schema,
-  ProgramProposalV1Schema,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
 } from "./contracts";
+import { fabricationProgramProposalFromResponse } from "./plan-response";
 import {
   FABRICATION_INTENT_PROMPT,
   FABRICATION_NARRATIVE_PROMPT,
   FABRICATION_PROGRAM_PROMPT,
   FABRICATION_REPAIR_PROMPT,
 } from "./prompts";
+import { FabricationIntentModelError } from "./model-contract-error";
 
 export const FOLDFORGE_MODEL = "gpt-5.6-sol";
+export const FABRICATION_INTENT_MAX_OUTPUT_TOKENS = 4_000;
+export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 4_000;
+
+const PROGRAM_BACKGROUND_POLL_INTERVAL_MS = 2_000;
+const PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS = 3;
+export const FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS = 210_000;
+const PROGRAM_BACKGROUND_CREATE_TIMEOUT_MS = 15_000;
+const PROGRAM_BACKGROUND_RETRIEVAL_TIMEOUT_MS = 10_000;
+const PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS = 5_000;
+
+const delay = async (durationMs: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, durationMs));
+
+const retrieveBackgroundResponse = async (
+  openAI: ReturnType<typeof getOpenAIClient>,
+  responseId: string,
+  retrievalDeadlineMs: number,
+): Promise<OpenAIResponse | null> => {
+  let lastError: unknown = new Error("Background response retrieval failed.");
+  for (
+    let attempt = 1;
+    attempt <= PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS;
+    attempt += 1
+  ) {
+    const remainingMs = retrievalDeadlineMs - Date.now();
+    if (remainingMs <= 0) return null;
+    try {
+      return await openAI.responses.retrieve(responseId, undefined, {
+        maxRetries: 0,
+        timeout: Math.min(PROGRAM_BACKGROUND_RETRIEVAL_TIMEOUT_MS, remainingMs),
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS) {
+        // Retrievals do not start model work, so bounded retries improve
+        // connection resilience without risking duplicate paid generations.
+        const retryDelayMs = Math.min(
+          PROGRAM_BACKGROUND_POLL_INTERVAL_MS,
+          retrievalDeadlineMs - Date.now(),
+        );
+        if (retryDelayMs <= 0) return null;
+        await delay(retryDelayMs);
+      }
+    }
+  }
+  throw lastError;
+};
+
+const runBackgroundResponse = async (
+  openAI: ReturnType<typeof getOpenAIClient>,
+  request: ResponseCreateParamsNonStreaming,
+): Promise<OpenAIResponse> => {
+  const startedAtMs = Date.now();
+  const responseDeadlineMs =
+    startedAtMs + FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS;
+  const retrievalDeadlineMs =
+    responseDeadlineMs - PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS;
+  let response = await openAI.responses.create(request, {
+    maxRetries: 0,
+    timeout: Math.min(
+      PROGRAM_BACKGROUND_CREATE_TIMEOUT_MS,
+      retrievalDeadlineMs - startedAtMs,
+    ),
+  });
+  while (response.status === "queued" || response.status === "in_progress") {
+    const remainingRetrievalMs = retrievalDeadlineMs - Date.now();
+    if (remainingRetrievalMs <= 0) {
+      const remainingResponseMs = responseDeadlineMs - Date.now();
+      if (remainingResponseMs <= 0) return response;
+      return openAI.responses.cancel(response.id, {
+        maxRetries: 0,
+        timeout: remainingResponseMs,
+      });
+    }
+    await delay(
+      Math.min(PROGRAM_BACKGROUND_POLL_INTERVAL_MS, remainingRetrievalMs),
+    );
+    const retrieved = await retrieveBackgroundResponse(
+      openAI,
+      response.id,
+      retrievalDeadlineMs,
+    );
+    if (retrieved) response = retrieved;
+  }
+  return response;
+};
+
+const runMeteredRequest = async <
+  Request extends { readonly max_output_tokens: number },
+  Response extends {
+    readonly id: string;
+    readonly usage?: ResponseUsage | null;
+  },
+>(input: {
+  readonly budget: PaidEvalBudget | null;
+  readonly operation: PaidEvalOperation;
+  readonly request: Request;
+  readonly execute: (request: Request) => Promise<Response>;
+}): Promise<Response> => {
+  if (!input.budget) return input.execute(input.request);
+  return input.budget.run({
+    operation: input.operation,
+    request: input.request,
+    execute: input.execute,
+  });
+};
+
+class LiveEvaluationBudgetRequiredError extends Error {
+  readonly code = "budget_required";
+
+  constructor() {
+    super(
+      "Live OpenAI evaluations require the persistent paid-evaluation budget.",
+    );
+    this.name = "LiveEvaluationBudgetRequiredError";
+  }
+}
+
+const assertEvaluationBudget = (budget: PaidEvalBudget | null): void => {
+  if (process.env.ENABLE_LIVE_OPENAI_EVALS === "true" && !budget) {
+    throw new LiveEvaluationBudgetRequiredError();
+  }
+};
 
 export interface FabricationIntentModel {
   compileIntent(
@@ -61,81 +197,431 @@ export interface FabricationNarrativeModel {
   ): Promise<FabricationNarrativeV1>;
 }
 
+type SemanticReferenceKind =
+  | "panel"
+  | "body"
+  | "joint"
+  | "connector_relationship"
+  | "driver"
+  | "output"
+  | "landmark";
+
+interface SemanticReferenceKey {
+  readonly canonicalId: string;
+  readonly semanticKind: SemanticReferenceKind;
+  readonly semanticKey: string;
+  readonly connectorMember: "tab" | "slot" | null;
+}
+
+const referenceKeyConvention = (
+  kind: GeometryRefKind,
+): {
+  readonly prefix: string;
+  readonly semanticKind: SemanticReferenceKind;
+} | null => {
+  switch (kind) {
+    case "panel":
+    case "body":
+    case "joint":
+    case "driver":
+    case "output":
+      return { prefix: `${kind}-`, semanticKind: kind };
+    case "semantic_part":
+      return { prefix: "part-", semanticKind: "landmark" };
+    case "sheet":
+    case "path":
+    case "connector":
+    case "semantic_constraint":
+    case "export":
+      return null;
+  }
+};
+
+const removeRepeatedPrefix = (identifier: string, prefix: string): string => {
+  let result = identifier;
+  while (result.startsWith(prefix) && result.length > prefix.length) {
+    result = result.slice(prefix.length);
+  }
+  return result;
+};
+
+const canonicalSemanticPartId = (identifier: string): string => {
+  if (identifier.startsWith("connector-")) {
+    const connectorKey = removeRepeatedPrefix(identifier, "connector-").replace(
+      /-(?:tab|slot)$/u,
+      "",
+    );
+    return `part-connector-${connectorKey}`;
+  }
+  for (const prefix of ["panel-", "body-", "joint-", "driver-", "output-"]) {
+    if (identifier.startsWith(prefix)) {
+      return `part-${removeRepeatedPrefix(identifier, prefix)}`;
+    }
+  }
+  return `part-${removeRepeatedPrefix(identifier, "part-")}`;
+};
+
+const canonicalPartTokens = (semanticPartIds: readonly string[]): Set<string> =>
+  new Set(
+    semanticPartIds.flatMap((id) =>
+      id
+        .replace(/^part-(?:connector-)?/u, "")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/u)
+        .filter((token) => token.length > 1),
+    ),
+  );
+
+const namedLandmarksForParts = (
+  landmarks: readonly string[],
+  semanticPartIds: readonly string[],
+): readonly string[] => {
+  const partTokens = canonicalPartTokens(semanticPartIds);
+  const named = landmarks.filter((landmark) =>
+    landmark
+      .toLowerCase()
+      .split(/[^a-z0-9]+/u)
+      .some((token) => partTokens.has(token)),
+  );
+  return named.length > 0
+    ? named
+    : semanticPartIds.map((id) =>
+        id.replace(/^part-(?:connector-)?/u, "").replaceAll("-", " "),
+      );
+};
+
+const duplicatesRequestedEnvelope = (
+  intent: FabricationIntentV1,
+  constraint: Extract<
+    FabricationIntentV1["semanticConstraints"][number],
+    { readonly kind: "dimension" }
+  >,
+): boolean => {
+  const requestedMm =
+    constraint.dimension === "width"
+      ? intent.requestedSize.widthMm
+      : constraint.dimension === "height"
+        ? intent.requestedSize.heightMm
+        : constraint.dimension === "depth"
+          ? intent.requestedSize.depthMm
+          : null;
+  if (requestedMm === null || constraint.targetMm !== requestedMm) return false;
+  return (
+    (constraint.minimumMm === null || constraint.minimumMm === requestedMm) &&
+    (constraint.maximumMm === null || constraint.maximumMm === requestedMm)
+  );
+};
+
+const normalizeIntentSemanticPartIds = (
+  intent: FabricationIntentV1,
+): FabricationIntentV1 => ({
+  ...intent,
+  semanticConstraints: intent.semanticConstraints
+    .filter(
+      (constraint) =>
+        constraint.kind !== "dimension" ||
+        !duplicatesRequestedEnvelope(intent, constraint),
+    )
+    .map((constraint) => {
+      if (constraint.kind !== "recognizable_form") return constraint;
+      const semanticPartIds = [
+        ...new Set(constraint.semanticPartIds.map(canonicalSemanticPartId)),
+      ];
+      return {
+        ...constraint,
+        semanticPartIds,
+        requiredLandmarks: namedLandmarksForParts(
+          constraint.requiredLandmarks,
+          semanticPartIds,
+        ),
+      };
+    }),
+});
+
+const semanticReferenceKey = (
+  kind: GeometryRefKind,
+  canonicalId: string,
+): SemanticReferenceKey | null => {
+  if (kind === "connector") {
+    const withoutPrefix = removeRepeatedPrefix(canonicalId, "connector-");
+    const connectorMember = withoutPrefix.endsWith("-tab")
+      ? "tab"
+      : withoutPrefix.endsWith("-slot")
+        ? "slot"
+        : null;
+    const semanticKey = connectorMember
+      ? withoutPrefix.slice(0, -(connectorMember.length + 1))
+      : withoutPrefix;
+    return semanticKey.length > 0
+      ? {
+          canonicalId,
+          semanticKind: "connector_relationship",
+          semanticKey,
+          connectorMember,
+        }
+      : null;
+  }
+  const convention = referenceKeyConvention(kind);
+  if (!convention) return null;
+  const semanticKey = removeRepeatedPrefix(canonicalId, convention.prefix);
+  if (semanticKey.length === 0) return null;
+  return {
+    canonicalId,
+    semanticKind: convention.semanticKind,
+    semanticKey,
+    connectorMember: null,
+  };
+};
+
+export const fabricationSemanticReferenceKeys = (
+  intent: FabricationIntentV1,
+): readonly SemanticReferenceKey[] => {
+  const references: {
+    readonly kind: GeometryRefKind;
+    readonly id: string;
+  }[] = [];
+  for (const constraint of intent.semanticConstraints) {
+    switch (constraint.kind) {
+      case "dimension":
+        references.push(constraint.geometryRef);
+        break;
+      case "clearance":
+      case "contact":
+        references.push(...constraint.geometryRefs);
+        break;
+      case "symmetry":
+      case "fold_flat":
+        references.push(
+          ...constraint.bodyIds.map((id) => ({ kind: "body" as const, id })),
+        );
+        break;
+      case "motion":
+        references.push({ kind: "output", id: constraint.outputId });
+        break;
+      case "recognizable_form":
+        references.push(
+          ...constraint.semanticPartIds.map((id) => ({
+            kind: "semantic_part" as const,
+            id,
+          })),
+        );
+        break;
+    }
+  }
+  const byCanonicalReference = new Map<string, SemanticReferenceKey>();
+  for (const reference of references) {
+    const normalized = semanticReferenceKey(reference.kind, reference.id);
+    if (normalized) {
+      byCanonicalReference.set(
+        `${normalized.semanticKind}:${normalized.canonicalId}`,
+        normalized,
+      );
+    }
+  }
+  return [...byCanonicalReference.values()].toSorted((left, right) =>
+    `${left.semanticKind}:${left.canonicalId}`.localeCompare(
+      `${right.semanticKind}:${right.canonicalId}`,
+      "en-US",
+    ),
+  );
+};
+
+export const fabricationPlanningInput = (
+  intent: FabricationIntentV1,
+  usedTopologyIds: readonly string[],
+) => ({
+  exactRequirements: intent.sourcePrompt,
+  designBrief: {
+    objectLabel: intent.objectLabel,
+    functionalGoal: intent.functionalGoal,
+    visualDescription: intent.visualDescription,
+    behavior: intent.behavior,
+    requestedSize: intent.requestedSize,
+    stockOptions: intent.stockOptions,
+    fabricationBudget: intent.fabricationBudget,
+    semanticConstraints: intent.semanticConstraints,
+    priorities: intent.priorities,
+  },
+  semanticReferenceKeys: fabricationSemanticReferenceKeys(intent),
+  diversity:
+    usedTopologyIds.length > 0
+      ? { topologyIdsAlreadyUsed: [...usedTopologyIds] }
+      : null,
+});
+
+export const fabricationNarrativeInput = (candidate: CandidateV2) => ({
+  candidateId: candidate.candidateId,
+  selectionStatus: candidate.selectionStatus,
+  intent: {
+    title: candidate.intent.title,
+    objectLabel: candidate.intent.objectLabel,
+    functionalGoal: candidate.intent.functionalGoal,
+    visualDescription: candidate.intent.visualDescription,
+    behavior: candidate.intent.behavior,
+    requestedSize: candidate.intent.requestedSize,
+    semanticConstraints: candidate.intent.semanticConstraints,
+  },
+  design: {
+    label: candidate.label,
+    summary: candidate.program.designSummary,
+    assemblyStrategy: candidate.program.assemblyStrategy,
+    assemblyOperations: candidate.program.blueprint.assemblyOperations,
+  },
+  verification: {
+    valid: candidate.verification.valid,
+    reportId: candidate.verification.reportId,
+    irHash: candidate.verification.irHash,
+    failedAtStage: candidate.verification.failedAtStage,
+  },
+  score: candidate.score,
+  exportMetadata: candidate.exportMetadata,
+  provenance: {
+    compilerVersion: candidate.provenance.compilerVersion,
+    modelId: candidate.provenance.modelId,
+    modelResponseId: candidate.provenance.modelResponseId,
+    modelPlanHash: candidate.provenance.modelPlanHash,
+    planExpanderVersion: candidate.provenance.planExpanderVersion,
+    appliedPatchIds: candidate.provenance.appliedPatchIds,
+    repairCycle: candidate.provenance.repairCycle,
+  },
+});
+
 export class OpenAIFabricationIntentModel implements FabricationIntentModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async compileIntent(
     prompt: string,
     safetyIdentifier: string,
   ): Promise<FabricationIntentV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = FABRICATION_INTENT_MAX_OUTPUT_TOKENS;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_INTENT_PROMPT,
       input: [{ role: "user", content: prompt }],
-      reasoning: { effort: "high" },
+      reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(
           FabricationIntentV1Schema,
           "fabrication_intent_v1",
         ),
       },
-      max_output_tokens: 3_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "compile_intent",
+      request,
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
-      throw new Error("GPT-5.6 Sol returned no parsed fabrication intent.");
+      throw new FabricationIntentModelError(
+        "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
+      );
     }
-    return FabricationIntentV1Schema.parse(response.output_parsed);
+    return FabricationIntentV1Schema.parse(
+      normalizeIntentSemanticPartIds(
+        FabricationIntentV1Schema.parse(response.output_parsed),
+      ),
+    );
   }
 }
 
 export class OpenAIFabricationProgramModel implements FabricationProgramModel {
+  constructor(
+    private readonly usageBudget: PaidEvalBudget | null = null,
+    private readonly maximumOutputTokens: number = FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
+  ) {
+    assertEvaluationBudget(usageBudget);
+    if (
+      !Number.isSafeInteger(maximumOutputTokens) ||
+      maximumOutputTokens < 1_000 ||
+      maximumOutputTokens > FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS
+    ) {
+      throw new Error(
+        `Program output tokens must be an integer between 1000 and ${FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS}.`,
+      );
+    }
+  }
+
   async generateProgram(
     intent: FabricationIntentV1,
     candidateOrdinal: number,
     usedTopologyIds: readonly string[],
     safetyIdentifier: string,
   ): Promise<ProgramProposalV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = this.maximumOutputTokens;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_PROGRAM_PROMPT,
       input: [
         {
           role: "user",
-          content: canonicalSerialize({
-            intent,
-            candidateOrdinal,
-            usedTopologyIds,
-          }),
+          content: canonicalSerialize(
+            fabricationPlanningInput(intent, usedTopologyIds),
+          ),
         },
       ],
-      reasoning: { effort: "high" },
-      text: {
-        format: zodTextFormat(
-          ProgramProposalV1Schema,
-          "fabrication_program_proposal_v1",
-        ),
-      },
-      max_output_tokens: 8_000,
+      // Deterministic expansion and verification own correctness. Low effort
+      // leaves the model enough planning capacity while avoiding the large
+      // hidden-token overhead observed with medium-effort Sol responses.
+      reasoning: { effort: "low" },
+      tools: [
+        zodResponsesFunction({
+          name: "submit_fabrication_plan",
+          description:
+            "Submit one compact bounded plan for deterministic expansion.",
+          parameters: FabricationPlanProposalV2Schema,
+        }),
+      ],
+      tool_choice: { type: "function", name: "submit_fabrication_plan" },
+      max_output_tokens: maxOutputTokens,
+      background: true,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
     });
-    if (!response.output_parsed) {
-      throw new Error("GPT-5.6 Sol returned no parsed fabrication program.");
-    }
-    return ProgramProposalV1Schema.parse(response.output_parsed);
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "generate_program",
+      request,
+      execute: (meteredRequest) =>
+        runBackgroundResponse(openAI, meteredRequest),
+    });
+    return fabricationProgramProposalFromResponse({
+      response,
+      intent,
+      candidateOrdinal,
+      modelId: FOLDFORGE_MODEL,
+    });
   }
 }
 
 export class OpenAIFabricationRepairModel implements FabricationRepairModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async diagnoseRepair(
     program: FabricationProgramV1,
     report: VerificationReportV2,
     repairCycle: number,
     safetyIdentifier: string,
   ): Promise<ProgramPatchV1 | null> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 2_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_REPAIR_PROMPT,
       input: [
@@ -154,10 +640,20 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
         }),
       ],
       tool_choice: { type: "function", name: "apply_parameter_patch" },
-      max_output_tokens: 2_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "diagnose_repair",
+      request,
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     const toolCall = response.output.find(
       (item) =>
@@ -169,14 +665,24 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
 }
 
 export class OpenAIFabricationNarrativeModel implements FabricationNarrativeModel {
+  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
+    assertEvaluationBudget(usageBudget);
+  }
+
   async generateNarrative(
     candidate: CandidateV2,
     safetyIdentifier: string,
   ): Promise<FabricationNarrativeV1> {
-    const response = await getOpenAIClient().responses.parse({
+    const maxOutputTokens = 2_000;
+    const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_NARRATIVE_PROMPT,
-      input: [{ role: "user", content: canonicalSerialize(candidate) }],
+      input: [
+        {
+          role: "user",
+          content: canonicalSerialize(fabricationNarrativeInput(candidate)),
+        },
+      ],
       reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(
@@ -184,10 +690,20 @@ export class OpenAIFabricationNarrativeModel implements FabricationNarrativeMode
           "fabrication_narrative_v1",
         ),
       },
-      max_output_tokens: 2_000,
+      max_output_tokens: maxOutputTokens,
       parallel_tool_calls: false,
       safety_identifier: safetyIdentifier,
       store: false,
+      service_tier: "default",
+    } satisfies ResponseCreateParamsWithTools;
+    const openAI = getOpenAIClient({
+      paidEvaluation: this.usageBudget !== null,
+    });
+    const response = await runMeteredRequest({
+      budget: this.usageBudget,
+      operation: "generate_narrative",
+      request,
+      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
     });
     if (!response.output_parsed) {
       throw new Error("GPT-5.6 Sol returned no parsed fabrication narrative.");
