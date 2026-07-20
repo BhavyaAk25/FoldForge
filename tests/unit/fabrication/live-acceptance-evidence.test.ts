@@ -75,7 +75,8 @@ describe("live Sol acceptance evidence", () => {
     expect(LIVE_SOL_ACCEPTANCE_CASE.acceptanceContract).toMatchObject({
       behavior: "static",
       panels: { length: 6 },
-      foldConnections: { length: 5 },
+      foldJointCount: 5,
+      requiredFoldConnections: { length: 0 },
       connectorPairs: { length: 1 },
       sheet: {
         widthMm: 210,
@@ -90,7 +91,8 @@ describe("live Sol acceptance evidence", () => {
       acceptanceContract: {
         behavior: "flap",
         panels: { length: 2 },
-        foldConnections: { length: 1 },
+        foldJointCount: 1,
+        requiredFoldConnections: { length: 1 },
         connectorPairs: { length: 0 },
         motion: {
           control: "fold",

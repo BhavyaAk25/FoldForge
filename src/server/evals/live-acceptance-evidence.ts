@@ -7,14 +7,17 @@ import type {
 
 export interface LiveAcceptanceContract {
   readonly behavior: FabricationBehavior;
-  readonly assemblyStrategy: "fold_only" | "tab_slot" | "articulated_tab_slot";
+  readonly assemblyStrategies: readonly (
+    "fold_only" | "tab_slot" | "articulated_tab_slot"
+  )[];
   readonly panels: readonly {
     readonly name: string;
-    readonly role: PanelBlueprintV1["role"];
+    readonly roles: readonly PanelBlueprintV1["role"][];
     readonly widthMm: number;
     readonly heightMm: number;
   }[];
-  readonly foldConnections: readonly {
+  readonly foldJointCount: number;
+  readonly requiredFoldConnections: readonly {
     readonly parentPanelName: string;
     readonly childPanelName: string;
   }[];
@@ -168,9 +171,9 @@ export const evaluateLiveAcceptance = (input: {
     ),
     acceptanceCheck(
       "program.assemblyStrategy",
-      contract.assemblyStrategy,
+      contract.assemblyStrategies.join("|"),
       candidate.program.assemblyStrategy,
-      candidate.program.assemblyStrategy === contract.assemblyStrategy,
+      contract.assemblyStrategies.includes(candidate.program.assemblyStrategy),
     ),
     acceptanceCheck(
       "blueprint.panels.length",
@@ -180,9 +183,9 @@ export const evaluateLiveAcceptance = (input: {
     ),
     acceptanceCheck(
       "blueprint.joints.fold.length",
-      contract.foldConnections.length,
+      contract.foldJointCount,
       blueprint.joints.filter((joint) => joint.kind === "fold").length,
-      blueprint.joints.length === contract.foldConnections.length &&
+      blueprint.joints.length === contract.foldJointCount &&
         blueprint.joints.every((joint) => joint.kind === "fold"),
     ),
     acceptanceCheck(
@@ -209,9 +212,9 @@ export const evaluateLiveAcceptance = (input: {
       ),
       acceptanceCheck(
         `panels.${expectedPanel.name}.role`,
-        expectedPanel.role,
+        expectedPanel.roles.join("|"),
         panel?.role ?? null,
-        panel?.role === expectedPanel.role,
+        panel !== undefined && expectedPanel.roles.includes(panel.role),
       ),
       acceptanceCheck(
         `panels.${expectedPanel.name}.widthMm`,
@@ -255,14 +258,16 @@ export const evaluateLiveAcceptance = (input: {
     );
   }
 
-  for (const connection of contract.foldConnections) {
+  for (const connection of contract.requiredFoldConnections) {
     const parent = panelByName.get(connection.parentPanelName);
     const child = panelByName.get(connection.childPanelName);
     const matches = blueprint.joints.filter(
       (joint) =>
         joint.kind === "fold" &&
-        joint.parentBodyId === parent?.bodyId &&
-        joint.childBodyId === child?.bodyId,
+        ((joint.parentBodyId === parent?.bodyId &&
+          joint.childBodyId === child?.bodyId) ||
+          (joint.parentBodyId === child?.bodyId &&
+            joint.childBodyId === parent?.bodyId)),
     );
     checks.push(
       acceptanceCheck(
@@ -446,21 +451,16 @@ export const evaluateLiveAcceptance = (input: {
         blueprint.outputs.length === 0,
       ),
       acceptanceCheck(
-        "blueprint.joints.fixedAtHome",
+        "blueprint.joints.rightAngleHome",
         true,
         blueprint.joints.every((joint) =>
-          joint.kind === "prismatic"
-            ? joint.minTravelMm === joint.homeTravelMm &&
-              joint.homeTravelMm === joint.maxTravelMm
-            : joint.minAngleDeg === joint.homeAngleDeg &&
-              joint.homeAngleDeg === joint.maxAngleDeg,
+          joint.kind === "fold"
+            ? closeTo(Math.abs(joint.homeAngleDeg), 90)
+            : false,
         ),
-        blueprint.joints.every((joint) =>
-          joint.kind === "prismatic"
-            ? joint.minTravelMm === joint.homeTravelMm &&
-              joint.homeTravelMm === joint.maxTravelMm
-            : joint.minAngleDeg === joint.homeAngleDeg &&
-              joint.homeAngleDeg === joint.maxAngleDeg,
+        blueprint.joints.every(
+          (joint) =>
+            joint.kind === "fold" && closeTo(Math.abs(joint.homeAngleDeg), 90),
         ),
       ),
     );

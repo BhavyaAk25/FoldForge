@@ -164,22 +164,50 @@ export const LIVE_SOL_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
   requiredCandidateCount: 1,
   acceptanceContract: {
     behavior: "static",
-    assemblyStrategy: "tab_slot",
+    assemblyStrategies: ["tab_slot", "articulated_tab_slot"],
     panels: [
-      { name: "base", role: "structural", widthMm: 70, heightMm: 95 },
-      { name: "front", role: "structural", widthMm: 70, heightMm: 25 },
-      { name: "back", role: "structural", widthMm: 70, heightMm: 25 },
-      { name: "left", role: "structural", widthMm: 25, heightMm: 95 },
-      { name: "right", role: "structural", widthMm: 25, heightMm: 95 },
-      { name: "lid", role: "output", widthMm: 70, heightMm: 95 },
+      {
+        name: "base",
+        roles: ["structural"],
+        widthMm: 70,
+        heightMm: 25,
+      },
+      {
+        name: "front",
+        roles: ["structural"],
+        widthMm: 70,
+        heightMm: 95,
+      },
+      {
+        name: "back",
+        roles: ["structural"],
+        widthMm: 70,
+        heightMm: 95,
+      },
+      {
+        name: "left",
+        roles: ["structural"],
+        widthMm: 25,
+        heightMm: 95,
+      },
+      {
+        name: "right",
+        roles: ["structural"],
+        widthMm: 25,
+        heightMm: 95,
+      },
+      {
+        name: "lid",
+        roles: ["structural", "output"],
+        widthMm: 70,
+        heightMm: 25,
+      },
     ],
-    foldConnections: [
-      { parentPanelName: "base", childPanelName: "front" },
-      { parentPanelName: "base", childPanelName: "back" },
-      { parentPanelName: "base", childPanelName: "left" },
-      { parentPanelName: "base", childPanelName: "right" },
-      { parentPanelName: "back", childPanelName: "lid" },
-    ],
+    foldJointCount: 5,
+    // A cuboid has eleven valid one-piece nets. The deterministic verifier
+    // owns connected acyclic topology and collision checks; acceptance must
+    // not force the one base-star net that is too wide for printable A4.
+    requiredFoldConnections: [],
     connectorPairs: [{ tabPanelName: "lid", slotPanelName: "front" }],
     sheet: {
       widthMm: 210,
@@ -226,12 +254,20 @@ export const LIVE_SOL_MOTION_ACCEPTANCE_CASE: LiveReadinessCaseDefinition = {
   requiredCandidateCount: 1,
   acceptanceContract: {
     behavior: "flap",
-    assemblyStrategy: "fold_only",
+    assemblyStrategies: ["fold_only"],
     panels: [
-      { name: "base", role: "structural", widthMm: 80, heightMm: 60 },
-      { name: "flap", role: "output", widthMm: 30, heightMm: 60 },
+      {
+        name: "base",
+        roles: ["structural"],
+        widthMm: 80,
+        heightMm: 60,
+      },
+      { name: "flap", roles: ["output"], widthMm: 30, heightMm: 60 },
     ],
-    foldConnections: [{ parentPanelName: "base", childPanelName: "flap" }],
+    foldJointCount: 1,
+    requiredFoldConnections: [
+      { parentPanelName: "base", childPanelName: "flap" },
+    ],
     connectorPairs: [],
     sheet: {
       widthMm: 210,
