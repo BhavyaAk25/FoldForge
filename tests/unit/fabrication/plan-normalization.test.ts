@@ -181,7 +181,7 @@ describe("fold-only plan normalization", () => {
     ]);
   });
 
-  it("lays out an invalid semantic fold tree with exact shared score edges", () => {
+  it("lays out a fold tree without rewriting invalid connector geometry", () => {
     const source = fabricationPlanFromProgram(fixtureProgram());
     const wing = source.panels[1]!;
     const plan = {
@@ -316,16 +316,16 @@ describe("fold-only plan normalization", () => {
       report.failures.filter(
         (failure) =>
           failure.failureId.startsWith("connections.fold_edge") ||
-          (failure.failureId.startsWith("connections.connector") &&
-            !failure.failureId.startsWith(
-              "connections.connector_mate_reach",
-            )) ||
-          failure.failureId.startsWith("connections.tab_attachment") ||
-          failure.failureId.startsWith("connections.slot_clearance") ||
           failure.failureId.startsWith("packing.panel_overlap") ||
           failure.failureId.startsWith("packing.sheet_bounds"),
       ),
     ).toEqual([]);
+    expect(report.failures.map((failure) => failure.failureId)).toEqual(
+      expect.arrayContaining([
+        "connections.connector_fit#unused-tab:unused-slot",
+        "connections.tab_attachment#unused-tab",
+      ]),
+    );
     expect(
       report.failures.some((failure) =>
         failure.failureId.startsWith("connections.connector_mate_reach"),

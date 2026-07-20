@@ -7,6 +7,7 @@ import type {
 } from "openai/resources/responses/responses";
 
 import { canonicalSerialize } from "@/core/canonical";
+import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import {
   FabricationIntentV1Schema,
   ProgramPatchV1Schema,
@@ -621,13 +622,22 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
     safetyIdentifier: string,
   ): Promise<ProgramPatchV1 | null> {
     const maxOutputTokens = 2_000;
+    const baseProgramHash = fabricationProgramHash(program);
     const request = {
       model: FOLDFORGE_MODEL,
       instructions: FABRICATION_REPAIR_PROMPT,
       input: [
         {
           role: "user",
-          content: canonicalSerialize({ program, report, repairCycle }),
+          content: canonicalSerialize({
+            program,
+            report,
+            patchContext: {
+              programId: program.programId,
+              baseProgramHash,
+              repairCycle,
+            },
+          }),
         },
       ],
       reasoning: { effort: "high" },
@@ -660,7 +670,27 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
         item.type === "function_call" && item.name === "apply_parameter_patch",
     );
     if (!toolCall || toolCall.type !== "function_call") return null;
-    return ProgramPatchV1Schema.parse(JSON.parse(toolCall.arguments));
+    const proposedPatch = ProgramPatchV1Schema.parse(
+      JSON.parse(toolCall.arguments),
+    );
+    return ProgramPatchV1Schema.parse({
+      ...proposedPatch,
+      // These fields describe the current server transaction, not an AI
+      // design decision. Binding them here prevents a fabricated or stale
+      // echo from rejecting an otherwise grounded repair.
+      programId: program.programId,
+      baseProgramHash,
+      repairCycle,
+      authoredBy: "ai",
+      changesIntent: false,
+      operations: proposedPatch.operations.map((operation) => ({
+        ...operation,
+        // The patch is applied immediately to the same hashed program. Path,
+        // failure grounding, value type, unit, no-op, and final schema checks
+        // remain deterministic; an echoed current value is not authoritative.
+        expectedCurrentValue: null,
+      })),
+    });
   }
 }
 

@@ -3088,36 +3088,6 @@ const coincidentPanelBoundarySegments = (
   );
 };
 
-const isolatedBoundaryPointContact = (
-  firstPanelId: string,
-  secondPanelId: string,
-  motionState: EvaluatedMotionState,
-  witnesses: readonly Point3Mm[],
-): boolean => {
-  if (
-    witnesses.length === 0 ||
-    panelIntersectionSegments(firstPanelId, secondPanelId, motionState).length >
-      0
-  ) {
-    return false;
-  }
-  const firstBoundary = panelBoundarySegments(firstPanelId, motionState);
-  const secondBoundary = panelBoundarySegments(secondPanelId, motionState);
-  return witnesses.every(
-    (point) =>
-      firstBoundary.some(
-        ([start, end]) =>
-          distancePointToSegment3Mm(point, start, end) <=
-          CONTACT_LOCUS_TOLERANCE_MM,
-      ) &&
-      secondBoundary.some(
-        ([start, end]) =>
-          distancePointToSegment3Mm(point, start, end) <=
-          CONTACT_LOCUS_TOLERANCE_MM,
-      ),
-  );
-};
-
 const witnessesAreConfinedToSegments = (
   witnesses: readonly Point3Mm[],
   segments: readonly Segment3Mm[],
@@ -3471,25 +3441,11 @@ const validateCollision = (
               motionState,
               witnesses,
             );
-          // A static faceted assembly can bring two non-adjacent panel
-          // vertices to the same point. That is valid boundary contact when
-          // there is no positive-length intersection and every witness lies
-          // on both contours; a vertex piercing an interior still fails.
-          const allowedIsolatedPointContact =
-            isSingleStateStaticDesign &&
-            zeroAreaCenterlineContact &&
-            isolatedBoundaryPointContact(
-              first.panelId,
-              second.panelId,
-              motionState,
-              witnesses,
-            );
           const allowedBoundaryContact =
             zeroAreaCenterlineContact &&
             (locusBoundFoldSeam ||
               locusBoundBoundaryContact ||
-              locusBoundConnectorContact ||
-              allowedIsolatedPointContact);
+              locusBoundConnectorContact);
           if (allowedBoundaryContact) continue;
           const clearanceMm =
             overlapAreaMm2 > 1e-6

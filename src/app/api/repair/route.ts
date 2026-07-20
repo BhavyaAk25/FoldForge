@@ -253,11 +253,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
               stage: "repair",
               kind: "repair",
               code: "REPAIR_PATCH_REJECTED",
-              message: "The repair patch could not be applied safely.",
+              message: `The repair patch could not be applied safely (${applied.error.id}).`,
               modelCall: "attempted",
-              failureIds: before.value.report.failures
-                .slice(0, 24)
-                .map((failure) => failure.failureId),
+              failureIds: [
+                applied.error.id,
+                ...before.value.report.failures.map(
+                  (failure) => failure.failureId,
+                ),
+              ].slice(0, 24),
               failedAtStage: before.value.report.failedAtStage,
               repairCycle,
             }),
