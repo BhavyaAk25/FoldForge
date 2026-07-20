@@ -3,7 +3,7 @@ import {
   expandFabricationPlan,
   FABRICATION_PLAN_EXPANDER_VERSION,
 } from "@/core/fabrication/planning";
-import { expandSemanticFabricationPlan } from "@/core/fabrication/semantic-plan-expansion";
+import { expandResolvedSemanticFabricationPlan } from "@/core/fabrication/semantic-plan-expansion";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 import { sha256Hex } from "@/core/sha256";
 
@@ -138,7 +138,7 @@ export const fabricationProgramProposalFromResponse = (input: {
     if (semanticProposal.success) {
       return {
         proposal: semanticProposal.data,
-        expanded: expandSemanticFabricationPlan(
+        expanded: expandResolvedSemanticFabricationPlan(
           input.intent,
           semanticProposal.data.plan,
           input.candidateOrdinal,

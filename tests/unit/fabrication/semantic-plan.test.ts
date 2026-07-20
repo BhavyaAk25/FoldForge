@@ -13,6 +13,7 @@ import {
 import { evaluateMotionState } from "@/core/fabrication/kinematics";
 import { fabricationPlanFromProgram } from "@/core/fabrication/planning";
 import {
+  expandResolvedSemanticFabricationPlan,
   expandSemanticFabricationPlan,
   semanticPlanToFabricationPlanV1,
 } from "@/core/fabrication/semantic-plan-expansion";
@@ -44,6 +45,22 @@ const staticPlan = (): FabricationPlanV2 => {
     landmarks: [],
     assemblyStrategy: "fold_only",
     designSummary: "One static panel.",
+  };
+};
+
+const liveBoxIntent = (): FabricationIntentV1 => {
+  const source = fixtureIntent();
+  return {
+    ...source,
+    behavior: "static",
+    requestedSize: { widthMm: 70, heightMm: 95, depthMm: 25 },
+    fabricationBudget: {
+      ...source.fabricationBudget,
+      maximumPanels: 6,
+      maximumJointAndConnectorCount: 7,
+    },
+    semanticConstraints: [],
+    scopeStatus: "supported",
   };
 };
 
@@ -188,6 +205,99 @@ const expectMappingError = (
 };
 
 describe("semantic FabricationPlanV2", () => {
+  it("resolves model-selected closure edges before returning a live program", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const plan: FabricationPlanV2 = {
+      ...source,
+      joints: source.joints.map((joint) =>
+        joint.key === "left"
+          ? {
+              ...joint,
+              homeAngleDeg: -90,
+              minimumAngleDeg: -90,
+              maximumAngleDeg: -90,
+            }
+          : joint,
+      ),
+      connectorRelationships: source.connectorRelationships.map(
+        (relationship) => ({
+          ...relationship,
+          tabAttachment: { ...relationship.tabAttachment, edgeIndex: 0 },
+          slotAttachment: { ...relationship.slotAttachment, edgeIndex: 2 },
+        }),
+      ),
+    };
+
+    const unresolved = expandSemanticFabricationPlan(liveBoxIntent(), plan, 1);
+    expect(unresolved.ok).toBe(true);
+    if (!unresolved.ok) return;
+    const unresolvedIr = compileFabricationProgram(
+      liveBoxIntent(),
+      unresolved.value,
+    );
+    expect(unresolvedIr.ok).toBe(true);
+    if (!unresolvedIr.ok) return;
+    expect(
+      verifyFabricationIr(unresolvedIr.value, "candidate-unresolved").failures,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          failureId: expect.stringMatching(
+            /^connections\.connector_mate_reach/u,
+          ),
+        }),
+      ]),
+    );
+
+    const resolved = expandResolvedSemanticFabricationPlan(
+      liveBoxIntent(),
+      plan,
+      1,
+    );
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const resolvedIr = compileFabricationProgram(
+      liveBoxIntent(),
+      resolved.value,
+    );
+    expect(resolvedIr.ok).toBe(true);
+    if (!resolvedIr.ok) return;
+    expect(
+      verifyFabricationIr(resolvedIr.value, "candidate-resolved"),
+    ).toMatchObject({ valid: true, failures: [] });
+  });
+
+  it("normalizes contradictory static fold signs before verification", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const plan: FabricationPlanV2 = {
+      ...source,
+      joints: source.joints.map((joint) =>
+        joint.key === "left"
+          ? {
+              ...joint,
+              homeAngleDeg: -90,
+              minimumAngleDeg: -90,
+              maximumAngleDeg: -90,
+            }
+          : joint,
+      ),
+    };
+
+    const resolved = expandResolvedSemanticFabricationPlan(
+      liveBoxIntent(),
+      plan,
+      1,
+    );
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const compiled = compileFabricationProgram(liveBoxIntent(), resolved.value);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    expect(
+      verifyFabricationIr(compiled.value, "candidate-fold-sign"),
+    ).toMatchObject({ valid: true, failures: [] });
+  });
+
   it("strictly excludes model-authored global and reciprocal geometry", () => {
     const plan = fixtureSemanticPlan();
     expect(FabricationPlanV2Schema.safeParse(plan).success).toBe(true);

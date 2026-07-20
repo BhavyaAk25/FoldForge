@@ -1,4 +1,5 @@
 import { expandFabricationPlan } from "./planning";
+import { compileFabricationProgram } from "./compiler";
 import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
 import { connectorReferencePoint2 } from "./connector-geometry";
 import {
@@ -30,7 +31,9 @@ import type {
   SemanticPartV1,
   Transform2Mm,
   Transform3Mm,
+  VerificationReportV2,
 } from "./types";
+import { verificationStageOrder, verifyFabricationIr } from "./verification";
 
 const LAYOUT_GAP_MM = 2;
 const EDGE_LENGTH_TOLERANCE_MM = 0.1;
@@ -1570,4 +1573,228 @@ export const expandSemanticFabricationPlan = (
   return mapped.ok
     ? expandFabricationPlan(intentInput, mapped.value, candidateOrdinal)
     : mapped;
+};
+
+interface ResolvedPlanEvaluation {
+  readonly plan: FabricationPlanV2;
+  readonly program: FabricationProgramV1;
+  readonly report: VerificationReportV2;
+}
+
+const MAXIMUM_PLAN_RESOLUTION_EVALUATIONS = 160;
+const MAXIMUM_EDGE_CHOICES_PER_PANEL = 8;
+
+const numericFailureDeficit = (report: VerificationReportV2): number =>
+  report.failures.reduce((total, failure) => {
+    if (
+      typeof failure.actual.value !== "number" ||
+      typeof failure.expected.value !== "number"
+    ) {
+      return total;
+    }
+    const scale = Math.max(1, Math.abs(failure.expected.value));
+    const deficit = failure.failureId.startsWith(
+      "connections.connector_mate_reach",
+    )
+      ? failure.actual.value - failure.expected.value
+      : failure.expected.value - failure.actual.value;
+    return total + Math.max(0, deficit) / scale;
+  }, 0);
+
+const reportIsBetter = (
+  candidate: VerificationReportV2,
+  current: VerificationReportV2,
+): boolean => {
+  if (candidate.valid !== current.valid) return candidate.valid;
+  const stages = verificationStageOrder();
+  const stageIndex = (report: VerificationReportV2): number =>
+    report.failedAtStage === null
+      ? stages.length
+      : stages.indexOf(report.failedAtStage);
+  const candidateStage = stageIndex(candidate);
+  const currentStage = stageIndex(current);
+  if (candidateStage !== currentStage) return candidateStage > currentStage;
+  const hardFailureCount = (report: VerificationReportV2): number =>
+    report.failures.filter((failure) => failure.severity === "hard").length;
+  const candidateFailures = hardFailureCount(candidate);
+  const currentFailures = hardFailureCount(current);
+  if (candidateFailures !== currentFailures) {
+    return candidateFailures < currentFailures;
+  }
+  return numericFailureDeficit(candidate) < numericFailureDeficit(current);
+};
+
+const isStaticPoseFailure = (report: VerificationReportV2): boolean =>
+  report.failures.some(
+    (failure) =>
+      failure.failureId.startsWith("connections.connector_") ||
+      failure.failureId === "collision.minimum_clearance",
+  );
+
+const edgeChoiceIndexes = (
+  panel: SemanticPanelV2,
+  currentIndex: number,
+  minimumLengthMm: number,
+): readonly number[] => {
+  const geometry = panelGeometry(panel);
+  if (!geometry.ok) return [currentIndex];
+  const fittingIndexes = geometry.value.localVertices.flatMap((_, index) => {
+    const edge = edgeFor(geometry.value, index);
+    return edge.ok && edgeLengthMm(edge.value) >= minimumLengthMm
+      ? [index]
+      : [];
+  });
+  return [currentIndex, ...fittingIndexes]
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, MAXIMUM_EDGE_CHOICES_PER_PANEL);
+};
+
+const withDirectionConsistentStaticFolds = (
+  plan: FabricationPlanV2,
+): FabricationPlanV2 => ({
+  ...plan,
+  joints: plan.joints.map((joint) => {
+    if (joint.kind !== "fold") return joint;
+    const magnitudeDeg = Math.abs(joint.homeAngleDeg);
+    const homeAngleDeg =
+      joint.foldDirection === "valley" ? magnitudeDeg : -magnitudeDeg;
+    return {
+      ...joint,
+      homeAngleDeg,
+      minimumAngleDeg: Math.min(joint.minimumAngleDeg, homeAngleDeg),
+      maximumAngleDeg: Math.max(joint.maximumAngleDeg, homeAngleDeg),
+    };
+  }),
+});
+
+/**
+ * Sol chooses semantic topology and local attachments. For a static fold tree,
+ * edge numbering and fold sign are discrete authoring choices that code can
+ * resolve exhaustively inside a small budget. This pass never changes panel
+ * dimensions, bodies, topology, or requested semantics; every accepted choice
+ * must make the deterministic report strictly better.
+ */
+export const expandResolvedSemanticFabricationPlan = (
+  intentInput: unknown,
+  planInput: unknown,
+  candidateOrdinal: number,
+): ReturnType<typeof expandSemanticFabricationPlan> => {
+  const intent = FabricationIntentV1Schema.safeParse(intentInput);
+  const plan = FabricationPlanV2Schema.safeParse(planInput);
+  const initial = expandSemanticFabricationPlan(
+    intentInput,
+    planInput,
+    candidateOrdinal,
+  );
+  if (!intent.success || !plan.success || !initial.ok) return initial;
+
+  const evaluate = (
+    candidatePlan: FabricationPlanV2,
+  ): ResolvedPlanEvaluation | null => {
+    const expanded = expandSemanticFabricationPlan(
+      intent.data,
+      candidatePlan,
+      candidateOrdinal,
+    );
+    if (!expanded.ok) return null;
+    const compiled = compileFabricationProgram(intent.data, expanded.value);
+    if (!compiled.ok) return null;
+    return {
+      plan: candidatePlan,
+      program: expanded.value,
+      report: verifyFabricationIr(
+        compiled.value,
+        `candidate-plan-resolution-${candidateOrdinal}`,
+      ),
+    };
+  };
+
+  const initialEvaluation = evaluate(plan.data);
+  if (
+    !initialEvaluation ||
+    initialEvaluation.report.valid ||
+    intent.data.behavior !== "static" ||
+    !isStaticPoseFailure(initialEvaluation.report)
+  ) {
+    return initial;
+  }
+
+  let evaluationCount = 1;
+  let best = initialEvaluation;
+  const consider = (candidatePlan: FabricationPlanV2): void => {
+    if (evaluationCount >= MAXIMUM_PLAN_RESOLUTION_EVALUATIONS) return;
+    evaluationCount += 1;
+    const candidate = evaluate(candidatePlan);
+    if (candidate && reportIsBetter(candidate.report, best.report)) {
+      best = candidate;
+    }
+  };
+
+  consider(withDirectionConsistentStaticFolds(best.plan));
+
+  for (let pass = 0; pass < 2 && !best.report.valid; pass += 1) {
+    for (
+      let relationshipIndex = 0;
+      relationshipIndex < best.plan.connectorRelationships.length &&
+      evaluationCount < MAXIMUM_PLAN_RESOLUTION_EVALUATIONS;
+      relationshipIndex += 1
+    ) {
+      const relationship = best.plan.connectorRelationships[relationshipIndex];
+      if (!relationship) continue;
+      const tabPanel = best.plan.panels.find(
+        (panel) => panel.key === relationship.tabAttachment.panelKey,
+      );
+      const slotPanel = best.plan.panels.find(
+        (panel) => panel.key === relationship.slotAttachment.panelKey,
+      );
+      if (!tabPanel || !slotPanel) continue;
+      const tabChoices = edgeChoiceIndexes(
+        tabPanel,
+        relationship.tabAttachment.edgeIndex,
+        relationship.spanMm + LAYOUT_GAP_MM,
+      );
+      const slotChoices = edgeChoiceIndexes(
+        slotPanel,
+        relationship.slotAttachment.edgeIndex,
+        relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
+      );
+      const basePlan = best.plan;
+      for (const tabEdgeIndex of tabChoices) {
+        for (const slotEdgeIndex of slotChoices) {
+          if (
+            tabEdgeIndex === relationship.tabAttachment.edgeIndex &&
+            slotEdgeIndex === relationship.slotAttachment.edgeIndex
+          ) {
+            continue;
+          }
+          consider({
+            ...basePlan,
+            connectorRelationships: basePlan.connectorRelationships.map(
+              (value, index) =>
+                index === relationshipIndex
+                  ? {
+                      ...value,
+                      tabAttachment: {
+                        ...value.tabAttachment,
+                        edgeIndex: tabEdgeIndex,
+                      },
+                      slotAttachment: {
+                        ...value.slotAttachment,
+                        edgeIndex: slotEdgeIndex,
+                      },
+                    }
+                  : value,
+            ),
+          });
+          if (best.report.valid) break;
+        }
+        if (best.report.valid) break;
+      }
+    }
+    if (!best.report.valid) {
+      consider(withDirectionConsistentStaticFolds(best.plan));
+    }
+  }
+
+  return { ok: true, value: best.program };
 };
