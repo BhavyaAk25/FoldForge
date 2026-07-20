@@ -176,6 +176,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         ...source,
         semanticConstraints: [
           {
+            constraintId: "constraint-box-height",
+            kind: "dimension",
+            hard: true,
+            source: "user",
+            geometryRef: { kind: "panel", id: "panel-front" },
+            dimension: "height",
+            minimumMm: source.requestedSize.heightMm,
+            maximumMm: source.requestedSize.heightMm,
+            targetMm: source.requestedSize.heightMm,
+            toleranceMm: 0,
+          },
+          {
             constraintId: "constraint-box-landmarks",
             kind: "recognizable_form",
             hard: true,
@@ -189,7 +201,13 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
               "connector-lid-lock-slot",
               "part-part-lid",
             ],
-            requiredLandmarks: ["base", "front", "lid", "lid lock"],
+            requiredLandmarks: [
+              "base",
+              "front",
+              "lid",
+              "lid lock",
+              "exactly five folds connecting six panels",
+            ],
             evaluation: "landmark_geometry",
           },
         ],
@@ -201,6 +219,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       "ff_subject",
     );
 
+    expect(intent.semanticConstraints).toHaveLength(1);
     expect(intent.semanticConstraints[0]).toMatchObject({
       kind: "recognizable_form",
       semanticPartIds: [
@@ -209,6 +228,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         "part-lid",
         "part-connector-lid-lock",
       ],
+      requiredLandmarks: ["base", "front", "lid", "lid lock"],
     });
   });
 

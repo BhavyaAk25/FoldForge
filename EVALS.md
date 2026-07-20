@@ -26,7 +26,7 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 | Gate             | Result                              |
 | ---------------- | ----------------------------------- |
-| Vitest           | 456/456 passing                     |
+| Vitest           | 457/457 passing                     |
 | Statements       | 96.96%                              |
 | Branches         | 90.40%                              |
 | Functions        | 97.86%                              |
@@ -150,6 +150,10 @@ On clean commit `2357c2f`, all three compiler responses were schema-valid and co
 Under the builder's next separate $2 authorization, clean commit `5ae9fea` passed the corrected live compiler gate 3/3 for $0.1164025. The exact intent then recalled 16/16 requirements and Sol completed one strict semantic plan. Deterministic verification rejected nine recognizable-form references at topology: semantic-part fields contained panel, joint, and connector identifiers rather than the canonical landmark-part identifiers they are required to name. The exact calls cost $0.1867375; cumulative spend in this ledger is $0.30314 with $1.69686 remaining. No repair or export was claimed.
 
 Intent normalization now converts recognizable-form references to canonical `part-*` landmark IDs, including deduplicated panel/body/joint aliases and reciprocal connector relationships. Hard `landmark_geometry` constraints pass only when every named part exists, every referenced part owns source-checked geometry, and every required landmark is present in those referenced parts; `human_review` cannot satisfy a hard gate. The exact six-panel regression includes this hard constraint and passes topology, semantics, full verification, and source-equivalent exports offline.
+
+On clean commit `446e95b`, the exact-build compiler gate passed 3/3 for $0.10987. The exact intent again recalled 16/16 requirements and Sol completed a strict plan. Verification reached semantics and measured the correct envelope span set, but the net's arbitrary world orientation exchanged Y and Z relative to the labels height and depth. The intent also duplicated the overall height/depth as panel dimension constraints and placed the prose topology requirement “exactly five fold joints connecting exactly six panels” in `requiredLandmarks`. The exact calls cost $0.170165; cumulative spend in the current $2 ledger is $0.583175 with $1.416825 remaining.
+
+Requested envelopes are now matched against the best deterministic permutation of the three world-axis spans because global preview orientation is not part of the user's fabrication request. Intent normalization removes exact dimension constraints that merely duplicate `requestedSize`, while preserving dimensions of named parts that differ from the overall envelope. Recognizable-form landmark lists retain only concise names connected to canonical semantic-part IDs; topology/count prose remains in the exact source request and acceptance contract rather than masquerading as geometry. Focused regressions cover all three rules without object-specific routing.
 
 Guardrails:
 

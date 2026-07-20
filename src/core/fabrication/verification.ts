@@ -3852,10 +3852,35 @@ const validateSemantics = (
     },
     { width: 0, height: 0, depth: 0 },
   );
+  const spanPermutations = [
+    [maximumSpansMm.width, maximumSpansMm.height, maximumSpansMm.depth],
+    [maximumSpansMm.width, maximumSpansMm.depth, maximumSpansMm.height],
+    [maximumSpansMm.height, maximumSpansMm.width, maximumSpansMm.depth],
+    [maximumSpansMm.height, maximumSpansMm.depth, maximumSpansMm.width],
+    [maximumSpansMm.depth, maximumSpansMm.width, maximumSpansMm.height],
+    [maximumSpansMm.depth, maximumSpansMm.height, maximumSpansMm.width],
+  ] as const;
+  const requestedSpanValues = [
+    ir.requestedSize.widthMm,
+    ir.requestedSize.heightMm,
+    ir.requestedSize.depthMm,
+  ] as const;
+  const assignmentErrorMm = (candidate: readonly number[]): number =>
+    candidate.reduce(
+      (sum, value, index) =>
+        sum +
+        (requestedSpanValues[index] === null
+          ? 0
+          : Math.abs(value - requestedSpanValues[index]!)),
+      0,
+    );
+  const assignedSpansMm = spanPermutations.reduce((best, candidate) =>
+    assignmentErrorMm(candidate) < assignmentErrorMm(best) ? candidate : best,
+  );
   const requestedDimensions = [
-    ["width", maximumSpansMm.width, ir.requestedSize.widthMm],
-    ["height", maximumSpansMm.height, ir.requestedSize.heightMm],
-    ["depth", maximumSpansMm.depth, ir.requestedSize.depthMm],
+    ["width", assignedSpansMm[0], ir.requestedSize.widthMm],
+    ["height", assignedSpansMm[1], ir.requestedSize.heightMm],
+    ["depth", assignedSpansMm[2], ir.requestedSize.depthMm],
   ] as const;
   for (const [dimension, actualMm, requestedMm] of requestedDimensions) {
     if (requestedMm === null) continue;

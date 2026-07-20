@@ -261,20 +261,81 @@ const canonicalSemanticPartId = (identifier: string): string => {
   return `part-${removeRepeatedPrefix(identifier, "part-")}`;
 };
 
+const canonicalPartTokens = (semanticPartIds: readonly string[]): Set<string> =>
+  new Set(
+    semanticPartIds.flatMap((id) =>
+      id
+        .replace(/^part-(?:connector-)?/u, "")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/u)
+        .filter((token) => token.length > 1),
+    ),
+  );
+
+const namedLandmarksForParts = (
+  landmarks: readonly string[],
+  semanticPartIds: readonly string[],
+): readonly string[] => {
+  const partTokens = canonicalPartTokens(semanticPartIds);
+  const named = landmarks.filter((landmark) =>
+    landmark
+      .toLowerCase()
+      .split(/[^a-z0-9]+/u)
+      .some((token) => partTokens.has(token)),
+  );
+  return named.length > 0
+    ? named
+    : semanticPartIds.map((id) =>
+        id.replace(/^part-(?:connector-)?/u, "").replaceAll("-", " "),
+      );
+};
+
+const duplicatesRequestedEnvelope = (
+  intent: FabricationIntentV1,
+  constraint: Extract<
+    FabricationIntentV1["semanticConstraints"][number],
+    { readonly kind: "dimension" }
+  >,
+): boolean => {
+  const requestedMm =
+    constraint.dimension === "width"
+      ? intent.requestedSize.widthMm
+      : constraint.dimension === "height"
+        ? intent.requestedSize.heightMm
+        : constraint.dimension === "depth"
+          ? intent.requestedSize.depthMm
+          : null;
+  if (requestedMm === null || constraint.targetMm !== requestedMm) return false;
+  return (
+    (constraint.minimumMm === null || constraint.minimumMm === requestedMm) &&
+    (constraint.maximumMm === null || constraint.maximumMm === requestedMm)
+  );
+};
+
 const normalizeIntentSemanticPartIds = (
   intent: FabricationIntentV1,
 ): FabricationIntentV1 => ({
   ...intent,
-  semanticConstraints: intent.semanticConstraints.map((constraint) =>
-    constraint.kind === "recognizable_form"
-      ? {
-          ...constraint,
-          semanticPartIds: [
-            ...new Set(constraint.semanticPartIds.map(canonicalSemanticPartId)),
-          ],
-        }
-      : constraint,
-  ),
+  semanticConstraints: intent.semanticConstraints
+    .filter(
+      (constraint) =>
+        constraint.kind !== "dimension" ||
+        !duplicatesRequestedEnvelope(intent, constraint),
+    )
+    .map((constraint) => {
+      if (constraint.kind !== "recognizable_form") return constraint;
+      const semanticPartIds = [
+        ...new Set(constraint.semanticPartIds.map(canonicalSemanticPartId)),
+      ];
+      return {
+        ...constraint,
+        semanticPartIds,
+        requiredLandmarks: namedLandmarksForParts(
+          constraint.requiredLandmarks,
+          semanticPartIds,
+        ),
+      };
+    }),
 });
 
 const semanticReferenceKey = (
@@ -466,8 +527,10 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
         "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
       );
     }
-    return normalizeIntentSemanticPartIds(
-      FabricationIntentV1Schema.parse(response.output_parsed),
+    return FabricationIntentV1Schema.parse(
+      normalizeIntentSemanticPartIds(
+        FabricationIntentV1Schema.parse(response.output_parsed),
+      ),
     );
   }
 }
