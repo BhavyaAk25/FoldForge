@@ -758,14 +758,14 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     });
   });
 
-  it("accepts only a strict function patch and never treats it as success", async () => {
+  it("binds a strict function patch to the current server transaction", async () => {
     const program = fixtureProgram();
     const patch = {
       version: "1",
       patchId: "patch-width",
-      programId: program.programId,
-      baseProgramHash: fabricationProgramHash(program),
-      repairCycle: 1,
+      programId: "program-stale-echo",
+      baseProgramHash: "f".repeat(64),
+      repairCycle: 5,
       diagnosis: "Reduce the panel width named by the failure.",
       operations: [
         {
@@ -773,7 +773,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
           operation: "set_number",
           path: "/blueprint/panels/panel-base/widthMm",
           value: 75,
-          expectedCurrentValue: 80,
+          expectedCurrentValue: 79,
           unit: "mm",
           failureIds: ["packing.sheet_bounds#panel-base"],
           reason: "The panel exceeds its sheet.",
@@ -816,7 +816,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       "ff_subject",
     );
 
-    expect(result).toEqual(patch);
+    expect(result).toEqual({
+      ...patch,
+      programId: program.programId,
+      baseProgramHash: fabricationProgramHash(program),
+      repairCycle: 1,
+      operations: [
+        {
+          ...patch.operations[0],
+          expectedCurrentValue: null,
+        },
+      ],
+    });
     expect(parseResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
@@ -827,6 +838,15 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         parallel_tool_calls: false,
         store: false,
         service_tier: "default",
+      }),
+    );
+    expect(parseResponse.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        input: [
+          expect.objectContaining({
+            content: expect.stringContaining(fabricationProgramHash(program)),
+          }),
+        ],
       }),
     );
   });
