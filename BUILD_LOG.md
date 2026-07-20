@@ -183,8 +183,10 @@ This log records product decisions and evidence boundaries. Counts are snapshots
 - On clean commit `2dc57ed`, the same-build compiler controls passed 3/3 and the exact live playing-card-box case passed all 63 acceptance checks. One strict Sol plan became one verified candidate with source-bound SVG, DXF, GLB, and JSON; GLB validation reported zero errors and warnings, and FOLD was correctly omitted for `connector_semantics`.
 - The separate ledger records $1.6265905 charged and $0.3734095 remaining. This is one successful acceptance smoke, not the five-case reliability gate.
 
-## Remaining external gate
+## Production delivery and remaining submission gate
 
 - Preserve every sealed ledger, continuation, claim, and failed-run report. Do not delete, reset, relabel, branch, or bypass them, and make no further paid call under the $3.70 cap.
-- Complete production deployment and a clean-browser hosted prompt/download check without exceeding the separate $2 authorization.
+- Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` is ready with live generation enabled. An authenticated browser run completed access, intent, program, and compile with HTTP 200 in about 53 seconds; its verifier incorrectly waited for the intentionally clipped screen-reader status line to become visually visible, so that final rendered assertion is not claimed.
+- A final program-only hosted confirmation returned a strict Sol program that production compiled as `passed`: 6 panels, 5 joints, 2 reciprocal connector elements, zero hard failures, and source-equivalent SVG/DXF/GLB/JSON. No model retry ran. Hosted usage is outside the client ledger, so exact final provider spend remains a dashboard check rather than a fabricated ledger value.
+- The rotated production demo access code is stored in macOS Keychain under `FoldForge DEMO_ACCESS_CODE`; it was never printed, committed, or written to browser storage.
 - Keep the five-case reliability gate, final judge score, narrated demo, and `/feedback` submission explicitly separate from the successful one-case live acceptance.

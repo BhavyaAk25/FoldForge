@@ -4,19 +4,20 @@
 
 The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **457 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
 
-GPT-5.6 Sol now passes the smallest complete live product proof. On clean commit `2dc57ed`, the same-build compiler gate passed supported, unsupported, and injection controls; the exact playing-card-box request produced one strict plan, one deterministically verified candidate, and source-bound SVG, DXF, GLB, and JSON. All 63 acceptance checks passed. Production deployment and hosted-browser confirmation are in progress.
+GPT-5.6 Sol now passes the smallest complete live product proof. On clean commit `2dc57ed`, the same-build compiler gate passed supported, unsupported, and injection controls; the exact playing-card-box request produced one strict plan, one deterministically verified candidate, and source-bound SVG, DXF, GLB, and JSON. All 63 acceptance checks passed. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also returned a strict hosted program that passed deterministic verification and exact export binding.
 
-| Area                                                                   | Status   | Evidence boundary                                                    |
-| ---------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| Versioned intent, semantic plan, program, IR, report, patch, candidate | Complete | Strict Zod contracts and canonical round trips                       |
-| Pure compiler, geometry, and kinematics                                | Complete | 120/120 controls; 0/560 hard-invalid mutations accepted              |
-| Ordered verifier and bounded repair                                    | Complete | 40/40 repaired; 20/20 infeasible; 0/120 hostile patches accepted     |
-| SVG, DXF, GLB, JSON, and conditional FOLD                              | Complete | Source-bound exporters and independent prepared-artifact consumers   |
-| One-design Describe → Forge → Export experience                        | Complete | 7/7 Chromium flows at all required widths                            |
-| OpenAI boundary and production safety                                  | Complete | Strict tools, access, origin/body caps, quotas, dedupe, kill switch  |
-| Compact live Sol plan                                                  | Complete | Strict plan completed inside the bounded route                       |
-| Exact live prompt → verified files                                     | Complete | 63/63 checks; SVG/DXF/GLB/JSON consumers pass                        |
-| Final deployment, PR merge, video, `/feedback`                         | Pending  | Deployment/merge follow code proof; video and task ID are user-owned |
+| Area                                                                   | Status   | Evidence boundary                                                   |
+| ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- |
+| Versioned intent, semantic plan, program, IR, report, patch, candidate | Complete | Strict Zod contracts and canonical round trips                      |
+| Pure compiler, geometry, and kinematics                                | Complete | 120/120 controls; 0/560 hard-invalid mutations accepted             |
+| Ordered verifier and bounded repair                                    | Complete | 40/40 repaired; 20/20 infeasible; 0/120 hostile patches accepted    |
+| SVG, DXF, GLB, JSON, and conditional FOLD                              | Complete | Source-bound exporters and independent prepared-artifact consumers  |
+| One-design Describe → Forge → Export experience                        | Complete | 7/7 Chromium flows at all required widths                           |
+| OpenAI boundary and production safety                                  | Complete | Strict tools, access, origin/body caps, quotas, dedupe, kill switch |
+| Compact live Sol plan                                                  | Complete | Strict plan completed inside the bounded route                      |
+| Exact live prompt → verified files                                     | Complete | 63/63 checks; SVG/DXF/GLB/JSON consumers pass                       |
+| Final deployment and hosted verification                               | Complete | Production program, verification, and exact exports passed          |
+| PR merge, video, `/feedback`                                           | Pending  | Merge follows checks; video and task ID are user-owned              |
 
 ## Immediate sequence
 
@@ -29,9 +30,9 @@ Calendar dates are not gates. Complete each ready step and stop only for a real 
 5. **Complete — separate $2 ledger.** The immutable continuation carries every prior charge and remains capped at the original authorization.
 6. **Complete — smallest useful live proof.** Clean commit `2dc57ed` passed the same-build compiler controls and exact static acceptance within the separate ledger.
 7. **Complete — validate exact bytes.** The selected SVG scale/layers/calibration, DXF parser/layers, GLB validator, canonical JSON source binding, and FOLD omission reason all passed.
-8. **In progress — production verification.** Deploy the accepted runtime, confirm `/api/health`, and run the supported prompt from a clean browser while the separate $2 ceiling still has room. Confirm the displayed result, controls, downloads, build SHA, and metadata-only logs.
-9. **Publish truthfully.** Add the new report and exact result to the evidence packet. Do not call a single case a five-case reliability suite or a 92/100 score.
-10. **Finish delivery.** Push the branch, complete PR review/checks, merge to `main` under the user's explicit authorization, verify production matches `main`, then record the public narrated demo and submit the primary Codex task's `/feedback` session ID.
+8. **Complete — production verification.** The accepted runtime is live. Production Sol returned a strict program; deterministic verification passed with zero hard failures; and source-equivalent SVG, DXF, GLB, and JSON were generated from that exact hosted program.
+9. **Complete — publish truthfully.** The evidence records both the hosted success and the clipped-status assertion mistake. A single exact case is not called a five-case reliability suite or a 92/100 score.
+10. **Finish delivery.** Push the branch, complete PR review/checks, merge to `main` under the user's explicit authorization, and verify production matches `main`. The public narrated demo and primary Codex task's `/feedback` session ID remain user-owned submission steps.
 
 ## Paid-evidence boundaries
 
@@ -46,7 +47,7 @@ The new acceptance allowance is separate:
 
 - maximum: **$2.00** total;
 - charged through the successful exact acceptance: **$1.6265905**;
-- remaining under that ceiling: **$0.3734095**;
+- remaining in that auditable local ledger before hosted verification: **$0.3734095**;
 - fresh run-specific report and ledger paths;
 - sequential calls only;
 - no model-generation retry;
@@ -78,4 +79,4 @@ FoldForge verifies geometry, bounded motion, clearance, and source equivalence. 
 
 Offline, prepared, mocked, smoke, and live evidence are labelled separately. A partial request is never promoted to a successful design. A hard-invalid candidate is never displayed or exported as valid.
 
-The harsh target remains at least **92/100** overall and **22/25** in each official category, but it is not earned yet. Current missing evidence is the hosted clean-browser run, a final reviewer score, and the public narrated submission.
+The harsh target remains at least **92/100** overall and **22/25** in each official category, but it is not earned yet. Current missing evidence is the broader five-case reliability gate, a final reviewer score, and the public narrated submission.

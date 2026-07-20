@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. On clean commit `2dc57ed`, the compact semantic-plan path also passed one exact paid live-Sol prompt-to-artifact acceptance case. Production deployment and clean hosted-browser verification remain pending; this one case is not a five-case reliability claim.
+The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. On clean commit `2dc57ed`, the compact semantic-plan path passed one exact paid local Sol prompt-to-artifact acceptance case. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also passed the exact hosted program, deterministic verification, and source-equivalent export confirmation described below. These exact cases are not a five-case reliability claim.
 
 Generated reports are written under ignored `artifacts/evals/`. Public evidence contains bounded metrics and hashes, never credentials, prompt bodies, model bodies, response IDs, or private reasoning. Offline evidence never counts as live-model evidence.
 
@@ -163,6 +163,10 @@ On clean commit `8f8c008`, the compiler gate passed 3/3 and Sol returned a verif
 
 On clean commit `2dc57ed`, the same-build live compiler gate passed all three supported, unsupported, and injection cases. The exact intent passed 16/16 explicit checks; Sol returned one strict compact plan; deterministic code expanded, compiled, and verified one candidate. All **63/63** acceptance checks passed. SVG, DXF, GLB, and canonical JSON were source-bound to the selected IR; SVG/DXF calibration and layers passed, GLB validation returned zero errors and warnings, JSON retained assembly operations and hashes, and FOLD was honestly omitted with `connector_semantics`. The separate ledger charged **$1.6265905** and retained **$0.3734095**. `releaseGatePassed` remains false because this was intentionally one acceptance smoke, not the five-case suite.
 
+The accepted runtime was deployed to production as `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` with live generation enabled. One authenticated clean-browser request completed access, intent, program, and compile with HTTP 200; the route chain finished in about 53 seconds. The first browser assertion incorrectly waited for the intentionally visually clipped screen-reader status line to become visible, so its harness timed out after the successful route chain and is not counted as a rendered-result assertion. No automatic model retry ran.
+
+One final program-only hosted confirmation reused the already accepted strict intent to avoid paying for a second intent call. Production Sol returned a strict program; production deterministic compilation returned `passed`; verification was valid with **0 hard failures**; and the selected result contained **6 panels, 5 fold joints, and 2 reciprocal connector elements**. Local source-binding of that exact hosted program produced source-equivalent SVG (**6,753 bytes**), DXF (**4,474 bytes**), GLB (**37,688 bytes**), and canonical JSON (**45,373 bytes**). Hosted route usage is not written to the client ledger, so exact combined spend must be confirmed in the provider dashboard; the hosted evidence used one UI intent/program pair plus one program-only call and no model retry.
+
 Guardrails:
 
 - use a fresh exclusive ledger and report path tied to one clean commit;
@@ -194,7 +198,7 @@ The interactive app separately enforces best-effort per-session quotas, a distin
 - **Exact case passed:** a successful acceptance smoke for that prompt and build.
 - **Five-case suite with at least four full successes:** broader reliability evidence, still subject to every export, hosted-build, security, accessibility, and judge gate.
 
-No report is called release-ready while production is kill-switched, the exact hosted prompt has not passed, or the deployed SHA differs from the evidence build.
+No report is called broadly reliable while the five-case gate and harsh judging thresholds remain unmet. The exact hosted acceptance above proves only the bounded playing-card-box path.
 
 ## Reproduction without paid calls
 

@@ -16,7 +16,7 @@
 
 If code finds a repairable failure, Sol may propose a small typed patch. Code applies the patch and reruns every check. The model cannot declare its own work valid.
 
-The compact live path has passed its exact paid local acceptance case. Production promotion and a clean hosted-browser confirmation are the remaining live-delivery checks. The prepared flower and duck studies remain available without spending API credits and are clearly labelled as prepared examples, not prompt results.
+The compact live path has passed both its exact paid local acceptance case and a production Sol confirmation. Production returned a strict six-panel program, deterministic verification passed with zero hard failures, and the same selected source produced SVG, DXF, GLB, and JSON. The prepared flower and duck studies remain available without spending API credits and are clearly labelled as prepared examples, not prompt results.
 
 | Playing-card box                                                                                                            | Vertical-lift flower study                                                                                                          | Static duck crease pattern                                                                                     |
 | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -105,7 +105,9 @@ Historical paid evaluation used a separate **$3.70** reservation ledger under an
 - no program, repair, or export from those failed attempts is claimed as a live success; and
 - the immutable historical ledger remains sealed at **$3.6134275**. It is not edited, reset, or reused.
 
-The builder later authorized a **new, separate maximum of $2.00** to test the smaller semantic-plan path and one exact prompt-to-export acceptance case. On clean commit `2dc57ed`, the same-build compiler controls passed 3/3 and the exact live case passed all 63 acceptance checks. Sol produced one strict plan; code verified one candidate and generated source-bound SVG, DXF, GLB, and canonical JSON. The GLB passed with zero errors and warnings, while FOLD was correctly omitted because it cannot preserve the design's tab-slot semantics. The ledger charged **$1.6265905** and retained **$0.3734095**. This is one successful acceptance smoke, not the older five-case reliability suite.
+The builder later authorized a **new, separate maximum of $2.00** to test the smaller semantic-plan path and one exact prompt-to-export acceptance case. On clean commit `2dc57ed`, the same-build compiler controls passed 3/3 and the exact live case passed all 63 acceptance checks. Sol produced one strict plan; code verified one candidate and generated source-bound SVG, DXF, GLB, and canonical JSON. The GLB passed with zero errors and warnings, while FOLD was correctly omitted because it cannot preserve the design's tab-slot semantics. The auditable local ledger charged **$1.6265905** and retained **$0.3734095**.
+
+Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` then passed an authenticated hosted confirmation: `/api/programs` and `/api/compile` returned 200, compilation passed, verification reported zero hard failures, and source-equivalent SVG, DXF, GLB, and JSON were generated from the hosted Sol program. Hosted route usage is not written into the client-side ledger, so the exact final provider charge must be read from the OpenAI dashboard; testing was limited to one UI intent/program pair and one program-only confirmation, with no model retry. This remains an exact-case acceptance smoke, not the older five-case reliability suite.
 
 The interactive quota and deduplication store is process-local and therefore best-effort across serverless instances. The evaluation ledger is the auditable client-side pre-request guard. Neither is an account-level provider billing cap.
 
@@ -197,14 +199,13 @@ pnpm audit --prod
 
 Paid evaluation is not part of an ordinary local check. It requires explicit live flags, a clean committed build, and a separately authorized run-specific ledger.
 
-## What remains before final delivery
+## Submission tasks outside the codebase
 
-- complete the production deployment of the accepted runtime and confirm `/api/health` reports that build with live generation enabled;
-- repeat the supported prompt from a clean browser without exceeding the separate $2 maximum;
-- confirm the hosted build SHA, downloads, and production logs; and
-- update the evidence, complete the public narrated demo, add the `/feedback` session ID, and merge only after the final checks pass.
+- record the public narrated demo using [submission/VIDEO_SCRIPT.md](./submission/VIDEO_SCRIPT.md);
+- add the primary Codex task's `/feedback` session ID to Devpost; and
+- place the judge access code from the private deployment secret in Devpost's private testing instructions.
 
-The exact local live case is a demonstrated prompt-to-fabrication success. Until hosted verification and the broader judging gates are complete, the project does not claim five-case reliability or a 92/100 release score.
+The exact local and hosted cases demonstrate this bounded prompt-to-fabrication path. The project still does not claim five-case reliability or a 92/100 judge score without the broader evidence required by [EVALS.md](./EVALS.md).
 
 ## Repository guide
 
