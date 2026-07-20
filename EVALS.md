@@ -155,6 +155,10 @@ On clean commit `446e95b`, the exact-build compiler gate passed 3/3 for $0.10987
 
 Requested envelopes are now matched against the best deterministic permutation of the three world-axis spans because global preview orientation is not part of the user's fabrication request. Intent normalization removes exact dimension constraints that merely duplicate `requestedSize`, while preserving dimensions of named parts that differ from the overall envelope. Recognizable-form landmark lists retain only concise names connected to canonical semantic-part IDs; topology/count prose remains in the exact source request and acceptance contract rather than masquerading as geometry. Focused regressions cover all three rules without object-specific routing.
 
+On clean commit `e7d38af`, the live compiler gate passed 3/3 for $0.11398. The exact intent passed 16/16 and Sol completed a strict plan. All prior semantic failures were cleared; topology then rejected one duplicate `part-connector-lid-lock` because the plan explicitly declared the required lid-lock landmark while deterministic expansion also derived the same semantic part from the reciprocal connector relationship. The exact calls cost $0.16564; cumulative current-ledger spend is $0.862795 with $1.137205 remaining.
+
+Semantic expansion now merges an explicit connector-relationship landmark with its code-derived reciprocal connector part, deduplicating geometry references by kind and canonical ID. It does not discard either source, invent a new relationship, or permit duplicate semantic identifiers. The exact six-panel regression includes both sources and proves one canonical lid-lock part reaches full verification and export finalization offline.
+
 Guardrails:
 
 - use a fresh exclusive ledger and report path tied to one clean commit;

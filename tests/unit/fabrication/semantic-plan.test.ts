@@ -560,7 +560,7 @@ describe("semantic FabricationPlanV2", () => {
             "left",
             "right",
             "lid",
-            "tab and slot",
+            "lid lock",
           ],
           evaluation: "landmark_geometry",
         },
@@ -647,12 +647,22 @@ describe("semantic FabricationPlanV2", () => {
       driver: null,
       outputs: [],
       couplings: [],
-      landmarks: panelIds.map((key) => ({
-        key,
-        label: key,
-        role: key === "lid" ? "fixed closed top" : "enclosure panel",
-        geometryRefs: [{ kind: "panel" as const, key }],
-      })),
+      landmarks: [
+        ...panelIds.map((key) => ({
+          key,
+          label: key,
+          role: key === "lid" ? "fixed closed top" : "enclosure panel",
+          geometryRefs: [{ kind: "panel" as const, key }],
+        })),
+        {
+          key: "connector-lid-lock",
+          label: "Lid lock",
+          role: "reciprocal closure",
+          geometryRefs: [
+            { kind: "connector_relationship" as const, key: "lid-lock" },
+          ],
+        },
+      ],
       assemblyStrategy: "tab_slot" as const,
       designSummary:
         "A continuous cross net folded into a static closed enclosure. The top crease is fixed at the assembled rest angle and has no open-close driver.",
@@ -682,6 +692,11 @@ describe("semantic FabricationPlanV2", () => {
     expect(compiled.value.semanticConstraints).toEqual(
       intent.semanticConstraints,
     );
+    expect(
+      compiled.value.semanticParts.filter(
+        (part) => part.semanticPartId === "part-connector-lid-lock",
+      ),
+    ).toHaveLength(1);
     const home = evaluateMotionState(compiled.value);
     expect(home.ok).toBe(true);
     if (!home.ok) return;

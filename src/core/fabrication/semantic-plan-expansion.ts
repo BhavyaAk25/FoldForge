@@ -1464,15 +1464,34 @@ export const semanticPlanToFabricationPlanV1 = (
   }
   for (const relationship of plan.connectorRelationships) {
     const ids = relationshipConnectorIds(relationship.key);
-    semanticParts.push({
-      semanticPartId: `part-connector-${relationship.key}`,
-      label: `Tab and slot ${relationship.key}`,
-      role: "derived reciprocal tab-slot relationship",
-      geometryRefs: [
-        { kind: "connector", id: ids.tab },
-        { kind: "connector", id: ids.slot },
-      ],
-    });
+    const semanticPartId = `part-connector-${relationship.key}`;
+    const connectorRefs: readonly GeometryRefV1[] = [
+      { kind: "connector", id: ids.tab },
+      { kind: "connector", id: ids.slot },
+    ];
+    const existingIndex = semanticParts.findIndex(
+      (part) => part.semanticPartId === semanticPartId,
+    );
+    const existing = semanticParts[existingIndex];
+    if (existing) {
+      const geometryRefs = new Map(
+        [...existing.geometryRefs, ...connectorRefs].map((reference) => [
+          `${reference.kind}:${reference.id}`,
+          reference,
+        ]),
+      );
+      semanticParts[existingIndex] = {
+        ...existing,
+        geometryRefs: [...geometryRefs.values()],
+      };
+    } else {
+      semanticParts.push({
+        semanticPartId,
+        label: `Tab and slot ${relationship.key}`,
+        role: "derived reciprocal tab-slot relationship",
+        geometryRefs: connectorRefs,
+      });
+    }
   }
 
   return {
