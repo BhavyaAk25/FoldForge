@@ -87,10 +87,19 @@ describe("bounded semantic geometric resolution", () => {
   }, 20_000);
 
   it("clamps caller-supplied resolver budgets to the safe bounds", () => {
+    const connectorPlan = productionConnectorReachPlan();
+    const relationship = connectorPlan.connectorRelationships[0]!;
+    const multiConnectorPlan = {
+      ...connectorPlan,
+      connectorRelationships: [
+        ...connectorPlan.connectorRelationships,
+        { ...relationship, key: "secondary-lock" },
+      ],
+    };
     expect(
       expandResolvedSemanticFabricationPlan(
         productionCardBoxIntent(),
-        productionConnectorReachPlan(),
+        multiConnectorPlan,
         1,
         1,
       ),
@@ -123,13 +132,14 @@ describe("bounded semantic geometric resolution", () => {
         productionCardBoxIntent(),
         productionIntermediateCollisionPlan(),
         1,
+        8,
       ),
     ).toMatchObject({
       ok: false,
       error: {
         kind: "geometric_resolution_exhausted",
         code: "collision.minimum_clearance",
-        resolverEvaluationCount: 24,
+        resolverEvaluationCount: 8,
       },
     });
   }, 20_000);
