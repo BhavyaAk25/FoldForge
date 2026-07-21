@@ -103,8 +103,15 @@ export const productionIntermediateCollisionPlan = (): FabricationPlanV2 => {
   return {
     ...source,
     topologyKey: "tuckRearChain",
-    panels: source.panels.map((panel) =>
-      panel.key === "left" ? { ...panel, widthMm: 25 } : panel,
+    joints: source.joints.map((joint) =>
+      joint.key === "left" && joint.kind === "fold"
+        ? {
+            ...joint,
+            parentBodyKey: "lid",
+            parentAttachment: { panelKey: "lid", edgeIndex: 1 },
+            childAttachment: { panelKey: "left", edgeIndex: 1 },
+          }
+        : joint,
     ),
   };
 };

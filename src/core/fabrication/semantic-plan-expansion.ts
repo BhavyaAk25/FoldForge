@@ -17,6 +17,7 @@ import {
   expandFabricationPlan,
   type FabricationPlanExpansionError,
 } from "./planning";
+import { FABRICATION_LIMITS } from "./limits";
 import { semanticPlanResourceCounts } from "./resource-counts";
 import type { FabricationLimitError } from "./result";
 import {
@@ -1690,19 +1691,44 @@ export interface GeometricResolutionExhaustedError {
   readonly message: string;
 }
 
+export interface ConnectorGeometryResolutionExhaustedError {
+  readonly kind: "connector_geometry_resolution_exhausted";
+  readonly code: SemanticPlanMappingError["code"];
+  readonly path: readonly string[];
+  readonly resolverEvaluationCount: number;
+  readonly message: string;
+}
+
+type ResolutionVariantCategory = keyof typeof RESOLUTION_CATEGORY_BUDGETS;
+
+export interface SemanticPlanResolutionDiagnostics {
+  readonly resolverEvaluationCount: number;
+  readonly categoryEvaluationCounts: Readonly<
+    Record<ResolutionVariantCategory, number>
+  >;
+  readonly evaluationSequence: readonly ResolutionVariantCategory[];
+  readonly evaluationGroupKeys: readonly string[];
+}
+
 export type ResolvedSemanticPlanExpansionError =
   | SemanticPlanExpansionError
   | FabricationPlanExpansionError
   | CompilationError
   | StructuralCollisionError
   | HardVerificationFailureError
-  | GeometricResolutionExhaustedError;
+  | GeometricResolutionExhaustedError
+  | ConnectorGeometryResolutionExhaustedError;
 
 export type ResolvedSemanticPlanExpansionResult =
-  | { readonly ok: true; readonly value: FabricationProgramV1 }
+  | {
+      readonly ok: true;
+      readonly value: FabricationProgramV1;
+      readonly resolutionDiagnostics: SemanticPlanResolutionDiagnostics;
+    }
   | {
       readonly ok: false;
       readonly error: ResolvedSemanticPlanExpansionError;
+      readonly resolutionDiagnostics?: SemanticPlanResolutionDiagnostics;
     };
 
 type ResolvedPlanEvaluationResult =
@@ -2227,6 +2253,9 @@ const attachmentPairsBetweenBodies = (
   parentBodyKey: string,
   childBodyKey: string,
 ): readonly AttachmentPair[] => {
+  const preferredChildEdgeIndex = plan.joints.find(
+    (joint) => joint.childBodyKey === childBodyKey,
+  )?.childAttachment.edgeIndex;
   const parentPanels = plan.panels.filter(
     (panel) => panel.bodyKey === parentBodyKey,
   );
@@ -2265,7 +2294,18 @@ const attachmentPairsBetweenBodies = (
       }
     }
   }
-  return pairs.slice(0, MAXIMUM_JOINT_ATTACHMENT_PAIRS);
+  // Preserve the model-selected child edge before varying the parent edge.
+  // This keeps a topology repair local to the failed adjacency and reaches
+  // physically equivalent reattachments before rotating the child panel.
+  return pairs
+    .toSorted(
+      (left, right) =>
+        Number(left.child.edgeIndex !== preferredChildEdgeIndex) -
+          Number(right.child.edgeIndex !== preferredChildEdgeIndex) ||
+        left.parent.edgeIndex - right.parent.edgeIndex ||
+        left.child.edgeIndex - right.child.edgeIndex,
+    )
+    .slice(0, MAXIMUM_JOINT_ATTACHMENT_PAIRS);
 };
 
 const descendantBodyKeys = (
@@ -2362,13 +2402,14 @@ const connectorPlanVariants = (
         continue;
       }
     }
+    // The resolver is entered only after successful semantic expansion, which
+    // has already proven both relationship panel references.
     const tabPanel = plan.panels.find(
       (panel) => panel.key === relationship.tabAttachment.panelKey,
-    );
+    )!;
     const slotPanel = plan.panels.find(
       (panel) => panel.key === relationship.slotAttachment.panelKey,
-    );
-    if (!tabPanel || !slotPanel) continue;
+    )!;
     const tabChoices = edgeChoiceIndexes(
       tabPanel,
       relationship.tabAttachment.edgeIndex,
@@ -2379,38 +2420,184 @@ const connectorPlanVariants = (
       relationship.slotAttachment.edgeIndex,
       relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
     );
-    for (const tabEdgeIndex of tabChoices) {
-      for (const slotEdgeIndex of slotChoices) {
-        if (
-          tabEdgeIndex === relationship.tabAttachment.edgeIndex &&
-          slotEdgeIndex === relationship.slotAttachment.edgeIndex
-        ) {
-          continue;
-        }
-        variants.push({
-          category: "connector",
-          groupKey: `connector:${relationship.key}`,
-          plan: {
-            ...plan,
-            connectorRelationships: plan.connectorRelationships.map(
-              (candidate, index) =>
-                index === relationshipIndex
-                  ? {
-                      ...candidate,
-                      tabAttachment: {
-                        ...candidate.tabAttachment,
-                        edgeIndex: tabEdgeIndex,
-                      },
-                      slotAttachment: {
-                        ...candidate.slotAttachment,
-                        edgeIndex: slotEdgeIndex,
-                      },
-                    }
-                  : candidate,
-            ),
-          },
-        });
+    const tabEdgeCount = outlineVertices(tabPanel.outline).length;
+    const slotEdgeCount = outlineVertices(slotPanel.outline).length;
+    const oppositeTabEdgeIndex =
+      (relationship.tabAttachment.edgeIndex + Math.floor(tabEdgeCount / 2)) %
+      tabEdgeCount;
+    const oppositeSlotEdgeIndex =
+      (relationship.slotAttachment.edgeIndex + Math.floor(slotEdgeCount / 2)) %
+      slotEdgeCount;
+    const edgePairs = tabChoices
+      .flatMap((tabEdgeIndex) =>
+        slotChoices.map((slotEdgeIndex) => ({
+          tabEdgeIndex,
+          slotEdgeIndex,
+        })),
+      )
+      .filter(
+        ({ tabEdgeIndex, slotEdgeIndex }) =>
+          tabEdgeIndex !== relationship.tabAttachment.edgeIndex ||
+          slotEdgeIndex !== relationship.slotAttachment.edgeIndex,
+      )
+      .toSorted((left, right) => {
+        const rank = (pair: {
+          readonly tabEdgeIndex: number;
+          readonly slotEdgeIndex: number;
+        }): number => {
+          const oppositeMatches =
+            Number(pair.tabEdgeIndex === oppositeTabEdgeIndex) +
+            Number(pair.slotEdgeIndex === oppositeSlotEdgeIndex);
+          const changedEdges =
+            Number(pair.tabEdgeIndex !== relationship.tabAttachment.edgeIndex) +
+            Number(
+              pair.slotEdgeIndex !== relationship.slotAttachment.edgeIndex,
+            );
+          return oppositeMatches * -4 + changedEdges * -2;
+        };
+        return (
+          rank(left) - rank(right) ||
+          left.tabEdgeIndex - right.tabEdgeIndex ||
+          left.slotEdgeIndex - right.slotEdgeIndex
+        );
+      });
+    for (const { tabEdgeIndex, slotEdgeIndex } of edgePairs) {
+      variants.push({
+        category: "connector",
+        groupKey: `connector:${relationship.key}`,
+        plan: {
+          ...plan,
+          connectorRelationships: plan.connectorRelationships.map(
+            (candidate, index) =>
+              index === relationshipIndex
+                ? {
+                    ...candidate,
+                    tabAttachment: {
+                      ...candidate.tabAttachment,
+                      edgeIndex: tabEdgeIndex,
+                    },
+                    slotAttachment: {
+                      ...candidate.slotAttachment,
+                      edgeIndex: slotEdgeIndex,
+                    },
+                  }
+                : candidate,
+          ),
+        },
+      });
+    }
+  }
+  return variants;
+};
+
+const connectorRecoveryPlanVariants = (
+  intent: FabricationIntentV1,
+  plan: FabricationPlanV2,
+  error: SemanticPlanMappingError,
+): readonly ResolutionVariant[] => {
+  if (
+    error.code !== "unsupported_mapping" ||
+    error.path[0] !== "connectorRelationships"
+  ) {
+    return [];
+  }
+  const relationshipKey = error.path[1];
+  const relationshipIndex = plan.connectorRelationships.findIndex(
+    (candidate) => candidate.key === relationshipKey,
+  );
+  // This key comes from deriveConnectors for the same parsed plan.
+  const relationship = plan.connectorRelationships[relationshipIndex]!;
+  const tabPanel = plan.panels.find(
+    (panel) => panel.key === relationship.tabAttachment.panelKey,
+  )!;
+  const slotPanel = plan.panels.find(
+    (panel) => panel.key === relationship.slotAttachment.panelKey,
+  )!;
+  const stock = intent.stockOptions[tabPanel.sheetIndex]!;
+
+  const slotWidthMm = Math.max(
+    FABRICATION_LIMITS.minimumFeatureMm + 0.01,
+    stock.material.thicknessMm + relationship.clearanceMm + 0.01,
+  );
+  const minimumSlotInsetMm =
+    FABRICATION_LIMITS.minimumInnerCutLigamentMm + slotWidthMm / 2 + 0.01;
+  const minimumTabDepthMm =
+    CONNECTOR_ENGAGEMENT_MARGIN_MM + minimumSlotInsetMm + 0.01;
+  const preferredDimensions = {
+    tabDepthMm: Math.max(relationship.tabDepthMm, minimumTabDepthMm),
+    slotInsetMm: Math.max(relationship.slotInsetMm, minimumSlotInsetMm),
+  };
+  const minimumDimensions = {
+    tabDepthMm: minimumTabDepthMm,
+    slotInsetMm: minimumSlotInsetMm,
+  };
+  const tabChoices = edgeChoiceIndexes(
+    tabPanel,
+    relationship.tabAttachment.edgeIndex,
+    relationship.spanMm + LAYOUT_GAP_MM,
+  );
+  const slotChoices = edgeChoiceIndexes(
+    slotPanel,
+    relationship.slotAttachment.edgeIndex,
+    relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
+  );
+  const updatedPlan = (
+    tabEdgeIndex: number,
+    slotEdgeIndex: number,
+    dimensions: typeof preferredDimensions,
+  ): FabricationPlanV2 => ({
+    ...plan,
+    connectorRelationships: plan.connectorRelationships.map(
+      (candidate, index) =>
+        index === relationshipIndex
+          ? {
+              ...candidate,
+              tabAttachment: {
+                ...candidate.tabAttachment,
+                edgeIndex: tabEdgeIndex,
+              },
+              slotAttachment: {
+                ...candidate.slotAttachment,
+                edgeIndex: slotEdgeIndex,
+              },
+              ...dimensions,
+            }
+          : candidate,
+    ),
+  });
+  const variants: ResolutionVariant[] = [
+    {
+      category: "connector",
+      groupKey: `connector-recovery:${relationship.key}:preferred`,
+      plan: updatedPlan(
+        relationship.tabAttachment.edgeIndex,
+        relationship.slotAttachment.edgeIndex,
+        preferredDimensions,
+      ),
+    },
+    {
+      category: "connector",
+      groupKey: `connector-recovery:${relationship.key}:minimum`,
+      plan: updatedPlan(
+        relationship.tabAttachment.edgeIndex,
+        relationship.slotAttachment.edgeIndex,
+        minimumDimensions,
+      ),
+    },
+  ];
+  for (const tabEdgeIndex of tabChoices) {
+    for (const slotEdgeIndex of slotChoices) {
+      if (
+        tabEdgeIndex === relationship.tabAttachment.edgeIndex &&
+        slotEdgeIndex === relationship.slotAttachment.edgeIndex
+      ) {
+        continue;
       }
+      variants.push({
+        category: "connector",
+        groupKey: `connector-recovery:${relationship.key}:${tabEdgeIndex}:${slotEdgeIndex}`,
+        plan: updatedPlan(tabEdgeIndex, slotEdgeIndex, preferredDimensions),
+      });
     }
   }
   return variants;
@@ -2483,7 +2670,16 @@ const geometricResolutionExhaustedError = (
   };
 };
 
-type ResolutionVariantCategory = keyof typeof RESOLUTION_CATEGORY_BUDGETS;
+const connectorGeometryResolutionExhaustedError = (
+  error: SemanticPlanMappingError,
+  resolverEvaluationCount: number,
+): ConnectorGeometryResolutionExhaustedError => ({
+  kind: "connector_geometry_resolution_exhausted",
+  code: error.code,
+  path: error.path,
+  resolverEvaluationCount,
+  message: `${error.message} The bounded connector geometry search exhausted ${resolverEvaluationCount} evaluated states without a compilable, verified result.`,
+});
 
 interface ResolutionVariant {
   readonly category: ResolutionVariantCategory;
@@ -2493,39 +2689,68 @@ interface ResolutionVariant {
 
 const selectCategorizedVariants = (
   variants: readonly ResolutionVariant[],
+  failureCode: string,
 ): readonly ResolutionVariant[] => {
-  const selected: ResolutionVariant[] = [];
-  const categoryCounts: Record<ResolutionVariantCategory, number> = {
-    connector: 0,
-    joint: 0,
-    reroot: 0,
-    adjacency: 0,
+  const eligible: ResolutionVariant[] = [];
+  const categories: readonly ResolutionVariantCategory[] = [
+    "connector",
+    "joint",
+    "reroot",
+    "adjacency",
+  ];
+  for (const category of categories) {
+    const candidates = variants.filter(
+      (variant) => variant.category === category,
+    );
+    const maximum = MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER[category];
+    if (category === "adjacency") {
+      // Adjacent equal-edge choices are ordered causally. Keeping the first
+      // few choices together reaches the second physical edge of the same
+      // grounded reattachment before spending work on unrelated graph edits.
+      eligible.push(...candidates.slice(0, maximum));
+      continue;
+    }
+    const selected: ResolutionVariant[] = [];
+    const groups = new Set<string>();
+    for (const candidate of candidates) {
+      if (groups.has(candidate.groupKey)) continue;
+      selected.push(candidate);
+      groups.add(candidate.groupKey);
+      if (selected.length >= maximum) break;
+    }
+    for (const candidate of candidates) {
+      if (selected.length >= maximum) break;
+      if (!selected.includes(candidate)) selected.push(candidate);
+    }
+    eligible.push(...selected);
+  }
+  const buckets: Record<ResolutionVariantCategory, ResolutionVariant[]> = {
+    connector: [],
+    joint: [],
+    reroot: [],
+    adjacency: [],
   };
-  const groups = new Set<string>();
-  for (const variant of variants) {
-    if (
-      categoryCounts[variant.category] >=
-        MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER[variant.category] ||
-      groups.has(variant.groupKey)
-    ) {
-      continue;
-    }
-    selected.push(variant);
-    categoryCounts[variant.category] += 1;
-    groups.add(variant.groupKey);
+  for (const variant of eligible) buckets[variant.category].push(variant);
+  const representativeOrder: readonly ResolutionVariantCategory[] =
+    failureCode.startsWith("connections.connector_")
+      ? ["connector", "joint", "reroot", "adjacency"]
+      : ["joint", "reroot", "adjacency", "connector"];
+  const fillOrder: readonly ResolutionVariantCategory[] =
+    failureCode === "collision.minimum_clearance"
+      ? ["adjacency", "joint", "reroot", "connector"]
+      : ["connector", "adjacency", "joint", "reroot"];
+  const prioritized: ResolutionVariant[] = [];
+  for (const category of representativeOrder) {
+    const representative = buckets[category].shift();
+    if (representative) prioritized.push(representative);
   }
-  for (const variant of variants) {
-    if (
-      categoryCounts[variant.category] >=
-        MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER[variant.category] ||
-      selected.includes(variant)
-    ) {
-      continue;
+  while (fillOrder.some((category) => buckets[category].length > 0)) {
+    for (const category of fillOrder) {
+      const variant = buckets[category].shift();
+      if (variant) prioritized.push(variant);
     }
-    selected.push(variant);
-    categoryCounts[variant.category] += 1;
   }
-  return selected;
+  return prioritized;
 };
 
 interface ResolutionCandidate {
@@ -2582,12 +2807,19 @@ export const expandResolvedSemanticFabricationPlan = (
 ): ResolvedSemanticPlanExpansionResult => {
   const intent = FabricationIntentV1Schema.safeParse(intentInput);
   const plan = FabricationPlanV2Schema.safeParse(planInput);
-  const initial = expandSemanticFabricationPlan(
-    intentInput,
-    planInput,
-    candidateOrdinal,
-  );
-  if (!intent.success || !plan.success || !initial.ok) return initial;
+  if (!intent.success || !plan.success) {
+    const invalid = expandSemanticFabricationPlan(
+      intentInput,
+      planInput,
+      candidateOrdinal,
+    );
+    if (invalid.ok) {
+      throw new Error(
+        "Internal invariant: parsed semantic inputs disagree with expansion.",
+      );
+    }
+    return invalid;
+  }
   const resolutionEvaluationLimit = Math.max(
     2,
     Math.min(
@@ -2600,6 +2832,35 @@ export const expandResolvedSemanticFabricationPlan = (
       ),
     ),
   );
+  let evaluationCount = 1;
+  const categoryEvaluationCounts: Record<ResolutionVariantCategory, number> = {
+    connector: 0,
+    joint: 0,
+    reroot: 0,
+    adjacency: 0,
+  };
+  const evaluationSequence: ResolutionVariantCategory[] = [];
+  const evaluationGroupKeys: string[] = [];
+  const resolutionDiagnostics = (): SemanticPlanResolutionDiagnostics => ({
+    resolverEvaluationCount: evaluationCount,
+    categoryEvaluationCounts: { ...categoryEvaluationCounts },
+    evaluationSequence: [...evaluationSequence],
+    evaluationGroupKeys: [...evaluationGroupKeys],
+  });
+  const resolved = (
+    program: FabricationProgramV1,
+  ): ResolvedSemanticPlanExpansionResult => ({
+    ok: true,
+    value: program,
+    resolutionDiagnostics: resolutionDiagnostics(),
+  });
+  const failed = (
+    error: ResolvedSemanticPlanExpansionError,
+  ): ResolvedSemanticPlanExpansionResult => ({
+    ok: false,
+    error,
+    resolutionDiagnostics: resolutionDiagnostics(),
+  });
 
   const evaluate = (
     candidatePlan: FabricationPlanV2,
@@ -2625,38 +2886,88 @@ export const expandResolvedSemanticFabricationPlan = (
     };
   };
 
-  const initialEvaluation = evaluate(plan.data);
-  if (!initialEvaluation.ok) return initialEvaluation;
-  if (initialEvaluation.value.report.valid) {
-    return { ok: true, value: initialEvaluation.value.program };
-  }
-  if (!isResolvableGeometricFailure(initialEvaluation.value.report)) {
-    return {
-      ok: false,
-      error: hardVerificationFailureError(initialEvaluation.value, 1),
-    };
+  const seenPlans = new Set([canonicalSerialize(plan.data)]);
+  let initialEvaluation = evaluate(plan.data);
+  if (!initialEvaluation.ok) {
+    const mappingFailure = initialEvaluation.error;
+    if (mappingFailure.kind !== "semantic_plan_mapping") {
+      return failed(mappingFailure);
+    }
+    const mappingVariants = connectorRecoveryPlanVariants(
+      intent.data,
+      plan.data,
+      mappingFailure,
+    );
+    if (mappingVariants.length === 0) return failed(mappingFailure);
+    const recovered: ResolvedPlanEvaluation[] = [];
+    let lastMappingFailure = mappingFailure;
+    for (const variant of mappingVariants) {
+      if (evaluationCount >= resolutionEvaluationLimit) break;
+      const serializedPlan = canonicalSerialize(variant.plan);
+      if (seenPlans.has(serializedPlan)) continue;
+      seenPlans.add(serializedPlan);
+      categoryEvaluationCounts.connector += 1;
+      evaluationSequence.push("connector");
+      evaluationGroupKeys.push(variant.groupKey);
+      evaluationCount += 1;
+      const candidate = evaluate(variant.plan);
+      if (!candidate.ok) {
+        if (candidate.error.kind === "semantic_plan_mapping") {
+          lastMappingFailure = candidate.error;
+        }
+        continue;
+      }
+      if (candidate.value.report.valid) {
+        return resolved(candidate.value.program);
+      }
+      recovered.push(candidate.value);
+    }
+    const bestRecovered = recovered.toSorted((left, right) =>
+      reportIsBetter(left.report, right.report)
+        ? -1
+        : reportIsBetter(right.report, left.report)
+          ? 1
+          : canonicalSerialize(left.plan).localeCompare(
+              canonicalSerialize(right.plan),
+            ),
+    )[0];
+    if (!bestRecovered) {
+      return failed(
+        connectorGeometryResolutionExhaustedError(
+          lastMappingFailure,
+          evaluationCount,
+        ),
+      );
+    }
+    initialEvaluation = { ok: true, value: bestRecovered };
   }
 
-  let evaluationCount = 1;
+  if (initialEvaluation.value.report.valid) {
+    return resolved(initialEvaluation.value.program);
+  }
+  if (!isResolvableGeometricFailure(initialEvaluation.value.report)) {
+    return failed(
+      hardVerificationFailureError(initialEvaluation.value, evaluationCount),
+    );
+  }
+
   let best = initialEvaluation.value;
   let frontier: readonly ResolvedPlanEvaluation[] = [initialEvaluation.value];
-  const seenPlans = new Set([canonicalSerialize(initialEvaluation.value.plan)]);
-  const categoryEvaluationCounts: Record<ResolutionVariantCategory, number> = {
-    connector: 0,
-    joint: 0,
-    reroot: 0,
-    adjacency: 0,
-  };
-  const normalizedPlan = withDirectionConsistentStaticFolds(plan.data);
+  const normalizedPlan = withDirectionConsistentStaticFolds(best.plan);
   const normalizedSerialization = canonicalSerialize(normalizedPlan);
-  if (!seenPlans.has(normalizedSerialization)) {
+  if (
+    evaluationCount < resolutionEvaluationLimit &&
+    !seenPlans.has(normalizedSerialization)
+  ) {
     seenPlans.add(normalizedSerialization);
     categoryEvaluationCounts.joint += 1;
+    evaluationSequence.push("joint");
+    evaluationGroupKeys.push("fold:direction-consistency");
     evaluationCount += 1;
     const normalized = evaluate(normalizedPlan);
     if (normalized.ok) {
       if (normalized.value.report.valid) {
-        return { ok: true, value: normalized.value.program };
+        return resolved(normalized.value.program);
       }
       if (reportIsBetter(normalized.value.report, best.report)) {
         best = normalized.value;
@@ -2676,45 +2987,54 @@ export const expandResolvedSemanticFabricationPlan = (
     for (const current of frontier) {
       const context = geometricFailureContext(current);
       const relevantPanelKeys = context ? new Set(context.panelKeys) : null;
+      const causalJointKeys =
+        context?.jointKeys.toSorted((leftKey, rightKey) => {
+          const rank = (jointKey: string): number => {
+            const joint = current.plan.joints.find(
+              (candidate) => candidate.key === jointKey,
+            )!;
+            if (context.bodyKeys.includes(joint.childBodyKey)) return 0;
+            if (context.bodyKeys.includes(joint.parentBodyKey)) return 1;
+            return 2;
+          };
+          return rank(leftKey) - rank(rightKey);
+        }) ?? [];
       const jointVariants: ResolutionVariant[] = [
         {
           category: "joint",
           groupKey: "fold:direction-consistency",
           plan: withDirectionConsistentStaticFolds(current.plan),
         },
-        ...(context?.jointKeys.flatMap((jointKey) =>
+        ...causalJointKeys.flatMap((jointKey) =>
           staticJointPlanVariants(current.plan, jointKey).map((variant) => ({
             category: "joint" as const,
             groupKey: `joint:${jointKey}`,
             plan: variant,
           })),
-        ) ?? []),
+        ),
       ];
       const connectorVariants = connectorPlanVariants(
         current.plan,
         relevantPanelKeys,
         context?.failureCode === "collision.minimum_clearance",
       );
-      const rerootVariants: ResolutionVariant[] =
-        depth === 0
-          ? []
-          : rerootedPlanVariants(current.plan, context?.bodyKeys ?? []).map(
-              (variant) => ({
-                category: "reroot",
-                groupKey: `reroot:${variant.bodies.find((body) => body.grounded)?.key ?? "unknown"}`,
-                plan: variant,
-              }),
-            );
-      const adjacencyVariants: ResolutionVariant[] =
-        depth === 0
-          ? []
-          : adjacencyPlanVariants(current.plan, context?.jointKeys ?? []).map(
-              (variant) => ({
-                ...variant,
-                category: "adjacency",
-              }),
-            );
-      const variants = selectCategorizedVariants([
+      const rerootVariants: ResolutionVariant[] = rerootedPlanVariants(
+        current.plan,
+        context?.bodyKeys ?? [],
+      ).map((variant) => ({
+        category: "reroot",
+        groupKey: `reroot:${variant.bodies.find((body) => body.grounded)?.key ?? "unknown"}`,
+        plan: variant,
+      }));
+      const adjacencyVariants: ResolutionVariant[] = adjacencyPlanVariants(
+        current.plan,
+        causalJointKeys,
+      ).map((variant) => ({
+        ...variant,
+        category: "adjacency",
+      }));
+      const serializedRawVariants = new Set<string>();
+      const rawVariants = [
         ...(context?.failureCode.startsWith("connections.connector_")
           ? connectorVariants
           : jointVariants),
@@ -2723,7 +3043,21 @@ export const expandResolvedSemanticFabricationPlan = (
           : connectorVariants),
         ...rerootVariants,
         ...adjacencyVariants,
-      ]);
+      ].filter((variant) => {
+        const serializedPlan = canonicalSerialize(variant.plan);
+        if (
+          seenPlans.has(serializedPlan) ||
+          serializedRawVariants.has(serializedPlan)
+        ) {
+          return false;
+        }
+        serializedRawVariants.add(serializedPlan);
+        return true;
+      });
+      const variants = selectCategorizedVariants(
+        rawVariants,
+        context?.failureCode ?? "",
+      );
       for (const variant of variants) {
         if (evaluationCount >= resolutionEvaluationLimit) break;
         if (
@@ -2733,14 +3067,15 @@ export const expandResolvedSemanticFabricationPlan = (
           continue;
         }
         const serializedPlan = canonicalSerialize(variant.plan);
-        if (seenPlans.has(serializedPlan)) continue;
         seenPlans.add(serializedPlan);
         categoryEvaluationCounts[variant.category] += 1;
+        evaluationSequence.push(variant.category);
+        evaluationGroupKeys.push(variant.groupKey);
         evaluationCount += 1;
         const candidate = evaluate(variant.plan);
         if (!candidate.ok) continue;
         if (candidate.value.report.valid) {
-          return { ok: true, value: candidate.value.program };
+          return resolved(candidate.value.program);
         }
         if (reportIsBetter(candidate.value.report, best.report)) {
           best = candidate.value;
@@ -2757,15 +3092,9 @@ export const expandResolvedSemanticFabricationPlan = (
   }
 
   if (evaluationCount >= resolutionEvaluationLimit) {
-    return {
-      ok: false,
-      error: geometricResolutionExhaustedError(best, evaluationCount),
-    };
+    return failed(geometricResolutionExhaustedError(best, evaluationCount));
   }
   return collisionFailure(best.report)
-    ? { ok: false, error: structuralCollisionError(best, evaluationCount) }
-    : {
-        ok: false,
-        error: hardVerificationFailureError(best, evaluationCount),
-      };
+    ? failed(structuralCollisionError(best, evaluationCount))
+    : failed(hardVerificationFailureError(best, evaluationCount));
 };

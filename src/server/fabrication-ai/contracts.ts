@@ -63,6 +63,7 @@ export const ProgramProposalV1Schema = z
         planHash: z.string().regex(/^[a-f0-9]{64}$/u),
         expanderVersion: z.literal(FABRICATION_PLAN_EXPANDER_VERSION),
         proposalCount: z.number().int().min(1).max(3).optional(),
+        evaluatedProposalCount: z.number().int().min(1).max(3).optional(),
         selectedProposalIndex: z.number().int().min(0).max(2).optional(),
         terminalFailureCodes: z
           .array(z.string().min(1).max(160))
