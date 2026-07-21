@@ -41,9 +41,9 @@ const LIMIT_PREFIX =
 const parseCount = (value: string): number | null => {
   const normalized = value.toLowerCase().replaceAll(/\s+/gu, "-");
   const numeric = Number.parseInt(normalized, 10);
-  return Number.isSafeInteger(numeric)
-    ? numeric
-    : (COUNT_WORDS.get(normalized) ?? null);
+  // COUNT_TOKEN admits only entries present in COUNT_WORDS when the token is
+  // not numeric, so the lookup is total at this boundary.
+  return Number.isSafeInteger(numeric) ? numeric : COUNT_WORDS.get(normalized)!;
 };
 
 const explicitMaximum = (

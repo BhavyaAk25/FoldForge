@@ -1,52 +1,32 @@
 import { describe, expect, it } from "vitest";
 
 import { POST as compilePost } from "@/app/api/compile/route";
-import { FABRICATION_LIMITS } from "@/core/fabrication/limits";
-import type { FabricationIntentV1 } from "@/core/fabrication/types";
+import { canonicalSerialize } from "@/core/canonical";
 import { fabricationProgramProposalFromResponse } from "@/server/fabrication-ai/plan-response";
-import { fixtureIntent } from "../fixtures/fabrication";
-import { fixtureLiveAcceptancePlan } from "../fixtures/semantic-plan";
+import { fixtureHomepageCardBoxDesignSpec } from "../fixtures/design-spec";
+import { productionCardBoxIntent } from "../fixtures/production-geometric-failures";
 
-const cardBoxIntent = (): FabricationIntentV1 => {
-  const source = fixtureIntent();
-  return {
-    ...source,
-    sourcePrompt:
-      "Make a small box from one sheet of cardstock for a deck of cards.",
-    behavior: "static",
-    requestedSize: { widthMm: 70, heightMm: 95, depthMm: 25 },
-    fabricationBudget: {
-      ...source.fabricationBudget,
-      maximumPanels: FABRICATION_LIMITS.maximumPanelCount,
-      maximumJointAndConnectorCount:
-        FABRICATION_LIMITS.maximumJointAndConnectorCount,
+const responseFor = (designSpec: unknown, id = "resp-v3-card-box") => ({
+  id,
+  status: "completed",
+  output: [
+    {
+      type: "function_call",
+      name: "submit_fabrication_design_spec",
+      arguments: JSON.stringify({
+        diversityClaim:
+          "Decompose the enclosure semantically and let code synthesize it.",
+        designSpec,
+      }),
     },
-    semanticConstraints: [],
-    scopeStatus: "supported",
-  };
-};
+  ],
+});
 
-describe("mocked model to real compile route", () => {
-  it("preflights and verifies a semantic card-box plan without mocking compile", async () => {
-    const intent = cardBoxIntent();
+describe("mocked V3 model specification to real compile route", () => {
+  it("synthesizes and verifies the homepage card-box without a prepared topology", async () => {
+    const intent = productionCardBoxIntent();
     const proposal = fabricationProgramProposalFromResponse({
-      response: {
-        id: "resp-sanitized-card-box",
-        status: "completed",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_fabrication_plan",
-            arguments: JSON.stringify({
-              baseProposal: {
-                diversityClaim: "Use one compact cross-net enclosure.",
-                plan: fixtureLiveAcceptancePlan(),
-              },
-              structuralAlternatives: [],
-            }),
-          },
-        ],
-      },
+      response: responseFor(fixtureHomepageCardBoxDesignSpec()),
       intent,
       candidateOrdinal: 1,
       modelId: "gpt-5.6-sol",
@@ -62,261 +42,72 @@ describe("mocked model to real compile route", () => {
         body: JSON.stringify({
           intent,
           program: proposal.program,
-          candidateId: "candidate-sanitized-card-box",
+          candidateId: "candidate-v3-card-box",
         }),
       }),
     );
 
     expect(response.status).toBe(200);
     expect(proposal.provenance).toMatchObject({
+      synthesizerVersion: "3.0.0",
       proposalCount: 1,
       evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
+      synthesisEvaluationCount: expect.any(Number),
     });
     expect(await response.json()).toMatchObject({
       status: "passed",
-      candidateId: "candidate-sanitized-card-box",
+      candidateId: "candidate-v3-card-box",
       report: { valid: true, failures: [] },
       score: { eligible: true },
     });
-  });
+  }, 30_000);
 
-  it("selects a later valid plan from one multi-proposal model response", async () => {
-    const intent = cardBoxIntent();
-    const validPlan = fixtureLiveAcceptancePlan();
-    const disconnectedPlan = {
-      ...validPlan,
-      topologyKey: "disconnected-box",
-      joints: [],
-    };
-    const proposal = fabricationProgramProposalFromResponse({
-      response: {
-        id: "resp-multi-proposal-card-box",
-        status: "completed",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_fabrication_plan",
-            arguments: JSON.stringify({
-              proposals: [
-                {
-                  diversityClaim: "Use a disconnected invalid mock topology.",
-                  plan: disconnectedPlan,
-                },
-                {
-                  diversityClaim: "Use one connected cross-net enclosure.",
-                  plan: validPlan,
-                },
-              ],
-            }),
-          },
-        ],
-      },
+  it("is byte-stable for the same semantic specification", () => {
+    const intent = productionCardBoxIntent();
+    const input = {
+      response: responseFor(fixtureHomepageCardBoxDesignSpec()),
       intent,
       candidateOrdinal: 1,
       modelId: "gpt-5.6-sol",
-    });
+    } as const;
+    const first = fabricationProgramProposalFromResponse(input);
+    const repeated = fabricationProgramProposalFromResponse(input);
 
-    expect(proposal.diversityClaim).toBe(
-      "Use one connected cross-net enclosure.",
-    );
-    const response = await compilePost(
-      new Request("https://foldforge.example/api/compile", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "https://foldforge.example",
-        },
-        body: JSON.stringify({
-          intent,
-          program: proposal.program,
-          candidateId: "candidate-selected-from-batch",
-        }),
-      }),
-    );
+    expect(canonicalSerialize(first)).toBe(canonicalSerialize(repeated));
+  }, 30_000);
 
-    expect(await response.json()).toMatchObject({
-      status: "passed",
-      report: { valid: true, failures: [] },
-    });
-  });
-
-  it("removes exact duplicate proposals before assigning resolution work", () => {
-    const intent = cardBoxIntent();
-    const validPlan = fixtureLiveAcceptancePlan();
-    const proposal = fabricationProgramProposalFromResponse({
-      response: {
-        id: "resp-duplicate-proposal-card-box",
-        status: "completed",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_fabrication_plan",
-            arguments: JSON.stringify({
-              proposals: [
-                {
-                  diversityClaim: "Use the connected cross-net enclosure.",
-                  plan: validPlan,
-                },
-                {
-                  diversityClaim: "Repeat the same enclosure exactly.",
-                  plan: validPlan,
-                },
-              ],
-            }),
-          },
-        ],
-      },
-      intent,
-      candidateOrdinal: 1,
-      modelId: "gpt-5.6-sol",
-    });
-
-    expect(proposal.provenance).toMatchObject({
-      proposalCount: 2,
-      evaluatedProposalCount: 1,
-      selectedProposalIndex: 0,
-      terminalFailureCodes: ["duplicate_plan_hash"],
-    });
-  });
-
-  it("expands a compact model-authored structural alternative and skips equivalent plans", () => {
-    const intent = cardBoxIntent();
-    const validPlan = fixtureLiveAcceptancePlan();
-    const invalidBase = {
-      ...validPlan,
-      topologyKey: "misattached-lid-base",
-      joints: validPlan.joints.map((joint) =>
-        joint.key === "lid"
-          ? {
-              ...joint,
-              childAttachment: {
-                ...joint.childAttachment,
-                edgeIndex: 9,
-              },
-            }
-          : joint,
-      ),
-    };
-    const proposal = fabricationProgramProposalFromResponse({
-      response: {
-        id: "resp-compact-alternative-card-box",
-        status: "completed",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_fabrication_plan",
-            arguments: JSON.stringify({
-              baseProposal: {
-                diversityClaim: "Attach the lid to its opposite long edge.",
-                plan: invalidBase,
-              },
-              structuralAlternatives: [
-                {
-                  diversityClaim:
-                    "Attach the same model-authored lid to the matching back edge.",
-                  topologyKey: "corrected-lid-edge",
-                  groundedBodyKey: null,
-                  jointEdits: [
-                    {
-                      jointKey: "lid",
-                      parentBodyKey: null,
-                      childBodyKey: null,
-                      parentAttachment: null,
-                      childAttachment: { panelKey: "lid", edgeIndex: 0 },
-                      foldDirection: null,
-                      homeValue: null,
-                      minimumValue: null,
-                      maximumValue: null,
-                    },
-                  ],
-                  connectorEdits: [],
-                },
-                {
-                  diversityClaim: "Rename the corrected topology only.",
-                  topologyKey: "renamed-corrected-lid-edge",
-                  groundedBodyKey: null,
-                  jointEdits: [
-                    {
-                      jointKey: "lid",
-                      parentBodyKey: null,
-                      childBodyKey: null,
-                      parentAttachment: null,
-                      childAttachment: { panelKey: "lid", edgeIndex: 0 },
-                      foldDirection: null,
-                      homeValue: null,
-                      minimumValue: null,
-                      maximumValue: null,
-                    },
-                  ],
-                  connectorEdits: [],
-                },
-              ],
-            }),
-          },
-        ],
-      },
-      intent,
-      candidateOrdinal: 1,
-      modelId: "gpt-5.6-sol",
-    });
-
-    expect(proposal).toMatchObject({
-      diversityClaim:
-        "Attach the same model-authored lid to the matching back edge.",
-      provenance: {
-        proposalCount: 3,
-        evaluatedProposalCount: 2,
-        selectedProposalIndex: 1,
-        terminalFailureCodes: expect.arrayContaining([
-          "duplicate_structural_fingerprint",
-        ]),
-      },
-    });
-  }, 20_000);
-
-  it("rejects malformed compact alternatives before deterministic expansion", () => {
+  it("rejects low-level topology fields at the model boundary", () => {
     expect(() =>
       fabricationProgramProposalFromResponse({
-        response: {
-          id: "resp-invalid-compact-alternative",
-          status: "completed",
-          output: [
-            {
-              type: "function_call",
-              name: "submit_fabrication_plan",
-              arguments: JSON.stringify({
-                baseProposal: {
-                  diversityClaim: "Use one complete base plan.",
-                  plan: fixtureLiveAcceptancePlan(),
-                },
-                structuralAlternatives: [
-                  {
-                    diversityClaim:
-                      "Reference an unknown model-authored joint.",
-                    topologyKey: "unknown-reference-alternative",
-                    groundedBodyKey: null,
-                    jointEdits: [
-                      {
-                        jointKey: "unknown-joint",
-                        parentBodyKey: null,
-                        childBodyKey: null,
-                        parentAttachment: null,
-                        childAttachment: null,
-                        foldDirection: null,
-                        homeValue: null,
-                        minimumValue: null,
-                        maximumValue: null,
-                      },
-                    ],
-                    connectorEdits: [],
-                  },
-                ],
-              }),
-            },
-          ],
-        },
-        intent: cardBoxIntent(),
+        response: responseFor({
+          ...fixtureHomepageCardBoxDesignSpec(),
+          groundedRoot: "base",
+        }),
+        intent: productionCardBoxIntent(),
+        candidateOrdinal: 1,
+        modelId: "gpt-5.6-sol",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "invalid_plan",
+        safeDetail: expect.objectContaining({ phase: "schema" }),
+      }),
+    );
+  });
+
+  it("returns a typed deterministic failure for an impossible specification", () => {
+    const spec = fixtureHomepageCardBoxDesignSpec();
+    expect(() =>
+      fabricationProgramProposalFromResponse({
+        response: responseFor({
+          ...spec,
+          parts: spec.parts.map((part) => ({
+            ...part,
+            width: { minimumMm: 500, preferredMm: 500, maximumMm: 500 },
+          })),
+        }),
+        intent: productionCardBoxIntent(),
         candidateOrdinal: 1,
         modelId: "gpt-5.6-sol",
       }),
@@ -324,9 +115,46 @@ describe("mocked model to real compile route", () => {
       expect.objectContaining({
         code: "invalid_plan",
         safeDetail: expect.objectContaining({
-          code: "alternative_reference",
+          phase: "expansion",
+          code: "part_sheet_fit",
         }),
       }),
     );
+  });
+
+  it("rejects malformed and duplicate V3 calls before synthesis", () => {
+    const intent = productionCardBoxIntent();
+    expect(() =>
+      fabricationProgramProposalFromResponse({
+        response: {
+          id: "resp-malformed-v3",
+          status: "completed",
+          output: [
+            {
+              type: "function_call",
+              name: "submit_fabrication_design_spec",
+              arguments: "not-json",
+            },
+          ],
+        },
+        intent,
+        candidateOrdinal: 1,
+        modelId: "gpt-5.6-sol",
+      }),
+    ).toThrowError(expect.objectContaining({ code: "invalid_plan" }));
+
+    const call = responseFor(fixtureHomepageCardBoxDesignSpec()).output[0]!;
+    expect(() =>
+      fabricationProgramProposalFromResponse({
+        response: {
+          id: "resp-duplicate-v3",
+          status: "completed",
+          output: [call, call],
+        },
+        intent,
+        candidateOrdinal: 1,
+        modelId: "gpt-5.6-sol",
+      }),
+    ).toThrowError(expect.objectContaining({ code: "duplicate_plan_call" }));
   });
 });

@@ -116,10 +116,7 @@ export const buildDirectedBodyTopology = (
       actualRootCount: rootBodyIds.length,
     });
   }
-  const rootBodyId = rootBodyIds[0];
-  if (rootBodyId === undefined) {
-    return err({ id: "topology.root_count", actualRootCount: 0 });
-  }
+  const rootBodyId = rootBodyIds[0]!;
 
   const orderedBodyIds: string[] = [];
   const orderedJointIds: string[] = [];

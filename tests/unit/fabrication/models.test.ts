@@ -24,10 +24,7 @@ import {
   fabricationSemanticReferenceKeys,
 } from "@/server/fabrication-ai/models";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
-import {
-  fixtureLiveAcceptancePlan,
-  fixtureSemanticPlan,
-} from "../../fixtures/semantic-plan";
+import { fixtureSingleFoldDesignSpec } from "../../fixtures/design-spec";
 
 const {
   cancelResponse,
@@ -57,10 +54,10 @@ const usage: ResponseUsage = {
 const planFunctionOutput = (diversityClaim: string) => [
   {
     type: "function_call",
-    name: "submit_fabrication_plan",
+    name: "submit_fabrication_design_spec",
     arguments: JSON.stringify({
       diversityClaim,
-      plan: fixtureSemanticPlan(),
+      designSpec: fixtureSingleFoldDesignSpec(),
     }),
   },
 ];
@@ -267,22 +264,27 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
 
     expect(result.program).toMatchObject({
       intentId: "intent-winged-display",
-      topologyId: "topology-two-panel-fold",
+      behavior: "flap",
     });
-    expect(result.provenance).toEqual({
+    expect(result.provenance).toMatchObject({
       modelId: FOLDFORGE_MODEL,
       modelResponseId: "resp-program",
-      planHash: sha256Hex(canonicalSerialize(fixtureSemanticPlan())),
+      planHash: sha256Hex(canonicalSerialize(fixtureSingleFoldDesignSpec())),
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+      synthesizerVersion: "3.0.0",
       proposalCount: 1,
       evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
-      terminalFailureCodes: [],
+      synthesisEvaluationCount: expect.any(Number),
+      synthesisNogoodCount: expect.any(Number),
+      terminalFailureCodes: expect.any(Array),
     });
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
-        instructions: expect.stringContaining("one complete baseProposal"),
+        instructions: expect.stringContaining(
+          "submit_fabrication_design_spec exactly once",
+        ),
         reasoning: { effort: "low" },
         max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
         background: true,
@@ -291,12 +293,12 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         service_tier: "default",
         tool_choice: {
           type: "function",
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
         },
         tools: [
           expect.objectContaining({
             type: "function",
-            name: "submit_fabrication_plan",
+            name: "submit_fabrication_design_spec",
             strict: true,
           }),
         ],
@@ -306,35 +308,35 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     expect(createResponse.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         instructions: expect.stringContaining(
-          "Never author flat transforms, packing coordinates, global axes or origins, quaternions",
+          "Do not choose or mention parent/child body topology",
         ),
       }),
     );
     expect(createResponse.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         instructions: expect.stringContaining(
-          "Code owns canonical identifiers, non-overlapping sheet packing",
+          "Deterministic code owns all of those decisions",
         ),
       }),
     );
     expect(createResponse.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         instructions: expect.stringContaining(
-          "rectangle vertices [(0,0),(1,0),(1,1),(0,1)]: edges 0 top, 1 right, 2 bottom, 3 left",
+          "Dimension ranges must satisfy minimum <= preferred <= maximum",
         ),
       }),
     );
     expect(createResponse.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         instructions: expect.stringContaining(
-          "canonical panel-front maps to panel key front",
+          "Every relation, driver, output, and landmark reference must resolve",
         ),
       }),
     );
     expect(createResponse.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         instructions: expect.stringContaining(
-          "perform a silent deterministic-expansion audit",
+          "Never substitute a prepared object, stored topology",
         ),
       }),
     );
@@ -365,7 +367,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       code: "invalid_plan",
       safeDetail: {
         phase: "expansion",
-        code: "contract_validation",
+        code: "no_verified_realization",
       },
     });
   });
@@ -397,8 +399,8 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
     const largestVisibleTokenEstimate = Math.ceil(
       Buffer.byteLength(
         JSON.stringify({
-          diversityClaim: "A concise topology-specific proposal.",
-          plan: fixtureLiveAcceptancePlan(),
+          diversityClaim: "A concise semantic decomposition.",
+          designSpec: fixtureSingleFoldDesignSpec(),
         }),
         "utf8",
       ) / 3,
@@ -638,7 +640,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       output: [
         {
           type: "function_call",
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
           arguments: "{",
         },
       ],
@@ -658,7 +660,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         ...planFunctionOutput("First plan."),
         {
           type: "function_call",
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
           arguments: null,
         },
       ],
@@ -669,14 +671,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       output: [
         {
           type: "function_call",
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
           arguments: JSON.stringify({
-            diversityClaim: "Use a missing sheet.",
-            plan: {
-              ...fixtureSemanticPlan(),
-              panels: fixtureSemanticPlan().panels.map((panel) => ({
-                ...panel,
-                sheetIndex: 3,
+            diversityClaim: "Use an impossible oversize part.",
+            designSpec: {
+              ...fixtureSingleFoldDesignSpec(),
+              parts: fixtureSingleFoldDesignSpec().parts.map((part) => ({
+                ...part,
+                width: {
+                  minimumMm: 500,
+                  preferredMm: 500,
+                  maximumMm: 500,
+                },
               })),
             },
           }),
@@ -708,14 +714,18 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       output: [
         {
           type: "function_call",
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
           arguments: JSON.stringify({
-            diversityClaim: "Use a missing sheet.",
-            plan: {
-              ...fixtureSemanticPlan(),
-              panels: fixtureSemanticPlan().panels.map((panel) => ({
-                ...panel,
-                sheetIndex: 3,
+            diversityClaim: "Use an impossible oversize part.",
+            designSpec: {
+              ...fixtureSingleFoldDesignSpec(),
+              parts: fixtureSingleFoldDesignSpec().parts.map((part) => ({
+                ...part,
+                width: {
+                  minimumMm: 500,
+                  preferredMm: 500,
+                  maximumMm: 500,
+                },
               })),
             },
           }),
@@ -734,8 +744,8 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       code: "invalid_plan",
       safeDetail: {
         phase: "expansion",
-        code: "invalid_reference",
-        path: ["panels", expect.any(String), "sheetIndex"],
+        code: "part_sheet_fit",
+        path: ["parts", "0"],
       },
     });
   });
