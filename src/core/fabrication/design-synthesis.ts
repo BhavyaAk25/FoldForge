@@ -2,13 +2,20 @@ import { canonicalSerialize } from "../canonical";
 import { sha256Hex } from "../sha256";
 import { compileFabricationProgram } from "./compiler";
 import {
+  fabricationDesignDimensionVariants,
+  type FabricationDesignDimensionVariantV3,
+} from "./design-dimension-variants";
+import {
   FabricationDesignSpecV3Schema,
   type FabricationDesignPartV3,
   type FabricationDesignSpecV3,
   type FabricationPartRelationV3,
 } from "./design-spec";
+import {
+  normalizedFabricationDesignSpecVariants,
+  type NormalizedDesignSpecVariant,
+} from "./design-spec-normalization";
 import { FABRICATION_LIMITS } from "./limits";
-import { scoreFabricationCandidate } from "./scoring";
 import {
   expandResolvedSemanticFabricationPlan,
   semanticPanelOutlineVertices,
@@ -28,7 +35,7 @@ import type {
 } from "./types";
 import { verifyFabricationIr } from "./verification";
 
-export const FABRICATION_SYNTHESIZER_VERSION = "3.0.0" as const;
+export const FABRICATION_SYNTHESIZER_VERSION = "3.1.0" as const;
 
 export const FABRICATION_SYNTHESIS_LIMITS = {
   maximumGraphCandidates: 12,
@@ -95,11 +102,13 @@ interface EdgeChoice {
   readonly lengthMm: number;
 }
 
-interface ValidCandidate {
-  readonly program: FabricationProgramV1;
-  readonly report: VerificationReportV2;
-  readonly programHash: string;
-  readonly totalScore: number;
+interface SynthesisLane {
+  readonly specVariant: NormalizedDesignSpecVariant;
+  readonly dimensionVariant: FabricationDesignDimensionVariantV3;
+  readonly graph: readonly JointRelation[];
+  readonly graphOrdinal: number;
+  readonly roots: readonly FabricationDesignPartV3[];
+  nextAttemptOrdinal: number;
 }
 
 const failure = (
@@ -171,14 +180,18 @@ const panelRole = (
 const panelForPart = (
   part: FabricationDesignPartV3,
   sheetIndex: number,
+  dimensions?: {
+    readonly widthMm: number;
+    readonly heightMm: number;
+  },
 ): SemanticPanelV2 => ({
   key: part.key,
   sheetIndex,
   bodyKey: part.key,
   label: part.label,
   role: panelRole(part.role),
-  widthMm: preferredDimensionMm(part.width),
-  heightMm: preferredDimensionMm(part.height),
+  widthMm: dimensions?.widthMm ?? preferredDimensionMm(part.width),
+  heightMm: dimensions?.heightMm ?? preferredDimensionMm(part.height),
   outline: outlineForPart(part),
   innerCutContours: [],
 });
@@ -259,46 +272,192 @@ const graphAcyclic = (
   return true;
 };
 
-const combinations = <T>(
-  values: readonly T[],
-  size: number,
-  limit: number,
-): readonly (readonly T[])[] => {
-  const results: T[][] = [];
-  const visit = (start: number, chosen: T[]): void => {
-    if (results.length >= limit) return;
-    if (chosen.length === size) {
-      results.push([...chosen]);
-      return;
-    }
-    for (let index = start; index < values.length; index += 1) {
-      chosen.push(values[index]!);
-      visit(index + 1, chosen);
-      chosen.pop();
-      if (results.length >= limit) return;
-    }
-  };
-  visit(0, []);
-  return results;
-};
+const relationPairKey = (relation: {
+  readonly partAKey: string;
+  readonly partBKey: string;
+}): string => [relation.partAKey, relation.partBKey].toSorted().join("::");
 
+const graphFingerprint = (relations: readonly JointRelation[]): string =>
+  relations.map(relationPairKey).toSorted().join("|");
+
+interface CompletionEdge {
+  readonly relation: JointRelation;
+  readonly semanticPriority: number;
+  readonly attachmentChoiceCount: number;
+}
+
+/**
+ * The semantic model may omit source-sheet crease adjacency because it only
+ * describes assembled relationships. Complete that forest with generic,
+ * equal-edge-supported fixed folds. Explicit motion relations are mandatory;
+ * locks never become graph edges.
+ */
 const graphCandidates = (
-  partKeys: readonly string[],
-  relations: readonly JointRelation[],
+  spec: FabricationDesignSpecV3,
+  panels: readonly SemanticPanelV2[],
 ): readonly (readonly JointRelation[])[] => {
+  const partKeys = spec.parts.map((part) => part.key);
   if (partKeys.length === 1) return [[]];
-  if (relations.length < partKeys.length - 1) return [];
-  return combinations(
-    relations,
-    partKeys.length - 1,
-    FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates * 4,
-  )
-    .filter(
-      (candidate) =>
-        graphAcyclic(partKeys, candidate) &&
-        graphConnected(partKeys, candidate),
-    )
-    .slice(0, FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates);
+  const jointRelations = spec.relations.filter(
+    (relation): relation is JointRelation =>
+      relation.kind === "fold" ||
+      relation.kind === "open_close" ||
+      relation.kind === "slide",
+  );
+  const drivenRelationKeys = new Set([
+    ...(spec.driver ? [spec.driver.relationKey] : []),
+    ...spec.outputs.map((output) => output.relationKey),
+  ]);
+  const required = jointRelations.filter(
+    (relation) =>
+      drivenRelationKeys.has(relation.key) || relation.kind === "slide",
+  );
+  const preferredJoints = jointRelations.filter(
+    (relation) => !required.includes(relation),
+  );
+  if (
+    required.length > partKeys.length - 1 ||
+    !graphAcyclic(partKeys, required)
+  ) {
+    return [];
+  }
+  if (
+    required.length === partKeys.length - 1 &&
+    graphConnected(partKeys, required)
+  ) {
+    return [required];
+  }
+
+  const panelsByKey = new Map(panels.map((panel) => [panel.key, panel]));
+  const requiredPairs = new Set(required.map(relationPairKey));
+  const declaredPairs = new Set(jointRelations.map(relationPairKey));
+  const touchPairs = new Set(
+    spec.relations
+      .filter((relation) => relation.kind === "touch")
+      .map(relationPairKey),
+  );
+  const pool: CompletionEdge[] = [];
+  for (const relation of preferredJoints) {
+    const partA = panelsByKey.get(relation.partAKey)!;
+    const partB = panelsByKey.get(relation.partBKey)!;
+    const attachmentChoiceCount = matchingEdgeChoices(partA, partB).length;
+    if (attachmentChoiceCount === 0) continue;
+    pool.push({
+      relation,
+      semanticPriority: 0,
+      attachmentChoiceCount,
+    });
+  }
+  let generatedOrdinal = 0;
+  for (let leftIndex = 0; leftIndex < partKeys.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < partKeys.length;
+      rightIndex += 1
+    ) {
+      const partAKey = partKeys[leftIndex]!;
+      const partBKey = partKeys[rightIndex]!;
+      const pairKey = relationPairKey({ partAKey, partBKey });
+      if (requiredPairs.has(pairKey) || declaredPairs.has(pairKey)) continue;
+      const partA = panelsByKey.get(partAKey)!;
+      const partB = panelsByKey.get(partBKey)!;
+      const attachmentChoiceCount = matchingEdgeChoices(partA, partB).length;
+      if (attachmentChoiceCount === 0) continue;
+      pool.push({
+        relation: {
+          key: `autoFold${generatedOrdinal}`,
+          kind: "fold",
+          partAKey,
+          partBKey,
+          angleRangeDeg: { minimum: 90, home: 90, maximum: 90 },
+        },
+        semanticPriority: touchPairs.has(pairKey) ? 1 : 2,
+        attachmentChoiceCount,
+      });
+      generatedOrdinal += 1;
+    }
+  }
+  const rankedPool = pool.toSorted(
+    (left, right) =>
+      left.semanticPriority - right.semanticPriority ||
+      right.attachmentChoiceCount - left.attachmentChoiceCount ||
+      relationPairKey(left.relation).localeCompare(
+        relationPairKey(right.relation),
+      ),
+  );
+  const needed = partKeys.length - 1 - required.length;
+  const results: JointRelation[][] = [];
+  const seen = new Set<string>();
+
+  const addCompletions = (orderedPool: readonly CompletionEdge[]): void => {
+    const visit = (
+      startIndex: number,
+      chosen: readonly JointRelation[],
+    ): void => {
+      if (
+        results.length >= FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates
+      ) {
+        return;
+      }
+      if (chosen.length === needed) {
+        const graph = [...required, ...chosen];
+        if (!graphConnected(partKeys, graph)) return;
+        const fingerprint = graphFingerprint(graph);
+        if (seen.has(fingerprint)) return;
+        seen.add(fingerprint);
+        results.push(graph);
+        return;
+      }
+      const remainingNeeded = needed - chosen.length;
+      for (
+        let index = startIndex;
+        index <= orderedPool.length - remainingNeeded;
+        index += 1
+      ) {
+        const next = orderedPool[index]!.relation;
+        const partial = [...required, ...chosen, next];
+        if (!graphAcyclic(partKeys, partial)) continue;
+        visit(index + 1, [...chosen, next]);
+        if (
+          results.length >= FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates
+        ) {
+          return;
+        }
+      }
+    };
+    visit(0, []);
+  };
+
+  const rotationCount = Math.max(
+    1,
+    Math.min(
+      rankedPool.length,
+      FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates,
+    ),
+  );
+  for (let rotation = 0; rotation < rotationCount; rotation += 1) {
+    const orderedPool = [
+      ...rankedPool.slice(rotation),
+      ...rankedPool.slice(0, rotation),
+    ];
+    const chosen: JointRelation[] = [];
+    for (const edge of orderedPool) {
+      if (chosen.length === needed) break;
+      const partial = [...required, ...chosen, edge.relation];
+      if (graphAcyclic(partKeys, partial)) chosen.push(edge.relation);
+    }
+    if (chosen.length !== needed) continue;
+    const graph = [...required, ...chosen];
+    if (!graphConnected(partKeys, graph)) continue;
+    const fingerprint = graphFingerprint(graph);
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    results.push(graph);
+  }
+  if (results.length < FABRICATION_SYNTHESIS_LIMITS.maximumGraphCandidates) {
+    addCompletions(rankedPool);
+  }
+  return results;
 };
 
 const rootRank = (part: FabricationDesignPartV3): number => {
@@ -448,14 +607,31 @@ const relationRange = (relation: JointRelation) => {
 
 const buildInternalPlan = (
   spec: FabricationDesignSpecV3,
+  dimensionVariant: FabricationDesignDimensionVariantV3,
   graph: readonly JointRelation[],
   rootKey: string,
   layoutOrdinal: number,
+  connectorOrientationOrdinal: number,
   topologyOrdinal: number,
 ): FabricationPlanV2 | null => {
-  const panels = spec.parts.map((part) => panelForPart(part, 0));
+  const dimensionsByPartKey = new Map(
+    dimensionVariant.parts.map((part) => [part.partKey, part]),
+  );
+  const panels = spec.parts.map((part) =>
+    panelForPart(part, 0, dimensionsByPartKey.get(part.key)),
+  );
   const panelsByKey = new Map(panels.map((panel) => [panel.key, panel]));
   const oriented = orientTree(rootKey, graph);
+  if (
+    spec.outputs.some((output) => {
+      const relation = oriented.find(
+        (candidate) => candidate.relation.key === output.relationKey,
+      );
+      return !relation || relation.childKey !== output.partKey;
+    })
+  ) {
+    return null;
+  }
   const attachments = chooseJointAttachments(
     oriented,
     panelsByKey,
@@ -480,14 +656,22 @@ const buildInternalPlan = (
     > => relation.kind === "lock",
   );
   const connectorRelationships = lockRelations.flatMap((relation) => {
+    const orientedLock =
+      connectorOrientationOrdinal % 2 === 0
+        ? relation
+        : {
+            ...relation,
+            partAKey: relation.partBKey,
+            partBKey: relation.partAKey,
+          };
     const slideGuide = oriented.find(
       (item) =>
         item.relation.kind === "slide" &&
         new Set([item.relation.partAKey, item.relation.partBKey]).has(
-          relation.partAKey,
+          orientedLock.partAKey,
         ) &&
         new Set([item.relation.partAKey, item.relation.partBKey]).has(
-          relation.partBKey,
+          orientedLock.partBKey,
         ),
     );
     const slideAttachments = slideGuide
@@ -503,7 +687,7 @@ const buildInternalPlan = (
             )[slideAttachments[1].edgeIndex]!,
           }
         : chooseConnectorAttachments(
-            relation,
+            orientedLock,
             panelsByKey,
             usedJointEdges,
             layoutOrdinal,
@@ -641,10 +825,11 @@ const buildInternalPlan = (
   return {
     version: "2",
     candidateLabel: spec.label,
-    topologyKey: `synth${topologyOrdinal}r${rootKey}l${layoutOrdinal}`.slice(
-      0,
-      40,
-    ),
+    topologyKey:
+      `synth${topologyOrdinal}r${rootKey}l${layoutOrdinal}c${connectorOrientationOrdinal}`.slice(
+        0,
+        40,
+      ),
     panels,
     bodies: spec.parts.map((part) => ({
       key: part.key,
@@ -669,15 +854,33 @@ const buildInternalPlan = (
         : null,
     outputs,
     couplings: [],
-    landmarks: spec.visibleLandmarks.map((landmark) => ({
-      key: landmark.key,
-      label: landmark.label,
-      role: landmark.importance,
-      geometryRefs: landmark.partKeys.flatMap((partKey) => [
-        { kind: "panel" as const, key: partKey },
-        { kind: "body" as const, key: partKey },
-      ]),
-    })),
+    landmarks: [
+      // Intent constraints bind semantic parts by the canonical V3 part key.
+      // Visible landmarks are additional named features; they must never be
+      // the only semantic binding for a fabricated panel.
+      ...spec.parts.map((part) => ({
+        key: part.key,
+        label: part.label,
+        role: part.role,
+        geometryRefs: [
+          { kind: "panel" as const, key: part.key },
+          { kind: "body" as const, key: part.key },
+        ],
+      })),
+      ...spec.visibleLandmarks
+        .filter(
+          (landmark) => !spec.parts.some((part) => part.key === landmark.key),
+        )
+        .map((landmark) => ({
+          key: landmark.key,
+          label: landmark.label,
+          role: landmark.importance,
+          geometryRefs: landmark.partKeys.flatMap((partKey) => [
+            { kind: "panel" as const, key: partKey },
+            { kind: "body" as const, key: partKey },
+          ]),
+        })),
+    ],
     assemblyStrategy:
       connectorRelationships.length === 0
         ? "fold_only"
@@ -769,6 +972,120 @@ const preflight = (
   return null;
 };
 
+const protectedPartAxesFromIntent = (
+  intent: FabricationIntentV1,
+  spec: FabricationDesignSpecV3,
+) => {
+  const partKeys = new Set(spec.parts.map((part) => part.key));
+  return intent.semanticConstraints.flatMap((constraint) => {
+    if (
+      constraint.kind !== "dimension" ||
+      constraint.source !== "user" ||
+      (constraint.dimension !== "width" && constraint.dimension !== "height")
+    ) {
+      return [];
+    }
+    const prefix = `${constraint.geometryRef.kind}-`;
+    const partKey = constraint.geometryRef.id.startsWith(prefix)
+      ? constraint.geometryRef.id.slice(prefix.length)
+      : constraint.geometryRef.id;
+    if (!partKeys.has(partKey)) return [];
+    return [
+      {
+        partKey,
+        axis:
+          constraint.dimension === "width"
+            ? ("widthMm" as const)
+            : ("heightMm" as const),
+      },
+    ];
+  });
+};
+
+const panelsForDimensionVariant = (
+  spec: FabricationDesignSpecV3,
+  dimensionVariant: FabricationDesignDimensionVariantV3,
+): readonly SemanticPanelV2[] => {
+  const dimensionsByPartKey = new Map(
+    dimensionVariant.parts.map((part) => [part.partKey, part]),
+  );
+  return spec.parts.map((part) =>
+    panelForPart(part, 0, dimensionsByPartKey.get(part.key)),
+  );
+};
+
+const rootCandidates = (
+  spec: FabricationDesignSpecV3,
+): readonly FabricationDesignPartV3[] =>
+  spec.parts
+    .filter(
+      (part) => !spec.outputs.some((output) => output.partKey === part.key),
+    )
+    .toSorted(
+      (left, right) =>
+        rootRank(left) - rootRank(right) || left.key.localeCompare(right.key),
+    )
+    .slice(0, FABRICATION_SYNTHESIS_LIMITS.maximumRootCandidates);
+
+const maximumLaneAttemptCount = (lane: SynthesisLane): number =>
+  lane.roots.length * FABRICATION_SYNTHESIS_LIMITS.maximumAttachmentLayouts * 2;
+
+export const fabricationSynthesisAttemptCoordinates = (
+  rootCandidateCount: number,
+  laneOrdinal: number,
+  attemptOrdinal: number,
+): {
+  readonly rootIndex: number;
+  readonly layoutOrdinal: number;
+  readonly connectorOrientationOrdinal: number;
+} => {
+  if (
+    !Number.isInteger(rootCandidateCount) ||
+    rootCandidateCount < 1 ||
+    !Number.isInteger(laneOrdinal) ||
+    laneOrdinal < 0 ||
+    !Number.isInteger(attemptOrdinal) ||
+    attemptOrdinal < 0
+  ) {
+    throw new Error(
+      "Synthesis attempt coordinates require non-negative integer ordinals and at least one root.",
+    );
+  }
+  const rootIndex = (attemptOrdinal + laneOrdinal) % rootCandidateCount;
+  const cycleOrdinal = Math.floor(attemptOrdinal / rootCandidateCount);
+  const layoutOrdinal =
+    (cycleOrdinal + laneOrdinal) %
+    FABRICATION_SYNTHESIS_LIMITS.maximumAttachmentLayouts;
+  const connectorOrientationOrdinal =
+    (Math.floor(
+      cycleOrdinal / FABRICATION_SYNTHESIS_LIMITS.maximumAttachmentLayouts,
+    ) +
+      laneOrdinal) %
+    2;
+  return { rootIndex, layoutOrdinal, connectorOrientationOrdinal };
+};
+
+const nextPlanFromLane = (lane: SynthesisLane): FabricationPlanV2 | null => {
+  if (lane.nextAttemptOrdinal >= maximumLaneAttemptCount(lane)) return null;
+  const attemptOrdinal = lane.nextAttemptOrdinal;
+  lane.nextAttemptOrdinal += 1;
+  const { rootIndex, layoutOrdinal, connectorOrientationOrdinal } =
+    fabricationSynthesisAttemptCoordinates(
+      lane.roots.length,
+      lane.graphOrdinal,
+      attemptOrdinal,
+    );
+  return buildInternalPlan(
+    lane.specVariant.spec,
+    lane.dimensionVariant,
+    lane.graph,
+    lane.roots[rootIndex]!.key,
+    layoutOrdinal,
+    connectorOrientationOrdinal,
+    lane.graphOrdinal,
+  );
+};
+
 export const synthesizeFabricationDesign = (
   intentInput: unknown,
   specInput: unknown,
@@ -794,63 +1111,145 @@ export const synthesizeFabricationDesign = (
       issue?.message ?? "The fabrication design specification is invalid.",
     );
   }
-  const preflightFailure = preflight(intent.data, spec.data);
-  if (preflightFailure) return preflightFailure;
-  const partKeys = spec.data.parts.map((part) => part.key);
-  const jointRelations = spec.data.relations.filter(
-    (relation): relation is JointRelation =>
-      relation.kind === "fold" ||
-      relation.kind === "open_close" ||
-      relation.kind === "slide",
+  const normalizedCandidates = normalizedFabricationDesignSpecVariants(
+    intent.data,
+    spec.data,
   );
-  const graphs = graphCandidates(partKeys, jointRelations);
-  if (graphs.length === 0) {
+  if (normalizedCandidates.length === 0) {
+    return failure(
+      "unsupported_design_spec",
+      "connector_clearance_domain",
+      ["tolerances", "clearanceMm"],
+      "The explicit connector clearance is outside the supported fabrication range.",
+    );
+  }
+  const preflightResults = normalizedCandidates.map((specVariant) => ({
+    specVariant,
+    failure: preflight(intent.data, specVariant.spec),
+  }));
+  const normalizedVariants = preflightResults.flatMap(
+    ({ specVariant, failure: variantFailure }) =>
+      variantFailure ? [] : [specVariant],
+  );
+  if (normalizedVariants.length === 0) {
+    return preflightResults[0]!.failure!;
+  }
+  const dimensionRows = normalizedVariants.map((specVariant) => {
+    const protectedPartAxes = protectedPartAxesFromIntent(
+      intent.data,
+      specVariant.spec,
+    );
+    return fabricationDesignDimensionVariants(specVariant.spec, {
+      protectedPartAxes,
+      requestedEnvelope: intent.data.requestedSize,
+    }).map((dimensionVariant) => ({
+      specVariant,
+      dimensionVariant,
+      graphs: graphCandidates(
+        specVariant.spec,
+        panelsForDimensionVariant(specVariant.spec, dimensionVariant),
+      ),
+      roots: rootCandidates(specVariant.spec),
+    }));
+  });
+  const maximumDimensionVariantCount = Math.max(
+    0,
+    ...dimensionRows.map((rows) => rows.length),
+  );
+  const maximumGraphVariantCount = Math.max(
+    0,
+    ...dimensionRows.flatMap((rows) => rows.map((row) => row.graphs.length)),
+  );
+  const lanes: SynthesisLane[] = [];
+  let graphOrdinal = 0;
+  // Diagonal ordering gives every semantic normalization an early preferred
+  // realization, then interleaves dimension relief with alternate graphs.
+  for (
+    let frontier = 0;
+    frontier < maximumDimensionVariantCount + maximumGraphVariantCount - 1;
+    frontier += 1
+  ) {
+    for (
+      let normalizedOrdinal = 0;
+      normalizedOrdinal < normalizedVariants.length;
+      normalizedOrdinal += 1
+    ) {
+      for (
+        let dimensionOrdinal = Math.min(
+          frontier,
+          maximumDimensionVariantCount - 1,
+        );
+        dimensionOrdinal >= 0;
+        dimensionOrdinal -= 1
+      ) {
+        const candidateGraphOrdinal = frontier - dimensionOrdinal;
+        const row = dimensionRows[normalizedOrdinal]?.[dimensionOrdinal];
+        const graph = row?.graphs[candidateGraphOrdinal];
+        if (!row || !graph || row.roots.length === 0) continue;
+        lanes.push({
+          specVariant: row.specVariant,
+          dimensionVariant: row.dimensionVariant,
+          graph,
+          graphOrdinal,
+          roots: row.roots,
+          nextAttemptOrdinal: 0,
+        });
+        graphOrdinal += 1;
+      }
+    }
+  }
+  if (lanes.length === 0) {
     return failure(
       "design_infeasible",
       "connected_acyclic_graph",
       ["relations"],
-      "The declared part relationships cannot form a connected acyclic fabrication graph.",
+      "The semantic relationships and physical edge ranges cannot form a connected acyclic fabrication graph.",
     );
   }
-  const roots = spec.data.parts
-    .toSorted(
-      (left, right) =>
-        rootRank(left) - rootRank(right) || left.key.localeCompare(right.key),
-    )
-    .slice(0, FABRICATION_SYNTHESIS_LIMITS.maximumRootCandidates);
+  const uniqueGraphFingerprints = new Set(
+    lanes.map((lane) => graphFingerprint(lane.graph)),
+  );
   const materialized: FabricationPlanV2[] = [];
   const seenStructures = new Set<string>();
   let truncated = false;
-  for (const [graphIndex, graph] of graphs.entries()) {
-    for (const root of roots) {
-      for (
-        let layoutOrdinal = 0;
-        layoutOrdinal < FABRICATION_SYNTHESIS_LIMITS.maximumAttachmentLayouts;
-        layoutOrdinal += 1
+  let schedulingRound = 0;
+  let activeLaneCount = lanes.length;
+  while (
+    materialized.length <
+      FABRICATION_SYNTHESIS_LIMITS.maximumMaterializedCandidates &&
+    activeLaneCount > 0
+  ) {
+    activeLaneCount = 0;
+    for (let offset = 0; offset < lanes.length; offset += 1) {
+      const lane = lanes[(schedulingRound + offset) % lanes.length]!;
+      if (lane.nextAttemptOrdinal >= maximumLaneAttemptCount(lane)) continue;
+      activeLaneCount += 1;
+      const plan = nextPlanFromLane(lane);
+      if (!plan) continue;
+      const fingerprint = semanticPlanStructureFingerprint(plan);
+      if (seenStructures.has(fingerprint)) continue;
+      seenStructures.add(fingerprint);
+      materialized.push(plan);
+      if (
+        materialized.length >=
+        FABRICATION_SYNTHESIS_LIMITS.maximumMaterializedCandidates
       ) {
-        const plan = buildInternalPlan(
-          spec.data,
-          graph,
-          root.key,
-          layoutOrdinal,
-          graphIndex,
-        );
-        if (!plan) continue;
-        const fingerprint = semanticPlanStructureFingerprint(plan);
-        if (seenStructures.has(fingerprint)) continue;
-        seenStructures.add(fingerprint);
-        materialized.push(plan);
-        if (
-          materialized.length >=
-          FABRICATION_SYNTHESIS_LIMITS.maximumMaterializedCandidates
-        ) {
-          truncated = true;
-          break;
-        }
+        break;
       }
-      if (truncated) break;
     }
-    if (truncated) break;
+    schedulingRound += 1;
+  }
+  truncated = lanes.some(
+    (lane) => lane.nextAttemptOrdinal < maximumLaneAttemptCount(lane),
+  );
+  if (materialized.length === 0) {
+    return failure(
+      "design_infeasible",
+      "no_materialized_candidate",
+      [],
+      "No bounded semantic realization produced compatible joints, connectors, motion, and output mappings.",
+      { terminalFailureCodes: ["materialization_failed"] },
+    );
   }
   const fullEvaluationLimit =
     intent.data.behavior === "static"
@@ -858,7 +1257,6 @@ export const synthesizeFabricationDesign = (
       : FABRICATION_SYNTHESIS_LIMITS.maximumFullEvaluationsMoving;
   const nogoods = new Set<string>();
   const terminalFailureCodes: string[] = [];
-  const valid: ValidCandidate[] = [];
   let evaluatedCandidateCount = 0;
   let rejectedCandidateCount = 0;
   for (const plan of materialized) {
@@ -904,60 +1302,45 @@ export const synthesizeFabricationDesign = (
       continue;
     }
     const programHash = sha256Hex(canonicalSerialize(expanded.value));
-    const score = scoreFabricationCandidate(
-      compiled.value,
+    // The public forge exposes one candidate. The ranked synthesis frontier is
+    // deterministic, so a later alternative must not replace an already fully
+    // verified design or add unnecessary server work.
+    return {
+      ok: true,
+      value: expanded.value,
       report,
-      intent.data,
-    );
-    valid.push({
-      program: expanded.value,
-      report,
-      programHash,
-      totalScore: score.totalScore ?? 0,
-    });
-  }
-  const selected = valid.toSorted(
-    (left, right) =>
-      right.totalScore - left.totalScore ||
-      left.programHash.localeCompare(right.programHash),
-  )[0];
-  if (!selected) {
-    const diagnostics = {
-      evaluatedCandidateCount,
-      rejectedCandidateCount,
-      nogoods,
-      terminalFailureCodes: [...new Set(terminalFailureCodes)].slice(0, 12),
+      diagnostics: {
+        specHash: sha256Hex(canonicalSerialize(spec.data)),
+        graphCandidateCount: uniqueGraphFingerprints.size,
+        materializedCandidateCount: materialized.length,
+        evaluatedCandidateCount,
+        rejectedCandidateCount,
+        nogoodCount: nogoods.size,
+        selectedProgramHash: programHash,
+        selectedTopologyId: expanded.value.topologyId,
+        terminalFailureCodes: [...new Set(terminalFailureCodes)].slice(0, 12),
+      },
     };
-    return truncated
-      ? failure(
-          "synthesis_budget_exhausted",
-          "bounded_search_exhausted",
-          [],
-          "The deterministic synthesis work budget ended before a verified design was found.",
-          diagnostics,
-        )
-      : failure(
-          "design_infeasible",
-          "no_verified_realization",
-          [],
-          "Every bounded realization of the design specification failed a hard fabrication check.",
-          diagnostics,
-        );
   }
-  return {
-    ok: true,
-    value: selected.program,
-    report: selected.report,
-    diagnostics: {
-      specHash: sha256Hex(canonicalSerialize(spec.data)),
-      graphCandidateCount: graphs.length,
-      materializedCandidateCount: materialized.length,
-      evaluatedCandidateCount,
-      rejectedCandidateCount,
-      nogoodCount: nogoods.size,
-      selectedProgramHash: selected.programHash,
-      selectedTopologyId: selected.program.topologyId,
-      terminalFailureCodes: [...new Set(terminalFailureCodes)].slice(0, 12),
-    },
+  const diagnostics = {
+    evaluatedCandidateCount,
+    rejectedCandidateCount,
+    nogoods,
+    terminalFailureCodes: [...new Set(terminalFailureCodes)].slice(0, 12),
   };
+  return truncated
+    ? failure(
+        "synthesis_budget_exhausted",
+        "bounded_search_exhausted",
+        [],
+        "The deterministic synthesis work budget ended before a verified design was found.",
+        diagnostics,
+      )
+    : failure(
+        "design_infeasible",
+        "no_verified_realization",
+        [],
+        "Every bounded realization of the design specification failed a hard fabrication check.",
+        diagnostics,
+      );
 };

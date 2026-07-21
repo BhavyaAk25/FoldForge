@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { canonicalSerialize } from "@/core/canonical";
 import { buildFabricationCandidate } from "@/core/fabrication/candidate";
+import { FABRICATION_SYNTHESIZER_VERSION } from "@/core/fabrication/design-synthesis";
 import { FABRICATION_LIMITS } from "@/core/fabrication/limits";
 import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import { sha256Hex } from "@/core/sha256";
@@ -271,7 +272,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       modelResponseId: "resp-program",
       planHash: sha256Hex(canonicalSerialize(fixtureSingleFoldDesignSpec())),
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
-      synthesizerVersion: "3.0.0",
+      synthesizerVersion: FABRICATION_SYNTHESIZER_VERSION,
       proposalCount: 1,
       evaluatedProposalCount: 1,
       selectedProposalIndex: 0,

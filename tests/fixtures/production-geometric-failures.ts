@@ -24,6 +24,43 @@ export const productionCardBoxIntent = (): FabricationIntentV1 => {
   };
 };
 
+export const productionCardBoxIntentWithRecognizableForm =
+  (): FabricationIntentV1 => {
+    const source = productionCardBoxIntent();
+    return {
+      ...source,
+      semanticConstraints: [
+        {
+          constraintId: "form-panels",
+          kind: "recognizable_form",
+          hard: true,
+          source: "user",
+          label: "Playing-card box panels",
+          semanticPartIds: [
+            "part-base",
+            "part-front",
+            "part-back",
+            "part-left",
+            "part-right",
+            "part-lid",
+          ],
+          requiredLandmarks: ["base", "front", "back", "left", "right", "lid"],
+          evaluation: "landmark_geometry",
+        },
+        {
+          constraintId: "form-lid-lock",
+          kind: "recognizable_form",
+          hard: true,
+          source: "user",
+          label: "Lid lock",
+          semanticPartIds: ["part-lid", "part-connector-lid-lock"],
+          requiredLandmarks: ["lid", "lid lock"],
+          evaluation: "landmark_geometry",
+        },
+      ],
+    };
+  };
+
 const movingCardBoxPlan = (): FabricationPlanV2 => {
   const source = fixtureLiveAcceptancePlan();
   return {

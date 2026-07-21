@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { POST as compilePost } from "@/app/api/compile/route";
 import { canonicalSerialize } from "@/core/canonical";
+import { FABRICATION_SYNTHESIZER_VERSION } from "@/core/fabrication/design-synthesis";
 import { fabricationProgramProposalFromResponse } from "@/server/fabrication-ai/plan-response";
-import { fixtureHomepageCardBoxDesignSpec } from "../fixtures/design-spec";
-import { productionCardBoxIntent } from "../fixtures/production-geometric-failures";
+import {
+  fixtureHomepageCardBoxDesignSpec,
+  fixtureModelShapedCardBoxDesignSpec,
+} from "../fixtures/design-spec";
+import {
+  productionCardBoxIntent,
+  productionCardBoxIntentWithRecognizableForm,
+} from "../fixtures/production-geometric-failures";
 
 const responseFor = (designSpec: unknown, id = "resp-v3-card-box") => ({
   id,
@@ -49,7 +56,7 @@ describe("mocked V3 model specification to real compile route", () => {
 
     expect(response.status).toBe(200);
     expect(proposal.provenance).toMatchObject({
-      synthesizerVersion: "3.0.0",
+      synthesizerVersion: FABRICATION_SYNTHESIZER_VERSION,
       proposalCount: 1,
       evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
@@ -58,6 +65,41 @@ describe("mocked V3 model specification to real compile route", () => {
     expect(await response.json()).toMatchObject({
       status: "passed",
       candidateId: "candidate-v3-card-box",
+      report: { valid: true, failures: [] },
+      score: { eligible: true },
+    });
+  }, 30_000);
+
+  it("normalizes a realistic Sol-shaped specification before the real compile route", async () => {
+    const intent = productionCardBoxIntentWithRecognizableForm();
+    const proposal = fabricationProgramProposalFromResponse({
+      response: responseFor(
+        fixtureModelShapedCardBoxDesignSpec(),
+        "resp-v3-model-shaped-card-box",
+      ),
+      intent,
+      candidateOrdinal: 1,
+      modelId: "gpt-5.6-sol",
+    });
+
+    const response = await compilePost(
+      new Request("https://foldforge.example/api/compile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://foldforge.example",
+        },
+        body: JSON.stringify({
+          intent,
+          program: proposal.program,
+          candidateId: "candidate-v3-model-shaped-card-box",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: "passed",
       report: { valid: true, failures: [] },
       score: { eligible: true },
     });

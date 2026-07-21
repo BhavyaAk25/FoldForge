@@ -1592,7 +1592,7 @@ export const semanticPlanToFabricationPlanV1 = (
     } else {
       semanticParts.push({
         semanticPartId,
-        label: `Tab and slot ${relationship.key}`,
+        label: `Tab and slot ${relationship.key.replace(/[-_]+/g, " ")}`,
         role: "derived reciprocal tab-slot relationship",
         geometryRefs: connectorRefs,
       });
