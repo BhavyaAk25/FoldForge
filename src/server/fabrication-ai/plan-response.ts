@@ -345,6 +345,13 @@ interface ValidatedProposal {
   readonly totalScore: number;
 }
 
+interface DistinctProposal {
+  readonly proposal: ParsedPlanProposal;
+  readonly proposalIndex: number;
+  readonly planHash: string;
+  readonly structuralFingerprint: string | null;
+}
+
 export const fabricationProgramProposalFromResponse = (input: {
   readonly response: CompletedFabricationPlanResponse;
   readonly intent: FabricationIntentV1;
@@ -401,17 +408,7 @@ export const fabricationProgramProposalFromResponse = (input: {
     code: string;
   }[] = [];
   let bestFailure: FabricationProgramFailureDetail | null = null;
-  // Keep the complete deterministic search across a model-authored batch inside
-  // the same request budget that previously applied to one proposal. Moving
-  // plans are more expensive because every variant runs the swept-motion gate.
-  const resolutionBudgetPerProposal = Math.max(
-    2,
-    Math.floor(
-      (input.intent.behavior === "static"
-        ? SEMANTIC_PLAN_RESOLUTION_BUDGETS.static
-        : SEMANTIC_PLAN_RESOLUTION_BUDGETS.moving) / proposals.length,
-    ),
-  );
+  const distinctProposals: DistinctProposal[] = [];
   for (const [proposalIndex, proposal] of proposals.entries()) {
     const planHash = sha256Hex(canonicalSerialize(proposal.plan));
     const structuralFingerprint =
@@ -424,10 +421,6 @@ export const fabricationProgramProposalFromResponse = (input: {
           seenStructuralFingerprints.has(structuralFingerprint)
         ? "duplicate_structural_fingerprint"
         : null;
-    seenPlanHashes.add(planHash);
-    if (structuralFingerprint) {
-      seenStructuralFingerprints.add(structuralFingerprint);
-    }
     if (duplicateCode) {
       proposalFailures.push({
         proposalIndex,
@@ -437,6 +430,36 @@ export const fabricationProgramProposalFromResponse = (input: {
       });
       continue;
     }
+    seenPlanHashes.add(planHash);
+    if (structuralFingerprint) {
+      seenStructuralFingerprints.add(structuralFingerprint);
+    }
+    distinctProposals.push({
+      proposal,
+      proposalIndex,
+      planHash,
+      structuralFingerprint,
+    });
+  }
+  // Keep the complete deterministic search across a model-authored batch inside
+  // the same request budget that previously applied to one proposal. Moving
+  // plans are more expensive because every variant runs the swept-motion gate.
+  // Equivalent alternatives are removed before this division, so a duplicate
+  // cannot consume or dilute the useful deterministic resolution budget.
+  const resolutionBudgetPerProposal = Math.max(
+    2,
+    Math.floor(
+      (input.intent.behavior === "static"
+        ? SEMANTIC_PLAN_RESOLUTION_BUDGETS.static
+        : SEMANTIC_PLAN_RESOLUTION_BUDGETS.moving) / distinctProposals.length,
+    ),
+  );
+  for (const {
+    proposal,
+    proposalIndex,
+    planHash,
+    structuralFingerprint,
+  } of distinctProposals) {
     const expanded =
       proposal.version === "2"
         ? expandResolvedSemanticFabricationPlan(
@@ -541,6 +564,7 @@ export const fabricationProgramProposalFromResponse = (input: {
       planHash: selected.planHash,
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
       proposalCount: proposals.length,
+      evaluatedProposalCount: distinctProposals.length,
       selectedProposalIndex: selected.proposalIndex,
       terminalFailureCodes: proposalFailures.map((failure) => failure.code),
     },

@@ -39,11 +39,16 @@ const expectResolved = (
   expect(
     verifyFabricationIr(compiled.value, `resolved-${plan.topologyKey}`),
   ).toMatchObject({ valid: true, failures: [] });
+  return resolved;
 };
 
 describe("bounded semantic geometric resolution", () => {
-  it("rejects detached tabs and boundary-crossing slots during derivation", () => {
+  it("recovers detached tabs and boundary-crossing slots before compilation", () => {
     const source = fixtureLiveAcceptancePlan();
+    const staticIntent = {
+      ...productionCardBoxIntent(),
+      behavior: "static",
+    } as const;
     const invalidPlans = [
       {
         ...source,
@@ -57,20 +62,167 @@ describe("bounded semantic geometric resolution", () => {
           (relationship) => ({ ...relationship, slotInsetMm: 0.1 }),
         ),
       },
+      {
+        ...source,
+        connectorRelationships: source.connectorRelationships.map(
+          (relationship) => ({ ...relationship, tabDepthMm: 100 }),
+        ),
+      },
+      {
+        ...source,
+        connectorRelationships: source.connectorRelationships.map(
+          (relationship) => ({ ...relationship, slotInsetMm: 100 }),
+        ),
+      },
     ];
 
     for (const plan of invalidPlans) {
-      expect(
-        expandSemanticFabricationPlan(productionCardBoxIntent(), plan, 1),
-      ).toMatchObject({
+      const unresolved = expandSemanticFabricationPlan(staticIntent, plan, 1);
+      expect(unresolved).toMatchObject({
         ok: false,
         error: {
           kind: "semantic_plan_mapping",
           code: "unsupported_mapping",
-          path: ["connectorRelationships", "lid-lock"],
         },
       });
+      if (unresolved.ok) throw new Error("Expected connector mapping failure.");
+      expect(
+        "path" in unresolved.error ? unresolved.error.path.slice(0, 2) : [],
+      ).toEqual(["connectorRelationships", "lid-lock"]);
+      const resolved = expandResolvedSemanticFabricationPlan(
+        staticIntent,
+        plan,
+        1,
+        8,
+      );
+      expect(resolved).toMatchObject({
+        ok: true,
+        resolutionDiagnostics: {
+          categoryEvaluationCounts: { connector: 1 },
+          evaluationSequence: ["connector"],
+        },
+      });
+      if (!resolved.ok) throw new Error(JSON.stringify(resolved.error));
+      const compiled = compileFabricationProgram(staticIntent, resolved.value);
+      expect(compiled.ok).toBe(true);
+      if (!compiled.ok) throw new Error(JSON.stringify(compiled.error));
+      expect(
+        verifyFabricationIr(compiled.value, "recovered-connector"),
+      ).toMatchObject({
+        valid: true,
+        failures: [],
+      });
     }
+  });
+
+  it("keeps recovered connector geometry subject to every later hard check", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const invalidConnector = {
+      ...source,
+      connectorRelationships: source.connectorRelationships.map(
+        (relationship) => ({ ...relationship, tabDepthMm: 0.1 }),
+      ),
+    };
+    expect(
+      expandResolvedSemanticFabricationPlan(
+        {
+          ...productionCardBoxIntent(),
+          behavior: "static",
+          requestedSize: { widthMm: 200, heightMm: 95, depthMm: 25 },
+        },
+        invalidConnector,
+        1,
+        8,
+      ),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        kind: "hard_verification_failure",
+        code: "semantics.requested_size#width",
+      },
+    });
+  });
+
+  it("does not reinterpret invalid schemas, references, or plan limits", () => {
+    expect(
+      expandResolvedSemanticFabricationPlan(
+        productionCardBoxIntent(),
+        {},
+        1,
+        8,
+      ),
+    ).toMatchObject({
+      ok: false,
+      error: { kind: "semantic_plan_mapping", code: "contract_invalid" },
+    });
+
+    const source = fixtureLiveAcceptancePlan();
+    expect(
+      expandResolvedSemanticFabricationPlan(
+        {
+          ...productionCardBoxIntent(),
+          fabricationBudget: {
+            ...productionCardBoxIntent().fabricationBudget,
+            maximumPanels: 1,
+          },
+        },
+        source,
+        1,
+        8,
+      ),
+    ).toMatchObject({
+      ok: false,
+      error: { kind: "limit_exceeded", limit: "intent.maximumPanels" },
+    });
+
+    const missingConnectorPanel = {
+      ...source,
+      connectorRelationships: source.connectorRelationships.map(
+        (relationship) => ({
+          ...relationship,
+          tabAttachment: {
+            ...relationship.tabAttachment,
+            panelKey: "missing-panel",
+          },
+        }),
+      ),
+    };
+    expect(
+      expandResolvedSemanticFabricationPlan(
+        { ...productionCardBoxIntent(), behavior: "static" },
+        missingConnectorPanel,
+        1,
+        8,
+      ),
+    ).toMatchObject({
+      ok: false,
+      error: { kind: "semantic_plan_mapping", code: "invalid_reference" },
+    });
+  });
+
+  it("returns a typed bounded failure for impossible connector geometry", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const impossible = {
+      ...source,
+      connectorRelationships: source.connectorRelationships.map(
+        (relationship) => ({ ...relationship, spanMm: 500 }),
+      ),
+    };
+    expect(
+      expandResolvedSemanticFabricationPlan(
+        { ...productionCardBoxIntent(), behavior: "static" },
+        impossible,
+        1,
+        8,
+      ),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        kind: "connector_geometry_resolution_exhausted",
+        code: "unsupported_mapping",
+        path: ["connectorRelationships", "lid-lock", "spanMm"],
+      },
+    });
   });
 
   it("uses the complete joint path for a connector reach failure", () => {
@@ -117,7 +269,7 @@ describe("bounded semantic geometric resolution", () => {
     ).toBe(true);
   }, 20_000);
 
-  it("keeps an intermediate motion collision hard-invalid before resolution", () => {
+  it("resolves an intermediate motion collision within eight causal evaluations", () => {
     const report = reportFor(productionIntermediateCollisionPlan());
     expect(report.failures).toEqual(
       expect.arrayContaining([
@@ -127,20 +279,26 @@ describe("bounded semantic geometric resolution", () => {
         }),
       ]),
     );
-    expect(
-      expandResolvedSemanticFabricationPlan(
-        productionCardBoxIntent(),
-        productionIntermediateCollisionPlan(),
-        1,
-        8,
-      ),
-    ).toMatchObject({
-      ok: false,
-      error: {
-        kind: "geometric_resolution_exhausted",
-        code: "collision.minimum_clearance",
-        resolverEvaluationCount: 8,
+    const resolved = expectResolved(productionIntermediateCollisionPlan());
+    expect(resolved).toMatchObject({
+      ok: true,
+      resolutionDiagnostics: {
+        resolverEvaluationCount: expect.any(Number),
+        categoryEvaluationCounts: {
+          reroot: expect.any(Number),
+          adjacency: expect.any(Number),
+        },
+        evaluationSequence: expect.arrayContaining(["reroot", "adjacency"]),
       },
     });
+    expect(
+      resolved.resolutionDiagnostics.resolverEvaluationCount,
+    ).toBeLessThanOrEqual(8);
+    expect(
+      resolved.resolutionDiagnostics.categoryEvaluationCounts.reroot,
+    ).toBeGreaterThan(0);
+    expect(
+      resolved.resolutionDiagnostics.categoryEvaluationCounts.adjacency,
+    ).toBeGreaterThan(0);
   }, 20_000);
 });

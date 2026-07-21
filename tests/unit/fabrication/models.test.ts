@@ -275,6 +275,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       planHash: sha256Hex(canonicalSerialize(fixtureSemanticPlan())),
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
       proposalCount: 1,
+      evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
       terminalFailureCodes: [],
     });

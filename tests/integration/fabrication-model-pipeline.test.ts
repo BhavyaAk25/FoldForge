@@ -70,6 +70,7 @@ describe("mocked model to real compile route", () => {
     expect(response.status).toBe(200);
     expect(proposal.provenance).toMatchObject({
       proposalCount: 1,
+      evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
     });
     expect(await response.json()).toMatchObject({
@@ -137,6 +138,45 @@ describe("mocked model to real compile route", () => {
     expect(await response.json()).toMatchObject({
       status: "passed",
       report: { valid: true, failures: [] },
+    });
+  });
+
+  it("removes exact duplicate proposals before assigning resolution work", () => {
+    const intent = cardBoxIntent();
+    const validPlan = fixtureLiveAcceptancePlan();
+    const proposal = fabricationProgramProposalFromResponse({
+      response: {
+        id: "resp-duplicate-proposal-card-box",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            name: "submit_fabrication_plan",
+            arguments: JSON.stringify({
+              proposals: [
+                {
+                  diversityClaim: "Use the connected cross-net enclosure.",
+                  plan: validPlan,
+                },
+                {
+                  diversityClaim: "Repeat the same enclosure exactly.",
+                  plan: validPlan,
+                },
+              ],
+            }),
+          },
+        ],
+      },
+      intent,
+      candidateOrdinal: 1,
+      modelId: "gpt-5.6-sol",
+    });
+
+    expect(proposal.provenance).toMatchObject({
+      proposalCount: 2,
+      evaluatedProposalCount: 1,
+      selectedProposalIndex: 0,
+      terminalFailureCodes: ["duplicate_plan_hash"],
     });
   });
 
@@ -226,6 +266,7 @@ describe("mocked model to real compile route", () => {
         "Attach the same model-authored lid to the matching back edge.",
       provenance: {
         proposalCount: 3,
+        evaluatedProposalCount: 2,
         selectedProposalIndex: 1,
         terminalFailureCodes: expect.arrayContaining([
           "duplicate_structural_fingerprint",
