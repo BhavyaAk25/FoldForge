@@ -78,6 +78,12 @@ export const FabricationPlanProposalV2Schema = z
   })
   .strict();
 
+export const FabricationPlanProposalBatchV2Schema = z
+  .object({
+    proposals: z.array(FabricationPlanProposalV2Schema).min(1).max(3),
+  })
+  .strict();
+
 export const FabricationNarrativeV1Schema = z
   .object({
     summary: z.string().min(1).max(600),
@@ -104,6 +110,9 @@ export type FabricationPlanProposalV1 = z.infer<
 >;
 export type FabricationPlanProposalV2 = z.infer<
   typeof FabricationPlanProposalV2Schema
+>;
+export type FabricationPlanProposalBatchV2 = z.infer<
+  typeof FabricationPlanProposalBatchV2Schema
 >;
 export type FabricationNarrativeV1 = z.infer<
   typeof FabricationNarrativeV1Schema

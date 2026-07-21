@@ -1269,9 +1269,7 @@ const validatePanelGeometry = (
         severity: "hard",
         message: `${panel.label} must be a nondegenerate simple polygon.`,
         actual: measured(areaMm2, "mm2"),
-        expected: measured(
-          `simple polygon with area >= ${MINIMUM_PANEL_AREA_MM2} mm2`,
-        ),
+        expected: measured(MINIMUM_PANEL_AREA_MM2, "mm2"),
         geometryRefs: refs,
         repairableProgramPaths: [
           `/blueprint/panels/${panel.panelId}/widthMm`,
@@ -1872,8 +1870,7 @@ const validateConnections = (
             category: "manufacturability",
             stage: "connections",
             severity: "hard",
-            message:
-              "The assembled slot lies beyond the tab's available insertion reach.",
+            message: `Connectors ${tab.connectorId} and ${mate.connectorId} are ${Number(mateDistanceMm.toFixed(6))} mm apart in the home pose; available insertion reach is ${Number(maximumMateDistanceMm.toFixed(6))} mm.`,
             actual: measured(mateDistanceMm, "mm"),
             expected: measured(maximumMateDistanceMm, "mm"),
             geometryRefs: [
@@ -3186,6 +3183,37 @@ const positiveBoundarySeamExists = (
   coincidentPanelBoundarySegments(firstPanelId, secondPanelId, motionState)
     .length > 0;
 
+const boundaryPointContactIsLocusBound = (
+  firstPanelId: string,
+  secondPanelId: string,
+  motionState: EvaluatedMotionState,
+  witnesses: readonly Point3Mm[],
+): boolean => {
+  const firstBoundary = panelBoundarySegments(firstPanelId, motionState);
+  const secondBoundary = panelBoundarySegments(secondPanelId, motionState);
+  const onBoundary = (point: Point3Mm, segments: readonly Segment3Mm[]) =>
+    segments.some(
+      ([start, end]) =>
+        distancePointToSegment3Mm(point, start, end) <=
+        CONTACT_LOCUS_TOLERANCE_MM,
+    );
+  return (
+    witnesses.length > 0 &&
+    witnesses.every(
+      (point) =>
+        onBoundary(point, firstBoundary) && onBoundary(point, secondBoundary),
+    ) &&
+    panelIntersectionSegments(firstPanelId, secondPanelId, motionState).every(
+      ([start, end]) =>
+        Math.hypot(
+          end.xMm - start.xMm,
+          end.yMm - start.yMm,
+          end.zMm - start.zMm,
+        ) <= CONTACT_LOCUS_TOLERANCE_MM,
+    )
+  );
+};
+
 const tabTrianglesAtState = (
   pair: ReciprocalConnectorPair,
   tabPanel: PanelV1,
@@ -3270,6 +3298,41 @@ const validateCollision = (
   );
   const panelById = new Map(ir.panels.map((panel) => [panel.panelId, panel]));
   const bodyById = new Map(ir.bodies.map((body) => [body.bodyId, body]));
+  // Zero-range joints lock a rigid subassembly. Boundary-only seams inside
+  // that subassembly remain intentional static contacts while another branch
+  // moves; positive-area overlap is still rejected below.
+  const fixedComponentParent = new Map(
+    ir.bodies.map((body) => [body.bodyId, body.bodyId]),
+  );
+  const fixedComponentRoot = (bodyId: string): string => {
+    let root = fixedComponentParent.get(bodyId) ?? bodyId;
+    while ((fixedComponentParent.get(root) ?? root) !== root) {
+      root = fixedComponentParent.get(root) ?? root;
+    }
+    let cursor = bodyId;
+    while ((fixedComponentParent.get(cursor) ?? cursor) !== root) {
+      const next = fixedComponentParent.get(cursor) ?? cursor;
+      fixedComponentParent.set(cursor, root);
+      cursor = next;
+    }
+    return root;
+  };
+  const joinFixedComponents = (firstBodyId: string, secondBodyId: string) => {
+    const firstRoot = fixedComponentRoot(firstBodyId);
+    const secondRoot = fixedComponentRoot(secondBodyId);
+    if (firstRoot !== secondRoot) {
+      fixedComponentParent.set(secondRoot, firstRoot);
+    }
+  };
+  for (const joint of ir.joints) {
+    const fixed =
+      joint.kind === "prismatic"
+        ? Math.abs(joint.maxTravelMm - joint.minTravelMm) <= 1e-9
+        : Math.abs(joint.maxAngleDeg - joint.minAngleDeg) <= 1e-9;
+    if (fixed) {
+      joinFixedComponents(joint.parentBodyId, joint.childBodyId);
+    }
+  }
   const foldAdjacentPanelPairs = new Set(
     ir.joints.flatMap((joint) => {
       if (joint.kind !== "fold") return [];
@@ -3391,6 +3454,18 @@ const validateCollision = (
             intentionallyAdjacent ||
             declaredContact ||
             reciprocalConnectorPairs.length > 0;
+          const fixedRelativePose =
+            fixedComponentRoot(first.bodyId) ===
+            fixedComponentRoot(second.bodyId);
+          const motionDriverValue = motionState.driverValue;
+          const atMotionEndpointOrRest =
+            ir.driver !== null &&
+            motionDriverValue !== null &&
+            [
+              ir.driver.minimumValue,
+              ir.driver.maximumValue,
+              ir.driver.homeValue,
+            ].some((value) => Math.abs(value - motionDriverValue) <= 1e-8);
           const zeroAreaCenterlineContact =
             centerlineDistanceMm <= 1e-6 && overlapAreaMm2 <= 1e-6;
           // A verified fold's two source edges are the joint axis. For two
@@ -3414,7 +3489,10 @@ const validateCollision = (
           // nor an authored contact declaration can excuse an interior line
           // crossing elsewhere on the same panel pair.
           const boundaryWitnessProofEligible =
-            contactRelationshipExists || isSingleStateStaticDesign;
+            contactRelationshipExists ||
+            isSingleStateStaticDesign ||
+            fixedRelativePose ||
+            atMotionEndpointOrRest;
           const witnesses =
             boundaryWitnessProofEligible &&
             zeroAreaCenterlineContact &&
@@ -3442,12 +3520,33 @@ const validateCollision = (
               motionState,
               witnesses,
             );
+          // A moving assembly may settle on a measure-zero corner at a
+          // canonical endpoint or rest state. Intermediate undeclared point
+          // contact remains hard-invalid.
+          const locusBoundEndpointPointContact =
+            atMotionEndpointOrRest &&
+            !locusBoundFoldSeam &&
+            boundaryPointContactIsLocusBound(
+              first.panelId,
+              second.panelId,
+              motionState,
+              witnesses,
+            );
           const allowedBoundaryContact =
             zeroAreaCenterlineContact &&
             (locusBoundFoldSeam ||
               locusBoundBoundaryContact ||
-              locusBoundConnectorContact);
-          if (allowedBoundaryContact) continue;
+              locusBoundConnectorContact ||
+              locusBoundEndpointPointContact);
+          // Reciprocal tab-slot panels are intentionally driven toward one
+          // another. Their non-intersecting approach may fall below the global
+          // moving-clearance threshold; actual intersection is still accepted
+          // only when confined to the verified slot and tab contours above.
+          const connectorApproachClearance =
+            reciprocalConnectorPairs.length > 0 &&
+            centerlineDistanceMm > 1e-6 &&
+            overlapAreaMm2 <= 1e-6;
+          if (allowedBoundaryContact || connectorApproachClearance) continue;
           const clearanceMm =
             overlapAreaMm2 > 1e-6
               ? 0
@@ -3879,45 +3978,78 @@ const validateSemantics = (
   state: VerificationState,
   motion: MotionEvaluation,
 ): void => {
+  const spansForState = (motionState: EvaluatedMotionState) => {
+    const bounds = boundsForPoints(
+      Object.values(motionState.panelVertices).flat(),
+    );
+    return bounds
+      ? {
+          width: bounds.maximumXmm - bounds.minimumXmm,
+          height: bounds.maximumYmm - bounds.minimumYmm,
+          depth: bounds.maximumZmm - bounds.minimumZmm,
+        }
+      : { width: 0, height: 0, depth: 0 };
+  };
   const maximumSpansMm = motion.allStates.reduce(
     (maximum, motionState) => {
-      const bounds = boundsForPoints(
-        Object.values(motionState.panelVertices).flat(),
-      );
-      if (!bounds) return maximum;
+      const spans = spansForState(motionState);
       return {
-        width: Math.max(maximum.width, bounds.maximumXmm - bounds.minimumXmm),
-        height: Math.max(maximum.height, bounds.maximumYmm - bounds.minimumYmm),
-        depth: Math.max(maximum.depth, bounds.maximumZmm - bounds.minimumZmm),
+        width: Math.max(maximum.width, spans.width),
+        height: Math.max(maximum.height, spans.height),
+        depth: Math.max(maximum.depth, spans.depth),
       };
     },
     { width: 0, height: 0, depth: 0 },
   );
-  const spanPermutations = [
-    [maximumSpansMm.width, maximumSpansMm.height, maximumSpansMm.depth],
-    [maximumSpansMm.width, maximumSpansMm.depth, maximumSpansMm.height],
-    [maximumSpansMm.height, maximumSpansMm.width, maximumSpansMm.depth],
-    [maximumSpansMm.height, maximumSpansMm.depth, maximumSpansMm.width],
-    [maximumSpansMm.depth, maximumSpansMm.width, maximumSpansMm.height],
-    [maximumSpansMm.depth, maximumSpansMm.height, maximumSpansMm.width],
-  ] as const;
+  const homeState = motion.allStates.reduce<EvaluatedMotionState | null>(
+    (closest, candidate) =>
+      closest === null ||
+      Math.abs((candidate.driverValue ?? 0) - (ir.driver?.homeValue ?? 0)) <
+        Math.abs((closest.driverValue ?? 0) - (ir.driver?.homeValue ?? 0))
+        ? candidate
+        : closest,
+    null,
+  );
+  const homeSpansMm = homeState ? spansForState(homeState) : maximumSpansMm;
+  const spanPermutations = (
+    basis: "home" | "swept",
+    spans: {
+      readonly width: number;
+      readonly height: number;
+      readonly depth: number;
+    },
+  ) => {
+    const values = [
+      [spans.width, spans.height, spans.depth],
+      [spans.width, spans.depth, spans.height],
+      [spans.height, spans.width, spans.depth],
+      [spans.height, spans.depth, spans.width],
+      [spans.depth, spans.width, spans.height],
+      [spans.depth, spans.height, spans.width],
+    ] as const;
+    return values.map((candidate) => ({ basis, values: candidate }));
+  };
   const requestedSpanValues = [
     ir.requestedSize.widthMm,
     ir.requestedSize.heightMm,
     ir.requestedSize.depthMm,
   ] as const;
   const assignmentErrorMm = (candidate: readonly number[]): number =>
-    candidate.reduce(
-      (sum, value, index) =>
-        sum +
-        (requestedSpanValues[index] === null
-          ? 0
-          : Math.abs(value - requestedSpanValues[index]!)),
-      0,
-    );
-  const assignedSpansMm = spanPermutations.reduce((best, candidate) =>
-    assignmentErrorMm(candidate) < assignmentErrorMm(best) ? candidate : best,
+    candidate.reduce((sum, value, index) => {
+      const requested = requestedSpanValues[index];
+      return (
+        sum + (typeof requested === "number" ? Math.abs(value - requested) : 0)
+      );
+    }, 0);
+  const assigned = [
+    ...spanPermutations("home", homeSpansMm),
+    ...spanPermutations("swept", maximumSpansMm),
+  ].reduce((best, candidate) =>
+    assignmentErrorMm(candidate.values) < assignmentErrorMm(best.values)
+      ? candidate
+      : best,
   );
+  const assignedSpansMm = assigned.values;
   const requestedDimensions = [
     ["width", assignedSpansMm[0], ir.requestedSize.widthMm],
     ["height", assignedSpansMm[1], ir.requestedSize.heightMm],
@@ -3939,7 +4071,7 @@ const validateSemantics = (
         category: "semantic",
         stage: "semantics",
         severity: "hard",
-        message: `Maximum ${dimension} span differs from the requested design envelope by more than ${REQUESTED_SIZE_TOLERANCE_MM} mm.`,
+        message: `${assigned.basis === "home" ? "Home-pose" : "Maximum swept"} ${dimension} span differs from the requested design envelope by more than ${REQUESTED_SIZE_TOLERANCE_MM} mm.`,
         actual: measured(actualMm, "mm"),
         expected: measured(requestedMm, "mm"),
         geometryRefs: ir.panels.map((panel) =>

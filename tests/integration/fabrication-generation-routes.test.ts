@@ -231,6 +231,44 @@ describe("POST /api/programs", () => {
     expect(serialized).not.toContain(providerDetail);
   });
 
+  it("never returns a proposal that fails deterministic verification", async () => {
+    mocks.generateProgram.mockResolvedValueOnce(
+      ProgramProposalV1Schema.parse({
+        diversityClaim: "A deliberately invalid mocked proposal.",
+        program: invalidPanelProgram(),
+        provenance: {
+          modelId: "gpt-5.6-sol",
+          modelResponseId: "resp-invalid-program-route",
+          planHash: "c".repeat(64),
+          expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+        },
+      }),
+    );
+
+    const response = await programsPost(
+      authorizedRequest("/api/programs", {
+        intent: fixtureIntent(),
+        candidateOrdinal: 1,
+        usedTopologyIds: [],
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({
+      error: {
+        code: "DESIGN_INVALID",
+        diagnostic: {
+          stage: "compile",
+          kind: "verification",
+          failureIds: ["geometry.simple_panel#panel-base"],
+          modelCall: "attempted",
+        },
+      },
+    });
+    expect(body).not.toHaveProperty("proposal");
+  });
+
   it("reports an incomplete plan with a stable non-private diagnostic", async () => {
     const privateDetail = "private partial plan content";
     mocks.generateProgram.mockRejectedValueOnce(
@@ -458,6 +496,37 @@ describe("POST /api/repair", () => {
         failureIds: ["geometry.simple_panel#panel-base"],
       },
     });
+    expect(mocks.diagnoseRepair).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a patch whose measured verifier failure gets worse", async () => {
+    const program = invalidPanelProgram();
+    mocks.diagnoseRepair.mockResolvedValueOnce(repairPatch(program, 1, 0.1));
+
+    const response = await repairPost(
+      authorizedRequest("/api/repair", {
+        intent: fixtureIntent(),
+        program,
+        candidateId: "candidate-no-progress",
+        repairCycle: 1,
+      }),
+    );
+    const body = await response.json();
+
+    expect(body).toMatchObject({
+      status: "infeasible",
+      program,
+      diagnostic: {
+        stage: "repair",
+        code: "REPAIR_NO_GEOMETRIC_EFFECT",
+        failureIds: [
+          "repair.no_geometric_effect",
+          "geometry.simple_panel#panel-base",
+        ],
+        modelCall: "attempted",
+      },
+    });
+    expect(body.diagnostic.message).toContain("12 mm2 -> 6 mm2");
     expect(mocks.diagnoseRepair).toHaveBeenCalledOnce();
   });
 

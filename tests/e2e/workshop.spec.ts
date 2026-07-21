@@ -94,7 +94,7 @@ const respondJson = (
 
 const programFor = (ordinal: number): FabricationProgramV1 => {
   const base = fixtureProgram();
-  const labels = ["Repaired narrow wing", "Direct fold", "Wide fold"];
+  const labels = ["Verified moving wing", "Direct fold", "Wide fold"];
   const suffixes = ["a", "b", "c"];
   const panels = base.blueprint.panels.map((panel) => {
     if (panel.panelId === "panel-base") {
@@ -112,9 +112,7 @@ const programFor = (ordinal: number): FabricationProgramV1 => {
         ],
       };
     }
-    return ordinal === 1 && panel.panelId === "panel-wing"
-      ? { ...panel, widthMm: 0.5 }
-      : panel;
+    return panel;
   });
   return {
     ...base,
@@ -390,7 +388,7 @@ const installStudioMocks = async (
   return state;
 };
 
-test("runs access, single-design forge, real repair evidence, checkpoint, and exact exports", async ({
+test("runs access, a server-verified single design, checkpoint, and exact exports", async ({
   page,
 }) => {
   const state = await installStudioMocks(page, { requireAccessOnce: true });
@@ -423,28 +421,19 @@ test("runs access, single-design forge, real repair evidence, checkpoint, and ex
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
   ]);
-  expect(state.endpointOrder.slice(0, 7)).toEqual([
+  expect(state.endpointOrder.slice(0, 6)).toEqual([
     "health",
     "intent:access-required",
     "access",
     "intent",
     "programs:1",
     "compile:candidate-1-two-panel-fold-a",
-    "repair:candidate-1-two-panel-fold-a:1",
   ]);
+  expect(state.repairRequests).toEqual([]);
   expect(state.intentPrompts.at(-1)).toBe(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
 
-  await expect(
-    page.getByText("What FoldForge fixed", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("geometry.minimum_feature#panel-wing", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("/blueprint/panels/panel-wing/widthMm", { exact: true }),
-  ).toBeVisible();
   const verifier = page.locator("details").filter({
     hasText: "Technical checks",
   });
@@ -485,7 +474,7 @@ test("runs access, single-design forge, real repair evidence, checkpoint, and ex
 
   await page.getByRole("button", { name: "Cut-and-fold pattern" }).click();
   const patternPreview = page.getByRole("img", {
-    name: /Repaired narrow wing pattern preview/iu,
+    name: /Verified moving wing pattern preview/iu,
   });
   await expect(patternPreview).toBeVisible();
   await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
@@ -551,9 +540,8 @@ test("runs access, single-design forge, real repair evidence, checkpoint, and ex
     expect(request.candidate.program.programId).toBe(
       "program-winged-display-a",
     );
-    expect(request.candidate.provenance.appliedPatchIds).toEqual([
-      "patch-wing-width-1",
-    ]);
+    expect(request.candidate.provenance.appliedPatchIds).toEqual([]);
+    expect(request.candidate.provenance.repairCycle).toBe(0);
     expect(request.candidate.provenance).toMatchObject({
       modelId: "gpt-5.6-sol",
       modelResponseId: "resp-e2e-program-1",

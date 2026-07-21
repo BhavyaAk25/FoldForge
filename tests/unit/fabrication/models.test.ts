@@ -279,7 +279,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
         instructions: expect.stringContaining(
-          "choose the simplest verification-friendly construction",
+          "one to three compact FabricationPlanV2 proposals",
         ),
         reasoning: { effort: "low" },
         max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,

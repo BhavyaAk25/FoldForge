@@ -72,4 +72,64 @@ describe("mocked model to real compile route", () => {
       score: { eligible: true },
     });
   });
+
+  it("selects a later valid plan from one multi-proposal model response", async () => {
+    const intent = cardBoxIntent();
+    const validPlan = fixtureLiveAcceptancePlan();
+    const disconnectedPlan = {
+      ...validPlan,
+      topologyKey: "disconnected-box",
+      joints: [],
+    };
+    const proposal = fabricationProgramProposalFromResponse({
+      response: {
+        id: "resp-multi-proposal-card-box",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            name: "submit_fabrication_plan",
+            arguments: JSON.stringify({
+              proposals: [
+                {
+                  diversityClaim: "Use a disconnected invalid mock topology.",
+                  plan: disconnectedPlan,
+                },
+                {
+                  diversityClaim: "Use one connected cross-net enclosure.",
+                  plan: validPlan,
+                },
+              ],
+            }),
+          },
+        ],
+      },
+      intent,
+      candidateOrdinal: 1,
+      modelId: "gpt-5.6-sol",
+    });
+
+    expect(proposal.diversityClaim).toBe(
+      "Use one connected cross-net enclosure.",
+    );
+    const response = await compilePost(
+      new Request("https://foldforge.example/api/compile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://foldforge.example",
+        },
+        body: JSON.stringify({
+          intent,
+          program: proposal.program,
+          candidateId: "candidate-selected-from-batch",
+        }),
+      }),
+    );
+
+    expect(await response.json()).toMatchObject({
+      status: "passed",
+      report: { valid: true, failures: [] },
+    });
+  });
 });

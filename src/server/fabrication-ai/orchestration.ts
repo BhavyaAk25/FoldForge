@@ -6,6 +6,10 @@ import {
 import { FABRICATION_LIMITS } from "@/core/fabrication/limits";
 import { repairInputHash, applyProgramPatch } from "@/core/fabrication/repair";
 import {
+  evaluateRepairProgress,
+  repairProgressMessage,
+} from "@/core/fabrication/repair-progress";
+import {
   FabricationIntentV1Schema,
   FabricationProgramV1Schema,
 } from "@/core/fabrication/schemas";
@@ -400,7 +404,10 @@ export const runFabricationRepairLoop = async (
         patch.patchId,
       ),
     );
-    const beforeProgramHash = fabricationProgramHash(program);
+    const beforeProgram = program;
+    const beforeIr = evaluation.ir;
+    const beforeReport = evaluation.report;
+    const beforeProgramHash = fabricationProgramHash(beforeProgram);
     const applied = applyProgramPatch(program, patch, evaluation.report);
     if (!applied.ok) {
       return {
@@ -416,6 +423,36 @@ export const runFabricationRepairLoop = async (
     }
     program = applied.value;
     const afterProgramHash = fabricationProgramHash(program);
+    evaluation = evaluate();
+    if (evaluation.error || !evaluation.ir || !evaluation.report) {
+      return {
+        status: "infeasible",
+        candidateId,
+        program: beforeProgram,
+        ir: beforeIr,
+        report: beforeReport,
+        cycles,
+        trace,
+        reason: evaluation.error ?? "Patched program compilation failed.",
+      };
+    }
+    const progress = evaluateRepairProgress(
+      beforeReport,
+      evaluation.report,
+      patch,
+    );
+    if (!progress.ok) {
+      return {
+        status: "infeasible",
+        candidateId,
+        program: beforeProgram,
+        ir: beforeIr,
+        report: beforeReport,
+        cycles,
+        trace,
+        reason: `repair.no_geometric_effect: ${repairProgressMessage(progress)}`,
+      };
+    }
     trace.push(
       traceEvent(
         trace.length,
@@ -426,19 +463,6 @@ export const runFabricationRepairLoop = async (
         afterProgramHash,
       ),
     );
-    evaluation = evaluate();
-    if (evaluation.error || !evaluation.ir || !evaluation.report) {
-      return {
-        status: "infeasible",
-        candidateId,
-        program,
-        ir: evaluation.ir,
-        report: evaluation.report,
-        cycles,
-        trace,
-        reason: evaluation.error ?? "Patched program compilation failed.",
-      };
-    }
     cycles.push({
       cycle,
       inputHash,

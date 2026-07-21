@@ -22,7 +22,11 @@ import type {
   FabricationPlanV2,
   SemanticPrismaticJointV2,
 } from "@/core/fabrication/semantic-plan";
-import type { FabricationIntentV1, Point3Mm } from "@/core/fabrication/types";
+import type {
+  FabricationBehavior,
+  FabricationIntentV1,
+  Point3Mm,
+} from "@/core/fabrication/types";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
 import {
@@ -355,6 +359,140 @@ describe("semantic FabricationPlanV2", () => {
       verifyFabricationIr(resolvedIr.value, "candidate-collision-resolved"),
     ).toMatchObject({ valid: true, failures: [] });
   });
+
+  it.each(["flap", "open_close"] satisfies readonly FabricationBehavior[])(
+    "runs home-pose collision resolution before full %s motion verification",
+    (behavior) => {
+      const source = fixtureSemanticPlan();
+      const basePanel = source.panels[0]!;
+      const plan: FabricationPlanV2 = {
+        ...source,
+        topologyKey: `${behavior}-colliding-wing`,
+        panels: [
+          ...source.panels,
+          {
+            ...basePanel,
+            key: "wall",
+            bodyKey: "wall",
+            label: "Fixed wall",
+            widthMm: 20,
+            heightMm: 60,
+          },
+        ],
+        bodies: [
+          ...source.bodies,
+          {
+            key: "wall",
+            label: "Fixed wall",
+            panelKeys: ["wall"],
+            grounded: false,
+          },
+        ],
+        joints: [
+          ...source.joints,
+          {
+            key: "wall",
+            kind: "fold",
+            parentBodyKey: "base",
+            childBodyKey: "wall",
+            parentAttachment: { panelKey: "base", edgeIndex: 3 },
+            childAttachment: { panelKey: "wall", edgeIndex: 1 },
+            foldDirection: "valley",
+            homeAngleDeg: 180,
+            minimumAngleDeg: 180,
+            maximumAngleDeg: 180,
+          },
+        ],
+      };
+      const intent = { ...fixtureIntent(), behavior };
+
+      const unresolved = expandSemanticFabricationPlan(intent, plan, 1);
+      expect(unresolved.ok).toBe(true);
+      if (!unresolved.ok) return;
+      const unresolvedIr = compileFabricationProgram(intent, unresolved.value);
+      expect(unresolvedIr.ok).toBe(true);
+      if (!unresolvedIr.ok) return;
+      expect(
+        verifyFabricationIr(
+          unresolvedIr.value,
+          `candidate-${behavior}-unresolved`,
+        ).failures,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            failureId: "collision.minimum_clearance",
+          }),
+        ]),
+      );
+
+      const resolved = expandResolvedSemanticFabricationPlan(intent, plan, 1);
+      expect(resolved.ok).toBe(true);
+      if (!resolved.ok) return;
+      const resolvedIr = compileFabricationProgram(intent, resolved.value);
+      expect(resolvedIr.ok).toBe(true);
+      if (!resolvedIr.ok) return;
+      expect(
+        verifyFabricationIr(resolvedIr.value, `candidate-${behavior}-resolved`),
+      ).toMatchObject({ valid: true, failures: [] });
+    },
+    20_000,
+  );
+
+  it("verifies a moving-lid box while preserving fixed wall seams", () => {
+    const source = fixtureLiveAcceptancePlan();
+    const plan: FabricationPlanV2 = {
+      ...source,
+      topologyKey: "moving-lid-box",
+      panels: source.panels.map((panel) =>
+        panel.key === "left" || panel.key === "right"
+          ? { ...panel, widthMm: 24 }
+          : panel,
+      ),
+      joints: source.joints.map((joint) =>
+        joint.key === "lid" && joint.kind === "fold"
+          ? {
+              ...joint,
+              minimumAngleDeg: 0,
+              maximumAngleDeg: 90,
+            }
+          : joint,
+      ),
+      driver: {
+        key: "lid",
+        jointKey: "lid",
+        label: "Open the lid",
+        control: "fold",
+        minimumValue: 0,
+        maximumValue: 90,
+        homeValue: 90,
+        direction: 1,
+      },
+      outputs: [
+        {
+          key: "lid",
+          jointKey: "lid",
+          bodyKey: "lid",
+          label: "Lid angle",
+          minimumValue: 0,
+          maximumValue: 90,
+          direction: 1,
+        },
+      ],
+    };
+    const intent = { ...liveBoxIntent(), behavior: "open_close" as const };
+
+    const resolved = expandResolvedSemanticFabricationPlan(intent, plan, 1);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const compiled = compileFabricationProgram(intent, resolved.value);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const report = verifyFabricationIr(
+      compiled.value,
+      "candidate-moving-lid-box",
+    );
+    expect(report).toMatchObject({ valid: true, failures: [] });
+  }, 20_000);
 
   it("composes a base-to-wall-to-lid chain in the parent coordinate frame", () => {
     const expanded = expandSemanticFabricationPlan(

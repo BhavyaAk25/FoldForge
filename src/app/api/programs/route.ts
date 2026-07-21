@@ -1,8 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { compileFabricationProgram } from "@/core/fabrication/compiler";
+import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
-import { modelFailureDiagnostic } from "@/server/api/forge-diagnostic";
+import {
+  compilationFailureDiagnostic,
+  modelFailureDiagnostic,
+  verificationFailureDiagnostic,
+} from "@/server/api/forge-diagnostic";
 import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
 import { apiError } from "@/server/api/response";
 import {
@@ -72,6 +78,39 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
           );
         const proposal = ProgramProposalV1Schema.safeParse(proposed);
         if (!proposal.success) return invalidModelResponse();
+        const compiled = compileFabricationProgram(
+          parsedRequest.data.intent,
+          proposal.data.program,
+        );
+        if (!compiled.ok) {
+          const diagnostic = compilationFailureDiagnostic(compiled.error);
+          return apiError(
+            diagnostic.code,
+            diagnostic.message,
+            502,
+            [],
+            diagnostic,
+          );
+        }
+        const report = verifyFabricationIr(
+          compiled.value,
+          `program-boundary-${parsedRequest.data.candidateOrdinal}`,
+        );
+        if (!report.valid) {
+          const diagnostic = verificationFailureDiagnostic({
+            stage: "compile",
+            report,
+            code: "DESIGN_INVALID",
+            modelCall: "attempted",
+          });
+          return apiError(
+            diagnostic.code,
+            diagnostic.message,
+            502,
+            [],
+            diagnostic,
+          );
+        }
         return NextResponse.json({
           proposal: proposal.data,
           programStructureFingerprint: programStructureFingerprint(

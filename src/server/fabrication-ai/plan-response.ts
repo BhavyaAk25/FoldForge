@@ -5,11 +5,20 @@ import {
   FABRICATION_PLAN_EXPANDER_VERSION,
 } from "@/core/fabrication/planning";
 import { expandResolvedSemanticFabricationPlan } from "@/core/fabrication/semantic-plan-expansion";
-import type { FabricationIntentV1 } from "@/core/fabrication/types";
+import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
+import type { FabricationPlanV2 } from "@/core/fabrication/semantic-plan";
+import type {
+  FabricationIntentV1,
+  FabricationPlanV1,
+  FabricationProgramV1,
+  VerificationReportV2,
+} from "@/core/fabrication/types";
+import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { sha256Hex } from "@/core/sha256";
 
 import {
   FabricationPlanProposalV1Schema,
+  FabricationPlanProposalBatchV2Schema,
   FabricationPlanProposalV2Schema,
   ProgramProposalV1Schema,
   type ProgramProposalV1,
@@ -30,6 +39,10 @@ export interface FabricationProgramFailureDetail {
   readonly code: string;
   readonly path: readonly string[];
   readonly message?: string;
+  readonly behavior?: FabricationIntentV1["behavior"];
+  readonly planHash?: string;
+  readonly topologyId?: string;
+  readonly resolverEvaluationCount?: number;
   readonly limit?: {
     readonly name: string;
     readonly actual: number;
@@ -102,9 +115,98 @@ const expansionFailureDetail = (
     ...(typeof record.message === "string"
       ? { message: record.message.slice(0, 500) }
       : {}),
+    ...(typeof record.resolverEvaluationCount === "number"
+      ? { resolverEvaluationCount: record.resolverEvaluationCount }
+      : {}),
     ...(limit ? { limit } : {}),
   };
 };
+
+type ParsedPlanProposal =
+  | {
+      readonly diversityClaim: string;
+      readonly plan: FabricationPlanV1;
+      readonly version: "1";
+    }
+  | {
+      readonly diversityClaim: string;
+      readonly plan: FabricationPlanV2;
+      readonly version: "2";
+    };
+
+const parsePlanProposals = (
+  rawProposal: unknown,
+): readonly ParsedPlanProposal[] => {
+  const batch = FabricationPlanProposalBatchV2Schema.safeParse(rawProposal);
+  if (batch.success) {
+    return batch.data.proposals.map((proposal) => ({
+      ...proposal,
+      version: "2" as const,
+    }));
+  }
+  const semantic = FabricationPlanProposalV2Schema.safeParse(rawProposal);
+  if (semantic.success) {
+    return [{ ...semantic.data, version: "2" }];
+  }
+  const legacy = FabricationPlanProposalV1Schema.safeParse(rawProposal);
+  if (legacy.success) {
+    return [{ ...legacy.data, version: "1" }];
+  }
+  const issue = batch.error.issues[0] ?? semantic.error.issues[0];
+  throw new FabricationProgramModelError(
+    "invalid_plan",
+    "GPT-5.6 Sol returned malformed fabrication plan arguments.",
+    {
+      phase: "schema",
+      code: issue?.code ?? "unknown",
+      path: issue?.path.map(String).slice(0, 12) ?? [],
+    },
+  );
+};
+
+const withPlanContext = (
+  detail: FabricationProgramFailureDetail,
+  intent: FabricationIntentV1,
+  plan: FabricationPlanV1 | FabricationPlanV2,
+): FabricationProgramFailureDetail => {
+  const planHash = sha256Hex(canonicalSerialize(plan));
+  const topologyId =
+    plan.version === "2" ? `topology-${plan.topologyKey}` : plan.topologyId;
+  const context = `Behavior ${intent.behavior}; topology ${topologyId}; plan ${planHash.slice(0, 12)}.`;
+  return {
+    ...detail,
+    behavior: intent.behavior,
+    planHash,
+    topologyId,
+    ...(detail.message
+      ? { message: `${context} ${detail.message}`.slice(0, 500) }
+      : {}),
+  };
+};
+
+const verificationFailureDetail = (
+  report: VerificationReportV2,
+): FabricationProgramFailureDetail => {
+  const primary =
+    report.failures.find((failure) => failure.severity === "hard") ??
+    report.failures[0];
+  return {
+    phase: "expansion",
+    code: primary?.failureId ?? "verification_hard_failure",
+    path:
+      primary?.geometryRefs.map((reference) => reference.id).slice(0, 12) ?? [],
+    message:
+      primary?.message ??
+      "The generated program failed deterministic verification.",
+  };
+};
+
+interface ValidatedProposal {
+  readonly proposal: ParsedPlanProposal;
+  readonly program: FabricationProgramV1;
+  readonly planHash: string;
+  readonly totalScore: number;
+}
 
 export const fabricationProgramProposalFromResponse = (input: {
   readonly response: CompletedFabricationPlanResponse;
@@ -151,66 +253,82 @@ export const fabricationProgramProposalFromResponse = (input: {
       { phase: "decoding", code: "invalid_json", path: [] },
     );
   }
-  const semanticProposal =
-    FabricationPlanProposalV2Schema.safeParse(rawProposal);
-  const legacyProposal = semanticProposal.success
-    ? null
-    : FabricationPlanProposalV1Schema.safeParse(rawProposal);
-  const parsed = (() => {
-    if (semanticProposal.success) {
-      return {
-        proposal: semanticProposal.data,
-        expanded: expandResolvedSemanticFabricationPlan(
-          input.intent,
-          semanticProposal.data.plan,
-          input.candidateOrdinal,
-        ),
-      };
+  const proposals = parsePlanProposals(rawProposal);
+  const valid: ValidatedProposal[] = [];
+  let bestFailure: FabricationProgramFailureDetail | null = null;
+  for (const [proposalIndex, proposal] of proposals.entries()) {
+    const expanded =
+      proposal.version === "2"
+        ? expandResolvedSemanticFabricationPlan(
+            input.intent,
+            proposal.plan,
+            input.candidateOrdinal,
+          )
+        : expandFabricationPlan(
+            input.intent,
+            proposal.plan,
+            input.candidateOrdinal,
+          );
+    if (!expanded.ok) {
+      bestFailure = withPlanContext(
+        expansionFailureDetail(expanded.error),
+        input.intent,
+        proposal.plan,
+      );
+      continue;
     }
-    if (legacyProposal?.success) {
-      return {
-        proposal: legacyProposal.data,
-        expanded: expandFabricationPlan(
-          input.intent,
-          legacyProposal.data.plan,
-          input.candidateOrdinal,
-        ),
-      };
+    const compiled = compileFabricationProgram(input.intent, expanded.value);
+    if (!compiled.ok) {
+      bestFailure = withPlanContext(
+        expansionFailureDetail(compiled.error),
+        input.intent,
+        proposal.plan,
+      );
+      continue;
     }
-    const issue = semanticProposal.error.issues[0];
-    throw new FabricationProgramModelError(
-      "invalid_plan",
-      "GPT-5.6 Sol returned malformed fabrication plan arguments.",
-      {
-        phase: "schema",
-        code: issue?.code ?? "unknown",
-        path: issue?.path.map(String).slice(0, 12) ?? [],
-      },
+    const report = verifyFabricationIr(
+      compiled.value,
+      `candidate-program-selection-${input.candidateOrdinal}-${proposalIndex + 1}`,
     );
-  })();
-  const { proposal, expanded } = parsed;
-  if (!expanded.ok) {
-    throw new FabricationProgramModelError(
-      "invalid_plan",
-      "GPT-5.6 Sol returned an invalid fabrication plan.",
-      expansionFailureDetail(expanded.error),
+    if (!report.valid) {
+      bestFailure = withPlanContext(
+        verificationFailureDetail(report),
+        input.intent,
+        proposal.plan,
+      );
+      continue;
+    }
+    const score = scoreFabricationCandidate(
+      compiled.value,
+      report,
+      input.intent,
     );
+    valid.push({
+      proposal,
+      program: expanded.value,
+      planHash: sha256Hex(canonicalSerialize(proposal.plan)),
+      totalScore: score.totalScore ?? 0,
+    });
   }
-  const compiled = compileFabricationProgram(input.intent, expanded.value);
-  if (!compiled.ok) {
+  const selected = valid.toSorted(
+    (left, right) =>
+      right.totalScore - left.totalScore ||
+      left.planHash.localeCompare(right.planHash),
+  )[0];
+  if (!selected) {
     throw new FabricationProgramModelError(
       "invalid_plan",
-      "GPT-5.6 Sol returned a fabrication plan that did not compile.",
-      expansionFailureDetail(compiled.error),
+      "GPT-5.6 Sol returned no fabrication plan that passed deterministic verification.",
+      bestFailure,
     );
   }
   return ProgramProposalV1Schema.parse({
-    diversityClaim: proposal.diversityClaim,
-    program: expanded.value,
+    diversityClaim: selected.proposal.diversityClaim,
+    program: selected.program,
     provenance: {
       modelId: input.modelId,
       modelResponseId: input.response.id,
-      planHash: sha256Hex(canonicalSerialize(proposal.plan)),
+      planHash: selected.planHash,
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
     },
   });

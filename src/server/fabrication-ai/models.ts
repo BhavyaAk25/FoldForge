@@ -28,7 +28,7 @@ import type {
 } from "@/server/ai/paid-eval-budget";
 
 import {
-  FabricationPlanProposalV2Schema,
+  FabricationPlanProposalBatchV2Schema,
   FabricationNarrativeV1Schema,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
@@ -583,8 +583,8 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
         zodResponsesFunction({
           name: "submit_fabrication_plan",
           description:
-            "Submit one compact bounded plan for deterministic expansion.",
-          parameters: FabricationPlanProposalV2Schema,
+            "Submit one to three compact bounded plans for deterministic selection.",
+          parameters: FabricationPlanProposalBatchV2Schema,
         }),
       ],
       tool_choice: { type: "function", name: "submit_fabrication_plan" },

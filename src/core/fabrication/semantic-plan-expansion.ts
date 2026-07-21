@@ -1631,6 +1631,16 @@ export interface StructuralCollisionError {
   readonly panelIds: readonly [string, string];
   readonly actualClearanceMm: number;
   readonly requiredClearanceMm: number;
+  readonly resolverEvaluationCount: number;
+  readonly report: VerificationReportV2;
+  readonly message: string;
+}
+
+export interface HardVerificationFailureError {
+  readonly kind: "hard_verification_failure";
+  readonly code: string;
+  readonly path: readonly string[];
+  readonly resolverEvaluationCount: number;
   readonly report: VerificationReportV2;
   readonly message: string;
 }
@@ -1639,7 +1649,8 @@ export type ResolvedSemanticPlanExpansionError =
   | SemanticPlanExpansionError
   | FabricationPlanExpansionError
   | CompilationError
-  | StructuralCollisionError;
+  | StructuralCollisionError
+  | HardVerificationFailureError;
 
 export type ResolvedSemanticPlanExpansionResult =
   | { readonly ok: true; readonly value: FabricationProgramV1 }
@@ -1735,11 +1746,17 @@ const withDirectionConsistentStaticFolds = (
     const magnitudeDeg = Math.abs(joint.homeAngleDeg);
     const homeAngleDeg =
       joint.foldDirection === "valley" ? magnitudeDeg : -magnitudeDeg;
+    const isFixed =
+      Math.abs(joint.maximumAngleDeg - joint.minimumAngleDeg) <= 1e-9;
     return {
       ...joint,
       homeAngleDeg,
-      minimumAngleDeg: Math.min(joint.minimumAngleDeg, homeAngleDeg),
-      maximumAngleDeg: Math.max(joint.maximumAngleDeg, homeAngleDeg),
+      minimumAngleDeg: isFixed
+        ? homeAngleDeg
+        : Math.min(joint.minimumAngleDeg, homeAngleDeg),
+      maximumAngleDeg: isFixed
+        ? homeAngleDeg
+        : Math.max(joint.maximumAngleDeg, homeAngleDeg),
     };
   }),
 });
@@ -1924,6 +1941,10 @@ const staticJointPlanVariants = (
               if (index !== jointIndex || candidate.kind === "prismatic") {
                 return candidate;
               }
+              const isFixed =
+                Math.abs(
+                  candidate.maximumAngleDeg - candidate.minimumAngleDeg,
+                ) <= 1e-9;
               const updated = {
                 ...candidate,
                 parentAttachment: {
@@ -1935,14 +1956,12 @@ const staticJointPlanVariants = (
                   edgeIndex: childEdgeIndex,
                 },
                 homeAngleDeg,
-                minimumAngleDeg: Math.min(
-                  candidate.minimumAngleDeg,
-                  homeAngleDeg,
-                ),
-                maximumAngleDeg: Math.max(
-                  candidate.maximumAngleDeg,
-                  homeAngleDeg,
-                ),
+                minimumAngleDeg: isFixed
+                  ? homeAngleDeg
+                  : Math.min(candidate.minimumAngleDeg, homeAngleDeg),
+                maximumAngleDeg: isFixed
+                  ? homeAngleDeg
+                  : Math.max(candidate.maximumAngleDeg, homeAngleDeg),
               };
               return updated.kind === "fold"
                 ? {
@@ -2031,6 +2050,7 @@ const connectorPlanVariants = (
 
 const structuralCollisionError = (
   evaluation: ResolvedPlanEvaluation,
+  resolverEvaluationCount: number,
 ): StructuralCollisionError => {
   const failure = collisionFailure(evaluation.report);
   const panelIds = failure?.geometryRefs
@@ -2049,8 +2069,27 @@ const structuralCollisionError = (
     panelIds: [firstPanelId, secondPanelId],
     actualClearanceMm,
     requiredClearanceMm,
+    resolverEvaluationCount,
     report: evaluation.report,
-    message: `${failure?.message ?? "The generated panels collide."} The model-selected topology could not be assembled without overlap using bounded attachment, fold-orientation, and home-angle choices.`,
+    message: `${failure?.message ?? "The generated panels collide."} The model-selected topology could not be assembled without overlap using bounded attachment, fold-orientation, and home-angle choices. Resolver evaluations: ${resolverEvaluationCount}.`,
+  };
+};
+
+const hardVerificationFailureError = (
+  evaluation: ResolvedPlanEvaluation,
+  resolverEvaluationCount: number,
+): HardVerificationFailureError => {
+  const failure =
+    evaluation.report.failures.find(
+      (candidate) => candidate.severity === "hard",
+    ) ?? evaluation.report.failures[0];
+  return {
+    kind: "hard_verification_failure",
+    code: failure?.failureId ?? "verification.hard_failure",
+    path: failure?.geometryRefs.map((reference) => reference.id) ?? [],
+    resolverEvaluationCount,
+    report: evaluation.report,
+    message: `${failure?.message ?? "The generated program failed deterministic verification."} Resolver evaluations: ${resolverEvaluationCount}.`,
   };
 };
 
@@ -2094,8 +2133,8 @@ const selectCollisionSearchBeam = (
 };
 
 /**
- * Sol chooses semantic topology and local attachments. For a static fold tree,
- * edge numbering, fold orientation, and a fixed orthogonal home pose are
+ * Sol chooses semantic topology and local attachments. For a fold tree, edge
+ * numbering, fold orientation, and an orthogonal home pose are
  * discrete authoring choices that code can search inside a small budget. The
  * search follows the joint path between the measured colliding panels and
  * never changes panel dimensions, bodies, topology, or requested semantics.
@@ -2140,12 +2179,14 @@ export const expandResolvedSemanticFabricationPlan = (
 
   const initialEvaluation = evaluate(plan.data);
   if (!initialEvaluation.ok) return initialEvaluation;
-  if (
-    initialEvaluation.value.report.valid ||
-    intent.data.behavior !== "static" ||
-    !isStaticPoseFailure(initialEvaluation.value.report)
-  ) {
+  if (initialEvaluation.value.report.valid) {
     return { ok: true, value: initialEvaluation.value.program };
+  }
+  if (!isStaticPoseFailure(initialEvaluation.value.report)) {
+    return {
+      ok: false,
+      error: hardVerificationFailureError(initialEvaluation.value, 1),
+    };
   }
 
   let evaluationCount = 1;
@@ -2206,6 +2247,9 @@ export const expandResolvedSemanticFabricationPlan = (
   }
 
   return collisionFailure(best.report)
-    ? { ok: false, error: structuralCollisionError(best) }
-    : { ok: true, value: best.program };
+    ? { ok: false, error: structuralCollisionError(best, evaluationCount) }
+    : {
+        ok: false,
+        error: hardVerificationFailureError(best, evaluationCount),
+      };
 };
