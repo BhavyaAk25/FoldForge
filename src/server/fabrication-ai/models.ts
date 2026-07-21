@@ -28,7 +28,7 @@ import type {
 } from "@/server/ai/paid-eval-budget";
 
 import {
-  FabricationPlanProposalBatchV3Schema,
+  FabricationDesignSpecProposalV3Schema,
   FabricationNarrativeV1Schema,
   type FabricationNarrativeV1,
   type ProgramProposalV1,
@@ -581,13 +581,16 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
       reasoning: { effort: "low" },
       tools: [
         zodResponsesFunction({
-          name: "submit_fabrication_plan",
+          name: "submit_fabrication_design_spec",
           description:
-            "Submit one complete bounded plan and up to two compact structural alternatives for deterministic selection.",
-          parameters: FabricationPlanProposalBatchV3Schema,
+            "Submit semantic parts, relationships, ranges, constraints, motion intent, and landmarks for deterministic fabrication synthesis.",
+          parameters: FabricationDesignSpecProposalV3Schema,
         }),
       ],
-      tool_choice: { type: "function", name: "submit_fabrication_plan" },
+      tool_choice: {
+        type: "function",
+        name: "submit_fabrication_design_spec",
+      },
       max_output_tokens: maxOutputTokens,
       background: true,
       parallel_tool_calls: false,

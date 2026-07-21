@@ -9,8 +9,8 @@
 ## What it does
 
 1. You describe one bounded flat-sheet object, including its size, material, and any required motion.
-2. GPT-5.6 Sol converts that request into a strict intent and one compact fabrication plan.
-3. Pure TypeScript expands the plan into exact panels, folds, joints, tabs, slots, and motion.
+2. GPT-5.6 Sol converts that request into a strict intent and a compact `FabricationDesignSpecV3`: named parts, dimension ranges, relationships, motion intent, priorities, and tolerances.
+3. A generic deterministic synthesizer chooses the body graph, grounded root, attachment edges, fold directions, connector locations, packing, and transforms. It compiles and verifies bounded alternatives before returning one design.
 4. The verifier checks geometry, sheet fit, clearances, assembly, motion, collisions, and requested dimensions.
 5. A passing design appears in the synchronized 3D and cut-pattern views. You can download the same design as SVG, DXF, GLB, and canonical JSON. FOLD appears only when it can represent the design without losing meaning.
 
@@ -31,24 +31,24 @@ FoldForge is not text-to-image or unrestricted text-to-CAD. Its bounded grammar 
 
 ## USER, AI, and CODE
 
-| Owner  | Owns                                                                                                                | Does not own                                                                 |
-| ------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `USER` | Object, dimensions, material, motion, and fabrication constraints                                                   | —                                                                            |
-| `AI`   | Strict intent, one compact semantic plan, a report-grounded diagnosis, and bounded parameter patches                | Validity, compiled coordinates, ranking, export bytes, or verifier overrides |
-| `CODE` | Plan expansion, units, geometry, kinematics, verification, repair application, scoring, hashes, previews, and files | Inventing missing essential measurements                                     |
+| Owner  | Owns                                                                                                                      | Does not own                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `USER` | Object, dimensions, material, motion, and fabrication constraints                                                         | —                                                                                                       |
+| `AI`   | Strict intent and a topology-free semantic design specification: parts, relationships, ranges, priorities, and tolerances | Topology, roots, attachment edges, fold signs, connector geometry, packing, validity, ranking, or files |
+| `CODE` | Constraint synthesis, units, topology, geometry, kinematics, verification, scoring, hashes, previews, and files           | Inventing missing essential measurements                                                                |
 
 ```mermaid
 flowchart LR
     U["USER: brief"] --> I["AI: strict intent"]
-    I --> P["AI: one compact plan"]
-    P --> C["CODE: expand and compile"]
+    I --> P["AI: topology-free design spec"]
+    P --> C["CODE: synthesize, compile, verify alternatives"]
     C --> V["CODE: verify"]
     V -->|"measured failure"| R["AI: typed patch"]
     R --> C
     V -->|"all hard checks pass"| X["CODE: preview and exact files"]
 ```
 
-All model responses pass versioned Zod schemas. OpenAI code stays server-only. Planning uses one strict function tool, bounded output, no generation retry, and background response polling within the deployed route budget. The model returns semantic shapes and relationships; code derives identifiers, transforms, packing, connector details, and assembly order without hidden object templates.
+All model responses pass versioned Zod schemas. OpenAI code stays server-only. Planning uses one strict function tool, bounded output, no generation retry, and background response polling within the deployed route budget. The V3 tool cannot express parent/child topology, a root, edge indexes, fold signs, connector dimensions, packing, or transforms. Code generates connected acyclic graphs and bounded geometric realizations from semantic relationships, records deterministic nogoods, and returns only a fully verified result. There are no hidden object templates.
 
 ## What code checks
 
@@ -85,8 +85,8 @@ Independent regression checks parse the showcase DXFs with `dxf-parser`, validat
 
 The current branch passes the no-cost release gates:
 
-- **457/457** Vitest tests;
-- coverage: **96.95% statements, 90.36% branches, 97.79% functions, 97.97% lines**;
+- **558/558** Vitest tests;
+- coverage: **96.39% statements, 90.02% branches, 97.74% functions, 97.75% lines**;
 - **120/120** valid compiler controls accepted and **0/560** hard-invalid mutations accepted;
 - **50 programs × 10 runs** with zero canonical differences;
 - **40/40** seeded failures repaired, **20/20** no-progress cases reported infeasible, and **0/120** hostile patches accepted;
@@ -124,7 +124,7 @@ Codex accelerated the implementation by:
 3. generating mutation, property, contract, browser, accessibility, consumer, and ablation tests; and
 4. running independent geometry, AI-contract, frontend, security, export, and skeptical-judge reviews and integrating serious findings.
 
-Runtime GPT-5.6 Sol has a different role: it interprets an unseen brief, authors one compact fabrication plan, and proposes bounded repairs for real verifier failures. Deterministic code owns the final geometry and files.
+Runtime GPT-5.6 Sol has a different role: it interprets an unseen brief and authors a topology-free semantic design specification. The deterministic synthesizer owns topology and all fabrication choices, and the compiler and verifier own the final geometry and files.
 
 This disclosure follows the [official rules](https://openai.devpost.com/rules), which require the README to distinguish Codex acceleration, builder decisions, and GPT-5.6 use. The [submission guidance](https://openai.devpost.com/updates/45282-openai-build-week-submissions-are-open-plugin-launch) also requires setup/testing instructions and a public narrated demo under three minutes. The primary build task's `/feedback` session ID is supplied through Devpost.
 
@@ -146,8 +146,8 @@ It refuses smooth solid modeling, deformable surfaces, electronics, motors, forc
 ## Architecture
 
 ```text
-src/core/fabrication/          pure schemas, semantic-plan expansion, compiler,
-                               geometry, motion, verification, repair, and exporters
+src/core/fabrication/          pure design-spec schema, bounded constraint synthesis,
+                               compiler, geometry, motion, verification, and exporters
 src/server/fabrication-ai/     Responses API prompts, contracts, model adapters,
                                background polling, and bounded orchestration
 src/server/api/                access, origin/body/quota/concurrency policy, diagnostics

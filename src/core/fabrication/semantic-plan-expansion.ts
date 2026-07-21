@@ -109,7 +109,7 @@ const relationshipConnectorIds = (relationshipKey: string) => ({
   slot: `connector-${relationshipKey}-slot`,
 });
 
-const outlineVertices = (
+export const semanticPanelOutlineVertices = (
   outline: SemanticPanelOutlineV2,
 ): readonly { readonly u: number; readonly v: number }[] => {
   switch (outline.kind) {
@@ -199,7 +199,7 @@ interface Edge2Mm {
 const panelGeometry = (
   panel: SemanticPanelV2,
 ): SemanticPlanMappingResult<PanelGeometry> => {
-  const contour = { vertices: outlineVertices(panel.outline) };
+  const contour = { vertices: semanticPanelOutlineVertices(panel.outline) };
   const localVertices = contour.vertices.map((point) => ({
     xMm: point.u * panel.widthMm,
     yMm: point.v * panel.heightMm,
@@ -2420,8 +2420,10 @@ const connectorPlanVariants = (
       relationship.slotAttachment.edgeIndex,
       relationship.spanMm + relationship.clearanceMm + 0.1 + LAYOUT_GAP_MM,
     );
-    const tabEdgeCount = outlineVertices(tabPanel.outline).length;
-    const slotEdgeCount = outlineVertices(slotPanel.outline).length;
+    const tabEdgeCount = semanticPanelOutlineVertices(tabPanel.outline).length;
+    const slotEdgeCount = semanticPanelOutlineVertices(
+      slotPanel.outline,
+    ).length;
     const oppositeTabEdgeIndex =
       (relationship.tabAttachment.edgeIndex + Math.floor(tabEdgeCount / 2)) %
       tabEdgeCount;

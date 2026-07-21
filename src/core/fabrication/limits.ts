@@ -28,6 +28,7 @@ export const FABRICATION_KINEMATIC_LIMITS = {
 
 export const FABRICATION_CONTRACT_VERSIONS = {
   intent: "1",
+  designSpec: "3",
   plan: "1",
   program: "1",
   ir: "1",

@@ -172,6 +172,35 @@ const dxfEntityCoordinates = (
 };
 
 describe("canonical multi-sheet pattern layout", () => {
+  it("omits malformed panel and path references to unknown sheets", () => {
+    const layout = createFabricationPatternLayout({
+      ...twoSheetIr,
+      panels: [
+        ...twoSheetIr.panels,
+        {
+          ...twoSheetIr.panels[0]!,
+          panelId: "panel-orphan",
+          sheetId: "missing",
+        },
+      ],
+      paths: [
+        ...twoSheetIr.paths,
+        {
+          ...twoSheetIr.paths[0]!,
+          pathId: "path-orphan",
+          sheetId: "missing",
+        },
+      ],
+    });
+
+    expect(layout.panels.map((entry) => entry.panel.panelId)).not.toContain(
+      "panel-orphan",
+    );
+    expect(layout.paths.map((entry) => entry.path.pathId)).not.toContain(
+      "path-orphan",
+    );
+  });
+
   it("places preview panels and paths in one non-overlapping sheet space", () => {
     const preview = createFabricationPatternLayout(twoSheetIr);
 

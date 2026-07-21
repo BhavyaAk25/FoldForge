@@ -3,16 +3,20 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
 import { canonicalSerialize } from "../../src/core/canonical";
+import {
+  expandFabricationPlan,
+  FABRICATION_PLAN_EXPANDER_VERSION,
+} from "../../src/core/fabrication/planning";
 import { sha256Hex } from "../../src/core/sha256";
 import type { FabricationIntentV1 } from "../../src/core/fabrication/types";
 import type { PaidEvalBudgetSnapshot } from "../../src/server/ai/paid-eval-budget";
 import {
   FabricationPlanProposalV1Schema,
+  ProgramProposalV1Schema,
   type FabricationPlanProposalV1,
   type ProgramProposalV1,
 } from "../../src/server/fabrication-ai/contracts";
 import { FOLDFORGE_MODEL } from "../../src/server/fabrication-ai/models";
-import { fabricationProgramProposalFromResponse } from "../../src/server/fabrication-ai/plan-response";
 
 const ResponseIdSchema = z.string().regex(/^resp_[A-Za-z0-9_-]+$/u);
 const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -272,21 +276,25 @@ export const expandRecoveredProgramPlans = (input: {
   readonly intent: FabricationIntentV1;
 }): readonly ProgramProposalV1[] =>
   input.recoveredPlans.entries.map((entry, index) => {
-    const proposal = fabricationProgramProposalFromResponse({
-      response: {
-        id: entry.responseId,
-        status: "completed",
-        output: [
-          {
-            type: "function_call",
-            name: "submit_fabrication_plan",
-            arguments: JSON.stringify(entry.proposal),
-          },
-        ],
+    const expanded = expandFabricationPlan(
+      input.intent,
+      entry.proposal.plan,
+      index + 1,
+    );
+    if (!expanded.ok) {
+      throw new Error(
+        `Recovered plan ${entry.responseId} no longer expands deterministically.`,
+      );
+    }
+    const proposal = ProgramProposalV1Schema.parse({
+      diversityClaim: entry.proposal.diversityClaim,
+      program: expanded.value,
+      provenance: {
+        modelId: FOLDFORGE_MODEL,
+        modelResponseId: entry.responseId,
+        planHash: entry.planHash,
+        expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
       },
-      intent: input.intent,
-      candidateOrdinal: index + 1,
-      modelId: FOLDFORGE_MODEL,
     });
     if (proposal.provenance.planHash !== entry.planHash) {
       throw new Error(

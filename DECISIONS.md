@@ -72,6 +72,12 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 **Accepted after the final paid truncation.** The full canonical program duplicated intent fields and required verbose deterministic bookkeeping. Sol now authors only the bounded geometry and mechanism choices in `FabricationPlanV1`. Pure code selects referenced intent stock, preserves body transforms and semantic bindings, creates stable program provenance and assembly operations, and validates the expanded `FabricationProgramV1`. The authenticated API returns the provider model ID and response ID plus a canonical plan hash and expander version; candidate provenance binds those fields into the exact JSON/export record while the visible trace keeps plan authorship under `AI` and expansion under `CODE`. The expander does not inspect prompt text or select prepared examples. This reduces output size without hiding a template or weakening the canonical verifier. The mitigation is offline-tested and remains live-unproven.
 
+## D-17 — Sol specifies semantics; code synthesizes topology
+
+**Accepted, superseding D-16 at the production model boundary.** Repeated live failures showed that asking a stochastic model to choose a nearly complete panel graph, grounded root, exact attachment edges, fold signs, and connector edges produced new unverified topologies that bounded local repair could not reliably rescue. Sol now returns one strict `FabricationDesignSpecV3` containing only semantic parts, dimension ranges, required relationships and motion, material and sheet constraints, landmarks, priorities, and tolerances.
+
+Pure code owns graph generation, root selection, equal-length attachment matching, fold orientation, connector geometry, packing, transforms, compilation, full static or 201-state motion verification, nogoods, scoring, and final selection. The bounded search distinguishes proven infeasibility from work-budget exhaustion and returns only a fully verified program. `FabricationPlanV2` remains an internal synthesis representation and historical replay contract; it is no longer accepted from the production model tool. No object-specific constructor or saved valid design is used.
+
 ## Rejected alternatives
 
 - **Rename the existing stand as a generalized compiler:** dishonest and unsupported by the source or evals.
