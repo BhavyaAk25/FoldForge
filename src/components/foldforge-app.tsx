@@ -19,7 +19,6 @@ import {
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
-import { repairInputHash } from "@/core/fabrication/repair";
 import type {
   CandidateV2,
   ExportFormat,
@@ -33,7 +32,6 @@ import {
   HealthApiResponseSchema,
   IntentApiResponseSchema,
   ProgramsApiResponseSchema,
-  RepairApiResponseSchema,
   StudioCheckpointSchema,
   type FinalizeApiResponse,
   type HealthApiResponse,
@@ -47,10 +45,7 @@ import {
   getJson,
   postJson,
 } from "@/lib/client-api";
-import {
-  forgeDiagnostic,
-  type ForgeDiagnosticV1,
-} from "@/lib/forge-diagnostics";
+import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import {
   forgePromptHash,
   forgeResultMatchesPrompt,
@@ -412,124 +407,28 @@ export function FoldForgeApp() {
       );
 
       const candidateId = candidateIdFor(ordinal, generated.proposal.program);
-      let currentProgram = generated.proposal.program;
-      let evaluation = await postJson(
+      const currentProgram = generated.proposal.program;
+      const evaluation = await postJson(
         "/api/compile",
         { intent: nextIntent, program: currentProgram, candidateId },
         CompileApiResponseSchema,
         { stage: "compile" },
       );
-      const evidence: RepairEvidence[] = [];
       const appliedPatchIds: string[] = [];
-      const seenRepairInputs = new Set<string>();
-      let repairCycle = 0;
-      let passed = evaluation.status === "passed";
-      let terminalDiagnostic: ForgeDiagnosticV1 | null =
-        evaluation.status === "passed" ? null : evaluation.diagnostic;
+      const repairCycle = 0;
 
-      for (
-        let cycle = 1;
-        evaluation.status === "invalid" && cycle <= 5;
-        cycle += 1
-      ) {
-        const repairableHardFailure = evaluation.report.failures.find(
-          (failure) =>
-            failure.severity === "hard" &&
-            failure.repairableProgramPaths.length > 0,
-        );
-        if (!repairableHardFailure) {
-          terminalDiagnostic = forgeDiagnostic({
-            stage: "repair",
-            kind: "repair",
-            code: "REPAIR_INFEASIBLE",
-            message:
-              evaluation.diagnostic.message +
-              " No paid repair was attempted because this failure has no bounded repair path.",
-            modelCall: "not_started",
-            failureIds: evaluation.diagnostic.failureIds,
-            failedAtStage: evaluation.diagnostic.failedAtStage,
-            repairCycle: cycle,
-          });
-          break;
-        }
-        const canonicalRepairInput = repairInputHash(
-          currentProgram,
-          evaluation.report,
-        );
-        if (seenRepairInputs.has(canonicalRepairInput)) {
-          terminalDiagnostic = forgeDiagnostic({
-            stage: "repair",
-            kind: "repair",
-            code: "DUPLICATE_REPAIR_INPUT",
-            message:
-              "The same checked design reached repair twice, so no additional paid repair was attempted.",
-            modelCall: "not_started",
-            failureIds: evaluation.diagnostic.failureIds,
-            failedAtStage: evaluation.diagnostic.failedAtStage,
-            repairCycle: cycle,
-          });
-          break;
-        }
-        seenRepairInputs.add(canonicalRepairInput);
-        setPhase("repair");
-        setStatusMessage("Checking and improving your design…");
-        const failure =
-          evaluation.report.failures.find(
-            (entry) => entry.severity === "hard",
-          ) ?? evaluation.report.failures[0];
-        const repaired = await postJson(
-          "/api/repair",
-          {
-            intent: nextIntent,
-            program: currentProgram,
-            candidateId,
-            repairCycle: cycle,
-          },
-          RepairApiResponseSchema,
-          { attemptId: forgeAttemptId, stage: "repair" },
-        );
-        terminalDiagnostic = repaired.diagnostic;
-        if (
-          repaired.patch &&
-          (repaired.status === "passed" || repaired.status === "still_invalid")
-        ) {
-          evidence.push({
-            cycle,
-            beforeFailureId: failure?.failureId ?? "verification.failure",
-            beforeFailureMessage:
-              failure?.message ?? "A hard verifier check failed.",
-            patch: repaired.patch,
-            result: repaired.status,
-          });
-          appliedPatchIds.push(repaired.patch.patchId);
-        }
-        if (repaired.status === "infeasible") break;
-        currentProgram = repaired.program;
-        repairCycle = cycle;
-        if (repaired.status === "passed") {
-          passed = true;
-          break;
-        }
-        if (!repaired.ir || !repaired.report || !repaired.score) break;
-        evaluation = {
-          status: "invalid",
-          candidateId,
-          ir: repaired.ir,
-          report: repaired.report,
-          score: repaired.score,
-          diagnostic: repaired.diagnostic,
-        };
-      }
-
-      if (!passed) {
+      if (evaluation.status !== "passed") {
         throw new FoldForgeDiagnosticError(
-          terminalDiagnostic ??
-            forgeDiagnostic({
-              stage: "compile",
-              kind: "unknown",
-              code: "DESIGN_NOT_VERIFIED",
-              message: "The generated design did not pass verification.",
-            }),
+          forgeDiagnostic({
+            stage: "compile",
+            kind: "contract",
+            code: "SERVER_VERIFICATION_DRIFT",
+            message:
+              "The server-selected program did not reproduce its verified result. No paid repair was attempted.",
+            modelCall: "not_applicable",
+            failureIds: evaluation.diagnostic.failureIds,
+            failedAtStage: evaluation.diagnostic.failedAtStage,
+          }),
         );
       }
       const candidate = buildCandidate(
@@ -553,8 +452,6 @@ export function FoldForgeApp() {
           }),
         );
       }
-      if (evidence.length > 0) evidenceByCandidate[candidateId] = evidence;
-
       const ranked = rankedCandidates([candidate]);
       const checkedDesign = ranked[0];
       if (!checkedDesign) {

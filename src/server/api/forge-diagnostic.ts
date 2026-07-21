@@ -203,6 +203,21 @@ export const modelFailureDiagnostic = (
         failedAtStage: "collision",
       });
     }
+    if (
+      error.code === "invalid_plan" &&
+      detail?.phase === "expansion" &&
+      typeof detail.code === "string" &&
+      typeof detail.message === "string"
+    ) {
+      return forgeDiagnostic({
+        stage,
+        kind: "verification",
+        code: "MODEL_PLAN_HARD_INVALID",
+        message: detail.message,
+        modelCall: "attempted",
+        failureIds: [detail.code],
+      });
+    }
     return forgeDiagnostic({
       stage,
       kind: "contract",

@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import { applyProgramPatch } from "@/core/fabrication/repair";
+import {
+  evaluateRepairProgress,
+  repairProgressMessage,
+} from "@/core/fabrication/repair-progress";
 import { ProgramPatchV1Schema } from "@/core/fabrication/schemas";
 import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
 import type {
@@ -279,6 +283,35 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
               repairCycle,
               "attempted",
             ),
+          );
+        }
+        const progress = evaluateRepairProgress(
+          before.value.report,
+          after.value.report,
+          parsedPatch.data,
+        );
+        if (!progress.ok) {
+          return outcome(
+            "infeasible",
+            candidateId,
+            parsedPatch.data,
+            program,
+            before.value,
+            forgeDiagnostic({
+              stage: "repair",
+              kind: "repair",
+              code: "REPAIR_NO_GEOMETRIC_EFFECT",
+              message: repairProgressMessage(progress),
+              modelCall: "attempted",
+              failureIds: [
+                "repair.no_geometric_effect",
+                ...progress.measurements.map(
+                  (measurement) => measurement.failureId,
+                ),
+              ].slice(0, 24),
+              failedAtStage: before.value.report.failedAtStage,
+              repairCycle,
+            }),
           );
         }
         return outcome(

@@ -51,9 +51,9 @@ export const LIVE_OPERATION_POLICIES: Readonly<
 export const LIVE_SESSION_LIMITS = {
   windowMs: 60 * 60 * 1_000,
   maximumRequests: 10,
-  // The public forge uses one intent, one program, at most five repairs, and
-  // one final narrative. This ceiling admits that complete workflow while
-  // bounding the cost and preventing parallel duplicate generations.
+  // The public forge uses one intent and one multi-proposal program call.
+  // The remaining headroom supports bounded explicit repair/finalize routes
+  // without allowing parallel duplicate generations.
   maximumReservedTokens: 140_000,
   maximumConcurrentPerSession: 1,
   maximumConcurrentGlobal: 8,
