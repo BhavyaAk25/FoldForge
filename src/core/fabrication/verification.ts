@@ -3305,13 +3305,15 @@ const validateCollision = (
     ir.bodies.map((body) => [body.bodyId, body.bodyId]),
   );
   const fixedComponentRoot = (bodyId: string): string => {
-    let root = fixedComponentParent.get(bodyId) ?? bodyId;
-    while ((fixedComponentParent.get(root) ?? root) !== root) {
-      root = fixedComponentParent.get(root) ?? root;
+    // Topology validation guarantees that every panel and joint body exists in
+    // this map before collision evaluation begins.
+    let root = fixedComponentParent.get(bodyId)!;
+    while (fixedComponentParent.get(root)! !== root) {
+      root = fixedComponentParent.get(root)!;
     }
     let cursor = bodyId;
-    while ((fixedComponentParent.get(cursor) ?? cursor) !== root) {
-      const next = fixedComponentParent.get(cursor) ?? cursor;
+    while (fixedComponentParent.get(cursor)! !== root) {
+      const next = fixedComponentParent.get(cursor)!;
       fixedComponentParent.set(cursor, root);
       cursor = next;
     }
@@ -4001,16 +4003,20 @@ const validateSemantics = (
     },
     { width: 0, height: 0, depth: 0 },
   );
-  const homeState = motion.allStates.reduce<EvaluatedMotionState | null>(
-    (closest, candidate) =>
-      closest === null ||
-      Math.abs((candidate.driverValue ?? 0) - (ir.driver?.homeValue ?? 0)) <
-        Math.abs((closest.driverValue ?? 0) - (ir.driver?.homeValue ?? 0))
-        ? candidate
-        : closest,
-    null,
-  );
-  const homeSpansMm = homeState ? spansForState(homeState) : maximumSpansMm;
+  // Motion validation guarantees at least one base state. Starting from it
+  // keeps the home-pose selection total without inventing an empty fallback.
+  const targetHomeValue = ir.driver?.homeValue ?? 0;
+  const homeState = motion.allStates
+    .slice(1)
+    .reduce(
+      (closest, candidate) =>
+        Math.abs((candidate.driverValue ?? targetHomeValue) - targetHomeValue) <
+        Math.abs((closest.driverValue ?? targetHomeValue) - targetHomeValue)
+          ? candidate
+          : closest,
+      motion.allStates[0]!,
+    );
+  const homeSpansMm = spansForState(homeState);
   const spanPermutations = (
     basis: "home" | "swept",
     spans: {

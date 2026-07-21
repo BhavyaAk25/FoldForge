@@ -49,8 +49,7 @@ const numericValue = (
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
-const failureKey = (failureId: string): string =>
-  failureId.split("#", 1)[0] ?? failureId;
+const failureKey = (failureId: string): string => failureId.split("#", 1)[0]!;
 
 const matchingAfterFailure = (
   before: VerificationFailureV2,
@@ -116,10 +115,16 @@ export const evaluateRepairProgress = (
       .filter((failure) => failure.severity === "hard")
       .map((failure) => failure.failureId),
   );
+  const beforeFailureKeys = new Set(
+    before.failures
+      .filter((failure) => failure.severity === "hard")
+      .map((failure) => failureKey(failure.failureId)),
+  );
   const introducedEarlierFailure = after.failures.some(
     (failure) =>
       failure.severity === "hard" &&
       !beforeFailureIds.has(failure.failureId) &&
+      !beforeFailureKeys.has(failureKey(failure.failureId)) &&
       STAGE_ORDER[failure.stage] <= earliestTargetStage,
   );
   if (

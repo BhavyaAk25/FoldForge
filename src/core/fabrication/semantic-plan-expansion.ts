@@ -2079,17 +2079,18 @@ const hardVerificationFailureError = (
   evaluation: ResolvedPlanEvaluation,
   resolverEvaluationCount: number,
 ): HardVerificationFailureError => {
-  const failure =
-    evaluation.report.failures.find(
-      (candidate) => candidate.severity === "hard",
-    ) ?? evaluation.report.failures[0];
+  // An invalid verifier report always owns at least one hard failure. The
+  // resolver reaches this boundary only after report.valid is false.
+  const failure = evaluation.report.failures.find(
+    (candidate) => candidate.severity === "hard",
+  )!;
   return {
     kind: "hard_verification_failure",
-    code: failure?.failureId ?? "verification.hard_failure",
-    path: failure?.geometryRefs.map((reference) => reference.id) ?? [],
+    code: failure.failureId,
+    path: failure.geometryRefs.map((reference) => reference.id),
     resolverEvaluationCount,
     report: evaluation.report,
-    message: `${failure?.message ?? "The generated program failed deterministic verification."} Resolver evaluations: ${resolverEvaluationCount}.`,
+    message: `${failure.message} Resolver evaluations: ${resolverEvaluationCount}.`,
   };
 };
 

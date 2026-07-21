@@ -68,6 +68,49 @@ const liveBoxIntent = (): FabricationIntentV1 => {
   };
 };
 
+const movingLidPlan = (): FabricationPlanV2 => {
+  const source = fixtureLiveAcceptancePlan();
+  return {
+    ...source,
+    topologyKey: "moving-lid-box",
+    panels: source.panels.map((panel) =>
+      panel.key === "left" || panel.key === "right"
+        ? { ...panel, widthMm: 24 }
+        : panel,
+    ),
+    joints: source.joints.map((joint) =>
+      joint.key === "lid" && joint.kind === "fold"
+        ? {
+            ...joint,
+            minimumAngleDeg: 0,
+            maximumAngleDeg: 90,
+          }
+        : joint,
+    ),
+    driver: {
+      key: "lid",
+      jointKey: "lid",
+      label: "Open the lid",
+      control: "fold",
+      minimumValue: 0,
+      maximumValue: 90,
+      homeValue: 90,
+      direction: 1,
+    },
+    outputs: [
+      {
+        key: "lid",
+        jointKey: "lid",
+        bodyKey: "lid",
+        label: "Lid angle",
+        minimumValue: 0,
+        maximumValue: 90,
+        direction: 1,
+      },
+    ],
+  };
+};
+
 const connectorPlan = (): FabricationPlanV2 => {
   const source = fixtureSemanticPlan();
   const panel = source.panels[0]!;
@@ -439,46 +482,7 @@ describe("semantic FabricationPlanV2", () => {
   );
 
   it("verifies a moving-lid box while preserving fixed wall seams", () => {
-    const source = fixtureLiveAcceptancePlan();
-    const plan: FabricationPlanV2 = {
-      ...source,
-      topologyKey: "moving-lid-box",
-      panels: source.panels.map((panel) =>
-        panel.key === "left" || panel.key === "right"
-          ? { ...panel, widthMm: 24 }
-          : panel,
-      ),
-      joints: source.joints.map((joint) =>
-        joint.key === "lid" && joint.kind === "fold"
-          ? {
-              ...joint,
-              minimumAngleDeg: 0,
-              maximumAngleDeg: 90,
-            }
-          : joint,
-      ),
-      driver: {
-        key: "lid",
-        jointKey: "lid",
-        label: "Open the lid",
-        control: "fold",
-        minimumValue: 0,
-        maximumValue: 90,
-        homeValue: 90,
-        direction: 1,
-      },
-      outputs: [
-        {
-          key: "lid",
-          jointKey: "lid",
-          bodyKey: "lid",
-          label: "Lid angle",
-          minimumValue: 0,
-          maximumValue: 90,
-          direction: 1,
-        },
-      ],
-    };
+    const plan = movingLidPlan();
     const intent = { ...liveBoxIntent(), behavior: "open_close" as const };
 
     const resolved = expandResolvedSemanticFabricationPlan(intent, plan, 1);
@@ -492,6 +496,38 @@ describe("semantic FabricationPlanV2", () => {
       "candidate-moving-lid-box",
     );
     expect(report).toMatchObject({ valid: true, failures: [] });
+  }, 20_000);
+
+  it("returns a typed hard failure when a moving plan misses its requested home-pose size", () => {
+    const intent: FabricationIntentV1 = {
+      ...liveBoxIntent(),
+      behavior: "open_close",
+      requestedSize: { widthMm: 20, heightMm: 20, depthMm: 20 },
+    };
+
+    const resolved = expandResolvedSemanticFabricationPlan(
+      intent,
+      movingLidPlan(),
+      1,
+    );
+
+    expect(resolved).toMatchObject({
+      ok: false,
+      error: {
+        kind: "hard_verification_failure",
+        code: "semantics.requested_size#width",
+        resolverEvaluationCount: 1,
+        report: {
+          valid: false,
+          failedAtStage: "semantics",
+          failures: expect.arrayContaining([
+            expect.objectContaining({
+              message: expect.stringContaining("Home-pose width span"),
+            }),
+          ]),
+        },
+      },
+    });
   }, 20_000);
 
   it("composes a base-to-wall-to-lid chain in the parent coordinate frame", () => {
