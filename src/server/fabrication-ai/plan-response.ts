@@ -4,9 +4,16 @@ import {
   expandFabricationPlan,
   FABRICATION_PLAN_EXPANDER_VERSION,
 } from "@/core/fabrication/planning";
-import { expandResolvedSemanticFabricationPlan } from "@/core/fabrication/semantic-plan-expansion";
+import {
+  expandResolvedSemanticFabricationPlan,
+  SEMANTIC_PLAN_RESOLUTION_BUDGETS,
+} from "@/core/fabrication/semantic-plan-expansion";
+import { semanticPlanStructureFingerprint } from "@/core/fabrication/semantic-plan-fingerprint";
 import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
-import type { FabricationPlanV2 } from "@/core/fabrication/semantic-plan";
+import {
+  FabricationPlanV2Schema,
+  type FabricationPlanV2,
+} from "@/core/fabrication/semantic-plan";
 import type {
   FabricationIntentV1,
   FabricationPlanV1,
@@ -19,9 +26,11 @@ import { sha256Hex } from "@/core/sha256";
 import {
   FabricationPlanProposalV1Schema,
   FabricationPlanProposalBatchV2Schema,
+  FabricationPlanProposalBatchV3Schema,
   FabricationPlanProposalV2Schema,
   ProgramProposalV1Schema,
   type ProgramProposalV1,
+  type FabricationPlanStructuralAlternativeV2,
 } from "./contracts";
 import {
   FabricationModelContractError,
@@ -43,6 +52,13 @@ export interface FabricationProgramFailureDetail {
   readonly planHash?: string;
   readonly topologyId?: string;
   readonly resolverEvaluationCount?: number;
+  readonly proposalCount?: number;
+  readonly proposalFailures?: readonly {
+    readonly proposalIndex: number;
+    readonly planHash: string;
+    readonly structuralFingerprint: string | null;
+    readonly code: string;
+  }[];
   readonly limit?: {
     readonly name: string;
     readonly actual: number;
@@ -134,9 +150,125 @@ type ParsedPlanProposal =
       readonly version: "2";
     };
 
+const applyStructuralAlternative = (
+  basePlan: FabricationPlanV2,
+  alternative: FabricationPlanStructuralAlternativeV2,
+): FabricationPlanV2 => {
+  const jointEdits = new Map(
+    alternative.jointEdits.map((edit) => [edit.jointKey, edit]),
+  );
+  const connectorEdits = new Map(
+    alternative.connectorEdits.map((edit) => [edit.relationshipKey, edit]),
+  );
+  if (
+    (alternative.groundedBodyKey !== null &&
+      !basePlan.bodies.some(
+        (body) => body.key === alternative.groundedBodyKey,
+      )) ||
+    alternative.jointEdits.some(
+      (edit) => !basePlan.joints.some((joint) => joint.key === edit.jointKey),
+    ) ||
+    alternative.connectorEdits.some(
+      (edit) =>
+        !basePlan.connectorRelationships.some(
+          (relationship) => relationship.key === edit.relationshipKey,
+        ),
+    )
+  ) {
+    throw new FabricationProgramModelError(
+      "invalid_plan",
+      "GPT-5.6 Sol returned a structural alternative with an unknown reference.",
+      {
+        phase: "schema",
+        code: "alternative_reference",
+        path: ["structuralAlternatives"],
+      },
+    );
+  }
+  const plan = {
+    ...basePlan,
+    topologyKey: alternative.topologyKey,
+    bodies: basePlan.bodies.map((body) => ({
+      ...body,
+      grounded:
+        alternative.groundedBodyKey === null
+          ? body.grounded
+          : body.key === alternative.groundedBodyKey,
+    })),
+    joints: basePlan.joints.map((joint) => {
+      const edit = jointEdits.get(joint.key);
+      if (!edit) return joint;
+      const common = {
+        ...joint,
+        parentBodyKey: edit.parentBodyKey ?? joint.parentBodyKey,
+        childBodyKey: edit.childBodyKey ?? joint.childBodyKey,
+        parentAttachment: edit.parentAttachment ?? joint.parentAttachment,
+        childAttachment: edit.childAttachment ?? joint.childAttachment,
+      };
+      if (common.kind === "prismatic") {
+        return {
+          ...common,
+          homeTravelMm: edit.homeValue ?? common.homeTravelMm,
+          minimumTravelMm: edit.minimumValue ?? common.minimumTravelMm,
+          maximumTravelMm: edit.maximumValue ?? common.maximumTravelMm,
+        };
+      }
+      const angular = {
+        ...common,
+        homeAngleDeg: edit.homeValue ?? common.homeAngleDeg,
+        minimumAngleDeg: edit.minimumValue ?? common.minimumAngleDeg,
+        maximumAngleDeg: edit.maximumValue ?? common.maximumAngleDeg,
+      };
+      return angular.kind === "fold" && edit.foldDirection !== null
+        ? { ...angular, foldDirection: edit.foldDirection }
+        : angular;
+    }),
+    connectorRelationships: basePlan.connectorRelationships.map(
+      (relationship) => {
+        const edit = connectorEdits.get(relationship.key);
+        return edit
+          ? {
+              ...relationship,
+              tabAttachment: edit.tabAttachment ?? relationship.tabAttachment,
+              slotAttachment:
+                edit.slotAttachment ?? relationship.slotAttachment,
+            }
+          : relationship;
+      },
+    ),
+  };
+  const parsed = FabricationPlanV2Schema.safeParse(plan);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new FabricationProgramModelError(
+      "invalid_plan",
+      "GPT-5.6 Sol returned an invalid structural alternative.",
+      {
+        phase: "schema",
+        code: issue?.code ?? "alternative_invalid",
+        path: issue?.path.map(String).slice(0, 12) ?? [],
+      },
+    );
+  }
+  return parsed.data;
+};
+
 const parsePlanProposals = (
   rawProposal: unknown,
 ): readonly ParsedPlanProposal[] => {
+  const compactBatch =
+    FabricationPlanProposalBatchV3Schema.safeParse(rawProposal);
+  if (compactBatch.success) {
+    const base = compactBatch.data.baseProposal;
+    return [
+      { ...base, version: "2" as const },
+      ...compactBatch.data.structuralAlternatives.map((alternative) => ({
+        diversityClaim: alternative.diversityClaim,
+        plan: applyStructuralAlternative(base.plan, alternative),
+        version: "2" as const,
+      })),
+    ];
+  }
   const batch = FabricationPlanProposalBatchV2Schema.safeParse(rawProposal);
   if (batch.success) {
     return batch.data.proposals.map((proposal) => ({
@@ -152,7 +284,10 @@ const parsePlanProposals = (
   if (legacy.success) {
     return [{ ...legacy.data, version: "1" }];
   }
-  const issue = batch.error.issues[0] ?? semantic.error.issues[0];
+  const issue =
+    compactBatch.error.issues[0] ??
+    batch.error.issues[0] ??
+    semantic.error.issues[0];
   throw new FabricationProgramModelError(
     "invalid_plan",
     "GPT-5.6 Sol returned malformed fabrication plan arguments.",
@@ -203,8 +338,10 @@ const verificationFailureDetail = (
 
 interface ValidatedProposal {
   readonly proposal: ParsedPlanProposal;
+  readonly proposalIndex: number;
   readonly program: FabricationProgramV1;
   readonly planHash: string;
+  readonly structuralFingerprint: string | null;
   readonly totalScore: number;
 }
 
@@ -255,14 +392,58 @@ export const fabricationProgramProposalFromResponse = (input: {
   }
   const proposals = parsePlanProposals(rawProposal);
   const valid: ValidatedProposal[] = [];
+  const seenPlanHashes = new Set<string>();
+  const seenStructuralFingerprints = new Set<string>();
+  const proposalFailures: {
+    proposalIndex: number;
+    planHash: string;
+    structuralFingerprint: string | null;
+    code: string;
+  }[] = [];
   let bestFailure: FabricationProgramFailureDetail | null = null;
+  // Keep the complete deterministic search across a model-authored batch inside
+  // the same request budget that previously applied to one proposal. Moving
+  // plans are more expensive because every variant runs the swept-motion gate.
+  const resolutionBudgetPerProposal = Math.max(
+    2,
+    Math.floor(
+      (input.intent.behavior === "static"
+        ? SEMANTIC_PLAN_RESOLUTION_BUDGETS.static
+        : SEMANTIC_PLAN_RESOLUTION_BUDGETS.moving) / proposals.length,
+    ),
+  );
   for (const [proposalIndex, proposal] of proposals.entries()) {
+    const planHash = sha256Hex(canonicalSerialize(proposal.plan));
+    const structuralFingerprint =
+      proposal.version === "2"
+        ? semanticPlanStructureFingerprint(proposal.plan)
+        : null;
+    const duplicateCode = seenPlanHashes.has(planHash)
+      ? "duplicate_plan_hash"
+      : structuralFingerprint &&
+          seenStructuralFingerprints.has(structuralFingerprint)
+        ? "duplicate_structural_fingerprint"
+        : null;
+    seenPlanHashes.add(planHash);
+    if (structuralFingerprint) {
+      seenStructuralFingerprints.add(structuralFingerprint);
+    }
+    if (duplicateCode) {
+      proposalFailures.push({
+        proposalIndex,
+        planHash,
+        structuralFingerprint,
+        code: duplicateCode,
+      });
+      continue;
+    }
     const expanded =
       proposal.version === "2"
         ? expandResolvedSemanticFabricationPlan(
             input.intent,
             proposal.plan,
             input.candidateOrdinal,
+            resolutionBudgetPerProposal,
           )
         : expandFabricationPlan(
             input.intent,
@@ -275,6 +456,12 @@ export const fabricationProgramProposalFromResponse = (input: {
         input.intent,
         proposal.plan,
       );
+      proposalFailures.push({
+        proposalIndex,
+        planHash,
+        structuralFingerprint,
+        code: bestFailure.code,
+      });
       continue;
     }
     const compiled = compileFabricationProgram(input.intent, expanded.value);
@@ -284,6 +471,12 @@ export const fabricationProgramProposalFromResponse = (input: {
         input.intent,
         proposal.plan,
       );
+      proposalFailures.push({
+        proposalIndex,
+        planHash,
+        structuralFingerprint,
+        code: bestFailure.code,
+      });
       continue;
     }
     const report = verifyFabricationIr(
@@ -296,6 +489,12 @@ export const fabricationProgramProposalFromResponse = (input: {
         input.intent,
         proposal.plan,
       );
+      proposalFailures.push({
+        proposalIndex,
+        planHash,
+        structuralFingerprint,
+        code: bestFailure.code,
+      });
       continue;
     }
     const score = scoreFabricationCandidate(
@@ -305,8 +504,10 @@ export const fabricationProgramProposalFromResponse = (input: {
     );
     valid.push({
       proposal,
+      proposalIndex,
       program: expanded.value,
-      planHash: sha256Hex(canonicalSerialize(proposal.plan)),
+      planHash,
+      structuralFingerprint,
       totalScore: score.totalScore ?? 0,
     });
   }
@@ -316,10 +517,19 @@ export const fabricationProgramProposalFromResponse = (input: {
       left.planHash.localeCompare(right.planHash),
   )[0];
   if (!selected) {
+    const failureDetail = bestFailure ?? {
+      phase: "expansion" as const,
+      code: "no_distinct_proposal",
+      path: [],
+    };
     throw new FabricationProgramModelError(
       "invalid_plan",
       "GPT-5.6 Sol returned no fabrication plan that passed deterministic verification.",
-      bestFailure,
+      {
+        ...failureDetail,
+        proposalCount: proposals.length,
+        proposalFailures,
+      },
     );
   }
   return ProgramProposalV1Schema.parse({
@@ -330,6 +540,9 @@ export const fabricationProgramProposalFromResponse = (input: {
       modelResponseId: input.response.id,
       planHash: selected.planHash,
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+      proposalCount: proposals.length,
+      selectedProposalIndex: selected.proposalIndex,
+      terminalFailureCodes: proposalFailures.map((failure) => failure.code),
     },
   });
 };

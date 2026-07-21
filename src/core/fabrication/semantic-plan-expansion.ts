@@ -1,7 +1,11 @@
 import { canonicalSerialize } from "../canonical";
 import { compileFabricationProgram, type CompilationError } from "./compiler";
 import { decomposeRigidMatrix4, rotationAroundAxisMatrix4 } from "./matrix";
-import { connectorReferencePoint2 } from "./connector-geometry";
+import {
+  classifyTabAttachment,
+  connectorReferencePoint2,
+  slotConnectorContour,
+} from "./connector-geometry";
 import {
   isSimplePolygon,
   pointInPolygon,
@@ -19,6 +23,7 @@ import {
   FabricationPlanV2Schema,
   type FabricationPlanV2,
   type SemanticEdgeAttachmentV2,
+  type SemanticJointV2,
   type SemanticPanelOutlineV2,
   type SemanticPanelV2,
 } from "./semantic-plan";
@@ -33,10 +38,13 @@ import type {
   JointV1,
   NormalizedPolygonContourV1,
   PlannedPanelBlueprintV1,
+  PanelV1,
   Point2Mm,
   SemanticPartV1,
   Transform2Mm,
   Transform3Mm,
+  SlotConnectorV1,
+  TabConnectorV1,
   VerificationReportV2,
 } from "./types";
 import { verificationStageOrder, verifyFabricationIr } from "./verification";
@@ -763,31 +771,59 @@ const deriveConnectors = (
     const ids = relationshipConnectorIds(relationship.key);
     // Panel sheet references are validated before connector derivation.
     const stock = intent.stockOptions[tabPanel.semantic.sheetIndex]!;
-    connectors.push(
-      {
-        connectorId: ids.tab,
-        kind: "tab",
-        panelId: canonicalId("panel", tabPanel.semantic.key),
-        mateConnectorId: ids.slot,
-        contour: { vertices: tabContour },
-        rootEdge: { start: tabStart, end: tabEnd },
-        insertionDirection: { x: 0, y: 0, z: 1 },
-        clearanceMm: relationship.clearanceMm,
+    const tabConnector: TabConnectorV1 = {
+      connectorId: ids.tab,
+      kind: "tab",
+      panelId: canonicalId("panel", tabPanel.semantic.key),
+      mateConnectorId: ids.slot,
+      contour: { vertices: tabContour },
+      rootEdge: { start: tabStart, end: tabEnd },
+      insertionDirection: { x: 0, y: 0, z: 1 },
+      clearanceMm: relationship.clearanceMm,
+    };
+    const slotConnector: SlotConnectorV1 = {
+      connectorId: ids.slot,
+      kind: "slot",
+      panelId: canonicalId("panel", slotPanel.semantic.key),
+      mateConnectorId: ids.tab,
+      centerline: slotSegment,
+      widthMm: Math.max(
+        1.01,
+        stock.material.thicknessMm + relationship.clearanceMm + 0.01,
+      ),
+      insertionDirection: { x: 0, y: 0, z: -1 },
+      clearanceMm: relationship.clearanceMm,
+    };
+    const tabPanelForValidation: PanelV1 = {
+      panelId: tabConnector.panelId,
+      sheetId: stock.sheetId,
+      bodyId: canonicalId("body", tabPanel.semantic.bodyKey),
+      label: tabPanel.semantic.label,
+      role: tabPanel.semantic.role,
+      contour: { vertices: tabPanel.localVertices },
+      innerCutContours: [],
+      thicknessMm: stock.material.thicknessMm,
+      flatTransform: {
+        translationMm: { xMm: 0, yMm: 0 },
+        rotationDeg: 0,
       },
-      {
-        connectorId: ids.slot,
-        kind: "slot",
-        panelId: canonicalId("panel", slotPanel.semantic.key),
-        mateConnectorId: ids.tab,
-        centerline: slotSegment,
-        widthMm: Math.max(
-          1.01,
-          stock.material.thicknessMm + relationship.clearanceMm + 0.01,
-        ),
-        insertionDirection: { x: 0, y: 0, z: -1 },
-        clearanceMm: relationship.clearanceMm,
-      },
-    );
+      semanticPartIds: [],
+    };
+    const slotContour = slotConnectorContour(slotConnector);
+    if (
+      classifyTabAttachment(tabConnector, tabPanelForValidation) === null ||
+      !isSimplePolygon(slotContour) ||
+      slotContour.some(
+        (point) => !pointInPolygon(point, slotPanel.localVertices, false),
+      )
+    ) {
+      return mappingError(
+        "unsupported_mapping",
+        ["connectorRelationships", relationship.key],
+        `Connector ${relationship.key} does not produce an attached tab and interior slot.`,
+      );
+    }
+    connectors.push(tabConnector, slotConnector);
   }
   return { ok: true, value: connectors };
 };
@@ -1645,12 +1681,22 @@ export interface HardVerificationFailureError {
   readonly message: string;
 }
 
+export interface GeometricResolutionExhaustedError {
+  readonly kind: "geometric_resolution_exhausted";
+  readonly code: string;
+  readonly path: readonly string[];
+  readonly resolverEvaluationCount: number;
+  readonly report: VerificationReportV2;
+  readonly message: string;
+}
+
 export type ResolvedSemanticPlanExpansionError =
   | SemanticPlanExpansionError
   | FabricationPlanExpansionError
   | CompilationError
   | StructuralCollisionError
-  | HardVerificationFailureError;
+  | HardVerificationFailureError
+  | GeometricResolutionExhaustedError;
 
 export type ResolvedSemanticPlanExpansionResult =
   | { readonly ok: true; readonly value: FabricationProgramV1 }
@@ -1667,10 +1713,26 @@ type ResolvedPlanEvaluationResult =
     };
 
 const MAXIMUM_PLAN_RESOLUTION_EVALUATIONS = 160;
+export const SEMANTIC_PLAN_RESOLUTION_BUDGETS = {
+  static: MAXIMUM_PLAN_RESOLUTION_EVALUATIONS,
+  moving: 24,
+} as const;
 const MAXIMUM_EDGE_CHOICES_PER_PANEL = 8;
 const MAXIMUM_JOINT_ATTACHMENT_PAIRS = 6;
 const MAXIMUM_COLLISION_SEARCH_DEPTH = 5;
 const COLLISION_SEARCH_BEAM_WIDTH = 10;
+const MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER = {
+  connector: 12,
+  joint: 6,
+  reroot: 2,
+  adjacency: 4,
+} as const;
+const RESOLUTION_CATEGORY_BUDGETS = {
+  connector: 32,
+  joint: 64,
+  reroot: 16,
+  adjacency: 47,
+} as const;
 
 const numericFailureDeficit = (report: VerificationReportV2): number =>
   report.failures.reduce((total, failure) => {
@@ -1687,7 +1749,13 @@ const numericFailureDeficit = (report: VerificationReportV2): number =>
       ? failure.actual.value - failure.expected.value
       : failure.expected.value - failure.actual.value;
     return total + Math.max(0, deficit) / scale;
-  }, 0);
+  }, 0) +
+  (report.metrics.find(
+    (metric) => metric.metricId === "collision.maximum_undeclared_overlap_area",
+  )?.value ?? 0) +
+  (report.metrics.find(
+    (metric) => metric.metricId === "collision.violating_motion_state_count",
+  )?.value ?? 0);
 
 const reportIsBetter = (
   candidate: VerificationReportV2,
@@ -1712,7 +1780,7 @@ const reportIsBetter = (
   return numericFailureDeficit(candidate) < numericFailureDeficit(current);
 };
 
-const isStaticPoseFailure = (report: VerificationReportV2): boolean =>
+const isResolvableGeometricFailure = (report: VerificationReportV2): boolean =>
   report.failures.some(
     (failure) =>
       failure.failureId.startsWith("connections.connector_") ||
@@ -1739,27 +1807,30 @@ const edgeChoiceIndexes = (
 
 const withDirectionConsistentStaticFolds = (
   plan: FabricationPlanV2,
-): FabricationPlanV2 => ({
-  ...plan,
-  joints: plan.joints.map((joint) => {
-    if (joint.kind !== "fold") return joint;
-    const magnitudeDeg = Math.abs(joint.homeAngleDeg);
-    const homeAngleDeg =
-      joint.foldDirection === "valley" ? magnitudeDeg : -magnitudeDeg;
-    const isFixed =
-      Math.abs(joint.maximumAngleDeg - joint.minimumAngleDeg) <= 1e-9;
-    return {
-      ...joint,
-      homeAngleDeg,
-      minimumAngleDeg: isFixed
-        ? homeAngleDeg
-        : Math.min(joint.minimumAngleDeg, homeAngleDeg),
-      maximumAngleDeg: isFixed
-        ? homeAngleDeg
-        : Math.max(joint.maximumAngleDeg, homeAngleDeg),
-    };
-  }),
-});
+): FabricationPlanV2 =>
+  plan.driver
+    ? plan
+    : {
+        ...plan,
+        joints: plan.joints.map((joint) => {
+          if (joint.kind !== "fold") return joint;
+          const magnitudeDeg = Math.abs(joint.homeAngleDeg);
+          const homeAngleDeg =
+            joint.foldDirection === "valley" ? magnitudeDeg : -magnitudeDeg;
+          const isFixed =
+            Math.abs(joint.maximumAngleDeg - joint.minimumAngleDeg) <= 1e-9;
+          return {
+            ...joint,
+            homeAngleDeg,
+            minimumAngleDeg: isFixed
+              ? homeAngleDeg
+              : Math.min(joint.minimumAngleDeg, homeAngleDeg),
+            maximumAngleDeg: isFixed
+              ? homeAngleDeg
+              : Math.max(joint.maximumAngleDeg, homeAngleDeg),
+          };
+        }),
+      };
 
 const collisionFailure = (report: VerificationReportV2) =>
   report.failures.find(
@@ -1830,34 +1901,75 @@ const jointPathBetweenBodies = (
   return [];
 };
 
-interface CollisionResolutionContext {
-  readonly panelKeys: readonly [string, string];
+interface GeometricFailureContext {
+  readonly failureCode: string;
+  readonly panelKeys: readonly string[];
+  readonly bodyKeys: readonly string[];
   readonly jointKeys: readonly string[];
+  readonly connectorRelationshipKeys: readonly string[];
 }
 
-const collisionResolutionContext = (
+const geometricFailureContext = (
   evaluation: ResolvedPlanEvaluation,
-): CollisionResolutionContext | null => {
-  const failure = collisionFailure(evaluation.report);
+): GeometricFailureContext | null => {
+  const failure = evaluation.report.failures.find(
+    (candidate) =>
+      candidate.severity === "hard" &&
+      (candidate.failureId === "collision.minimum_clearance" ||
+        candidate.failureId.startsWith("connections.connector_")),
+  );
   if (!failure) return null;
-  const panelIds = failure.geometryRefs
+  const panelKeys = failure.geometryRefs
     .filter((reference) => reference.kind === "panel")
-    .map((reference) => reference.id);
-  const firstPanelId = panelIds[0];
-  const secondPanelId = panelIds[1];
-  if (!firstPanelId || !secondPanelId) return null;
-  const firstPanelKey = panelKeyForId(evaluation.plan, firstPanelId);
-  const secondPanelKey = panelKeyForId(evaluation.plan, secondPanelId);
-  if (!firstPanelKey || !secondPanelKey) return null;
-  const firstBodyKey = bodyKeyForPanelKey(evaluation.plan, firstPanelKey);
-  const secondBodyKey = bodyKeyForPanelKey(evaluation.plan, secondPanelKey);
-  if (!firstBodyKey || !secondBodyKey) return null;
+    .flatMap((reference) => {
+      const panelKey = panelKeyForId(evaluation.plan, reference.id);
+      return panelKey ? [panelKey] : [];
+    });
+  const connectorRelationshipKeys = failure.geometryRefs
+    .filter((reference) => reference.kind === "connector")
+    .flatMap((reference) =>
+      evaluation.plan.connectorRelationships.flatMap((relationship) => {
+        const ids = relationshipConnectorIds(relationship.key);
+        return reference.id === ids.tab || reference.id === ids.slot
+          ? [relationship.key]
+          : [];
+      }),
+    );
+  for (const relationshipKey of connectorRelationshipKeys) {
+    const relationship = evaluation.plan.connectorRelationships.find(
+      (candidate) => candidate.key === relationshipKey,
+    );
+    if (relationship) {
+      panelKeys.push(
+        relationship.tabAttachment.panelKey,
+        relationship.slotAttachment.panelKey,
+      );
+    }
+  }
+  const uniquePanelKeys = panelKeys.filter(
+    (panelKey, index, values) => values.indexOf(panelKey) === index,
+  );
+  const bodyKeys = uniquePanelKeys
+    .flatMap((panelKey) => {
+      const bodyKey = bodyKeyForPanelKey(evaluation.plan, panelKey);
+      return bodyKey ? [bodyKey] : [];
+    })
+    .filter((bodyKey, index, values) => values.indexOf(bodyKey) === index);
+  if (bodyKeys.length < 2) return null;
+  const jointKeys = bodyKeys
+    .slice(1)
+    .flatMap((bodyKey) =>
+      jointPathBetweenBodies(evaluation.plan, bodyKeys[0]!, bodyKey),
+    );
   return {
-    panelKeys: [firstPanelKey, secondPanelKey],
-    jointKeys: jointPathBetweenBodies(
-      evaluation.plan,
-      firstBodyKey,
-      secondBodyKey,
+    failureCode: failure.failureId,
+    panelKeys: uniquePanelKeys,
+    bodyKeys,
+    jointKeys: jointKeys.filter(
+      (jointKey, index, values) => values.indexOf(jointKey) === index,
+    ),
+    connectorRelationshipKeys: connectorRelationshipKeys.filter(
+      (key, index, values) => values.indexOf(key) === index,
     ),
   };
 };
@@ -1905,6 +2017,9 @@ const equalLengthAttachmentPairs = (
     .slice(0, MAXIMUM_JOINT_ATTACHMENT_PAIRS);
 };
 
+const oppositeDirection = (direction: -1 | 1): -1 | 1 =>
+  direction === 1 ? -1 : 1;
+
 const staticJointPlanVariants = (
   plan: FabricationPlanV2,
   jointKey: string,
@@ -1934,6 +2049,18 @@ const staticJointPlanVariants = (
             joint.foldDirection !==
               (homeAngleDeg >= 0 ? "valley" : "mountain"));
         if (!changed) return [];
+        const reversesAngularDirection =
+          Math.abs(joint.homeAngleDeg) > 1e-9 &&
+          Math.abs(homeAngleDeg) > 1e-9 &&
+          Math.sign(joint.homeAngleDeg) !== Math.sign(homeAngleDeg);
+        const reverseRange = (minimum: number, maximum: number) => ({
+          minimum: -maximum,
+          maximum: -minimum,
+        });
+        const driverRange =
+          reversesAngularDirection && plan.driver?.jointKey === joint.key
+            ? reverseRange(plan.driver.minimumValue, plan.driver.maximumValue)
+            : null;
         return [
           {
             ...plan,
@@ -1945,6 +2072,12 @@ const staticJointPlanVariants = (
                 Math.abs(
                   candidate.maximumAngleDeg - candidate.minimumAngleDeg,
                 ) <= 1e-9;
+              const reversedRange = reversesAngularDirection
+                ? reverseRange(
+                    candidate.minimumAngleDeg,
+                    candidate.maximumAngleDeg,
+                  )
+                : null;
               const updated = {
                 ...candidate,
                 parentAttachment: {
@@ -1956,12 +2089,16 @@ const staticJointPlanVariants = (
                   edgeIndex: childEdgeIndex,
                 },
                 homeAngleDeg,
-                minimumAngleDeg: isFixed
-                  ? homeAngleDeg
-                  : Math.min(candidate.minimumAngleDeg, homeAngleDeg),
-                maximumAngleDeg: isFixed
-                  ? homeAngleDeg
-                  : Math.max(candidate.maximumAngleDeg, homeAngleDeg),
+                minimumAngleDeg: reversedRange
+                  ? reversedRange.minimum
+                  : isFixed
+                    ? homeAngleDeg
+                    : Math.min(candidate.minimumAngleDeg, homeAngleDeg),
+                maximumAngleDeg: reversedRange
+                  ? reversedRange.maximum
+                  : isFixed
+                    ? homeAngleDeg
+                    : Math.max(candidate.maximumAngleDeg, homeAngleDeg),
               };
               return updated.kind === "fold"
                 ? {
@@ -1970,30 +2107,260 @@ const staticJointPlanVariants = (
                   }
                 : updated;
             }),
+            driver:
+              plan.driver?.jointKey === joint.key && driverRange
+                ? {
+                    ...plan.driver,
+                    minimumValue: driverRange.minimum,
+                    maximumValue: driverRange.maximum,
+                    homeValue: -plan.driver.homeValue,
+                    direction: oppositeDirection(plan.driver.direction),
+                  }
+                : plan.driver,
+            outputs: plan.outputs.map((output) => {
+              if (output.jointKey !== joint.key || !reversesAngularDirection) {
+                return output;
+              }
+              const range = reverseRange(
+                output.minimumValue,
+                output.maximumValue,
+              );
+              return {
+                ...output,
+                minimumValue: range.minimum,
+                maximumValue: range.maximum,
+                direction: oppositeDirection(output.direction),
+              };
+            }),
           },
         ];
       }),
   );
 };
 
-const connectorPlanVariants = (
+const reversedJoint = (joint: SemanticJointV2): SemanticJointV2 => {
+  const reversed = {
+    ...joint,
+    parentBodyKey: joint.childBodyKey,
+    childBodyKey: joint.parentBodyKey,
+    parentAttachment: joint.childAttachment,
+    childAttachment: joint.parentAttachment,
+  };
+  return reversed.kind === "fold"
+    ? {
+        ...reversed,
+        foldDirection:
+          reversed.foldDirection === "valley" ? "mountain" : "valley",
+      }
+    : reversed;
+};
+
+const rerootedPlan = (
   plan: FabricationPlanV2,
-  relevantPanelKeys: ReadonlySet<string> | null,
+  rootBodyKey: string,
+): FabricationPlanV2 | null => {
+  if (
+    plan.joints.some((joint) => joint.kind === "prismatic") ||
+    !plan.bodies.some((body) => body.key === rootBodyKey)
+  ) {
+    return null;
+  }
+  const adjacency = new Map<
+    string,
+    { readonly bodyKey: string; readonly jointIndex: number }[]
+  >();
+  for (const [jointIndex, joint] of plan.joints.entries()) {
+    const parent = adjacency.get(joint.parentBodyKey) ?? [];
+    parent.push({ bodyKey: joint.childBodyKey, jointIndex });
+    adjacency.set(joint.parentBodyKey, parent);
+    const child = adjacency.get(joint.childBodyKey) ?? [];
+    child.push({ bodyKey: joint.parentBodyKey, jointIndex });
+    adjacency.set(joint.childBodyKey, child);
+  }
+  const oriented: SemanticJointV2[] = [...plan.joints];
+  const visited = new Set([rootBodyKey]);
+  const queue = [rootBodyKey];
+  while (queue.length > 0) {
+    const parentBodyKey = queue.shift();
+    if (!parentBodyKey) break;
+    for (const neighbor of adjacency.get(parentBodyKey) ?? []) {
+      if (visited.has(neighbor.bodyKey)) continue;
+      visited.add(neighbor.bodyKey);
+      queue.push(neighbor.bodyKey);
+      const joint = plan.joints[neighbor.jointIndex]!;
+      oriented[neighbor.jointIndex] =
+        joint.parentBodyKey === parentBodyKey ? joint : reversedJoint(joint);
+    }
+  }
+  if (visited.size !== plan.bodies.length) return null;
+  return {
+    ...plan,
+    bodies: plan.bodies.map((body) => ({
+      ...body,
+      grounded: body.key === rootBodyKey,
+    })),
+    joints: oriented,
+  };
+};
+
+const rerootedPlanVariants = (
+  plan: FabricationPlanV2,
+  relevantBodyKeys: readonly string[],
+): readonly FabricationPlanV2[] => {
+  const currentRoot = plan.bodies.find((body) => body.grounded)?.key;
+  const roots = [...relevantBodyKeys, ...plan.bodies.map((body) => body.key)]
+    .filter((key, index, values) => values.indexOf(key) === index)
+    .filter((key) => key !== currentRoot);
+  return roots.flatMap((rootBodyKey) => {
+    const rerooted = rerootedPlan(plan, rootBodyKey);
+    return rerooted ? [rerooted] : [];
+  });
+};
+
+interface AttachmentPair {
+  readonly parent: SemanticEdgeAttachmentV2;
+  readonly child: SemanticEdgeAttachmentV2;
+}
+
+const attachmentPairsBetweenBodies = (
+  plan: FabricationPlanV2,
+  parentBodyKey: string,
+  childBodyKey: string,
+): readonly AttachmentPair[] => {
+  const parentPanels = plan.panels.filter(
+    (panel) => panel.bodyKey === parentBodyKey,
+  );
+  const childPanels = plan.panels.filter(
+    (panel) => panel.bodyKey === childBodyKey,
+  );
+  const pairs: AttachmentPair[] = [];
+  for (const parentPanel of parentPanels) {
+    const parentGeometry = panelGeometry(parentPanel);
+    if (!parentGeometry.ok) continue;
+    for (const childPanel of childPanels) {
+      if (parentPanel.sheetIndex !== childPanel.sheetIndex) continue;
+      const childGeometry = panelGeometry(childPanel);
+      if (!childGeometry.ok) continue;
+      for (const [
+        parentEdgeIndex,
+      ] of parentGeometry.value.localVertices.entries()) {
+        const parentEdge = edgeFor(parentGeometry.value, parentEdgeIndex);
+        if (!parentEdge.ok) continue;
+        for (const [
+          childEdgeIndex,
+        ] of childGeometry.value.localVertices.entries()) {
+          const childEdge = edgeFor(childGeometry.value, childEdgeIndex);
+          if (
+            childEdge.ok &&
+            Math.abs(
+              edgeLengthMm(parentEdge.value) - edgeLengthMm(childEdge.value),
+            ) <= EDGE_LENGTH_TOLERANCE_MM
+          ) {
+            pairs.push({
+              parent: { panelKey: parentPanel.key, edgeIndex: parentEdgeIndex },
+              child: { panelKey: childPanel.key, edgeIndex: childEdgeIndex },
+            });
+          }
+        }
+      }
+    }
+  }
+  return pairs.slice(0, MAXIMUM_JOINT_ATTACHMENT_PAIRS);
+};
+
+const descendantBodyKeys = (
+  plan: FabricationPlanV2,
+  bodyKey: string,
+): ReadonlySet<string> => {
+  const descendants = new Set([bodyKey]);
+  const queue = [bodyKey];
+  while (queue.length > 0) {
+    const parentBodyKey = queue.shift();
+    if (!parentBodyKey) break;
+    for (const joint of plan.joints) {
+      if (
+        joint.parentBodyKey === parentBodyKey &&
+        !descendants.has(joint.childBodyKey)
+      ) {
+        descendants.add(joint.childBodyKey);
+        queue.push(joint.childBodyKey);
+      }
+    }
+  }
+  return descendants;
+};
+
+const adjacencyPlanVariants = (
+  plan: FabricationPlanV2,
+  causalJointKeys: readonly string[],
 ): readonly {
   readonly groupKey: string;
   readonly plan: FabricationPlanV2;
 }[] => {
-  const variants: { groupKey: string; plan: FabricationPlanV2 }[] = [];
+  const variants: {
+    readonly groupKey: string;
+    readonly plan: FabricationPlanV2;
+  }[] = [];
+  for (const jointKey of causalJointKeys) {
+    const jointIndex = plan.joints.findIndex((joint) => joint.key === jointKey);
+    const joint = plan.joints[jointIndex];
+    if (!joint || joint.kind === "prismatic") continue;
+    const childSubtree = descendantBodyKeys(plan, joint.childBodyKey);
+    const parentBodyKeys = plan.bodies
+      .map((body) => body.key)
+      .filter(
+        (bodyKey) =>
+          !childSubtree.has(bodyKey) && bodyKey !== joint.parentBodyKey,
+      );
+    for (const parentBodyKey of parentBodyKeys) {
+      for (const attachments of attachmentPairsBetweenBodies(
+        plan,
+        parentBodyKey,
+        joint.childBodyKey,
+      )) {
+        variants.push({
+          groupKey: `adjacency:${joint.key}:${parentBodyKey}`,
+          plan: {
+            ...plan,
+            joints: plan.joints.map((candidate, index) =>
+              index === jointIndex
+                ? {
+                    ...candidate,
+                    parentBodyKey,
+                    parentAttachment: attachments.parent,
+                    childAttachment: attachments.child,
+                  }
+                : candidate,
+            ),
+          },
+        });
+      }
+    }
+  }
+  return variants;
+};
+
+const connectorPlanVariants = (
+  plan: FabricationPlanV2,
+  relevantPanelKeys: ReadonlySet<string> | null,
+  requireBothRelevantPanels = false,
+): readonly ResolutionVariant[] => {
+  const variants: ResolutionVariant[] = [];
   for (const [
     relationshipIndex,
     relationship,
   ] of plan.connectorRelationships.entries()) {
-    if (
-      relevantPanelKeys &&
-      !relevantPanelKeys.has(relationship.tabAttachment.panelKey) &&
-      !relevantPanelKeys.has(relationship.slotAttachment.panelKey)
-    ) {
-      continue;
+    if (relevantPanelKeys) {
+      const relevantCount = [
+        relationship.tabAttachment.panelKey,
+        relationship.slotAttachment.panelKey,
+      ].filter((panelKey) => relevantPanelKeys.has(panelKey)).length;
+      if (
+        relevantCount === 0 ||
+        (requireBothRelevantPanels && relevantCount !== 2)
+      ) {
+        continue;
+      }
     }
     const tabPanel = plan.panels.find(
       (panel) => panel.key === relationship.tabAttachment.panelKey,
@@ -2021,6 +2388,7 @@ const connectorPlanVariants = (
           continue;
         }
         variants.push({
+          category: "connector",
           groupKey: `connector:${relationship.key}`,
           plan: {
             ...plan,
@@ -2053,25 +2421,29 @@ const structuralCollisionError = (
   resolverEvaluationCount: number,
 ): StructuralCollisionError => {
   const failure = collisionFailure(evaluation.report);
-  const panelIds = failure?.geometryRefs
+  if (!failure) {
+    throw new Error("Internal invariant: structural collision report missing.");
+  }
+  const panelIds = failure.geometryRefs
     .filter((reference) => reference.kind === "panel")
     .map((reference) => reference.id);
-  const firstPanelId = panelIds?.[0] ?? "panel-unknown-a";
-  const secondPanelId = panelIds?.[1] ?? "panel-unknown-b";
-  const actualClearanceMm =
-    typeof failure?.actual.value === "number" ? failure.actual.value : 0;
-  const requiredClearanceMm =
-    typeof failure?.expected.value === "number" ? failure.expected.value : 0;
+  const firstPanelId = panelIds[0];
+  const secondPanelId = panelIds[1];
+  if (!firstPanelId || !secondPanelId) {
+    throw new Error(
+      "Internal invariant: collision failure lacks two panel references.",
+    );
+  }
   return {
     kind: "structural_collision",
     code: "collision.minimum_clearance",
     path: ["collision", firstPanelId, secondPanelId],
     panelIds: [firstPanelId, secondPanelId],
-    actualClearanceMm,
-    requiredClearanceMm,
+    actualClearanceMm: Number(failure.actual.value),
+    requiredClearanceMm: Number(failure.expected.value),
     resolverEvaluationCount,
     report: evaluation.report,
-    message: `${failure?.message ?? "The generated panels collide."} The model-selected topology could not be assembled without overlap using bounded attachment, fold-orientation, and home-angle choices. Resolver evaluations: ${resolverEvaluationCount}.`,
+    message: `${failure.message} The model-selected topology could not be assembled without overlap using bounded attachment, fold-orientation, and home-angle choices. Resolver evaluations: ${resolverEvaluationCount}.`,
   };
 };
 
@@ -2094,6 +2466,68 @@ const hardVerificationFailureError = (
   };
 };
 
+const geometricResolutionExhaustedError = (
+  evaluation: ResolvedPlanEvaluation,
+  resolverEvaluationCount: number,
+): GeometricResolutionExhaustedError => {
+  const failure = evaluation.report.failures.find(
+    (candidate) => candidate.severity === "hard",
+  )!;
+  return {
+    kind: "geometric_resolution_exhausted",
+    code: failure.failureId,
+    path: failure.geometryRefs.map((reference) => reference.id),
+    resolverEvaluationCount,
+    report: evaluation.report,
+    message: `${failure.message} The bounded geometric resolver exhausted its ${resolverEvaluationCount} evaluated states without a verified result.`,
+  };
+};
+
+type ResolutionVariantCategory = keyof typeof RESOLUTION_CATEGORY_BUDGETS;
+
+interface ResolutionVariant {
+  readonly category: ResolutionVariantCategory;
+  readonly groupKey: string;
+  readonly plan: FabricationPlanV2;
+}
+
+const selectCategorizedVariants = (
+  variants: readonly ResolutionVariant[],
+): readonly ResolutionVariant[] => {
+  const selected: ResolutionVariant[] = [];
+  const categoryCounts: Record<ResolutionVariantCategory, number> = {
+    connector: 0,
+    joint: 0,
+    reroot: 0,
+    adjacency: 0,
+  };
+  const groups = new Set<string>();
+  for (const variant of variants) {
+    if (
+      categoryCounts[variant.category] >=
+        MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER[variant.category] ||
+      groups.has(variant.groupKey)
+    ) {
+      continue;
+    }
+    selected.push(variant);
+    categoryCounts[variant.category] += 1;
+    groups.add(variant.groupKey);
+  }
+  for (const variant of variants) {
+    if (
+      categoryCounts[variant.category] >=
+        MAXIMUM_VARIANTS_PER_CATEGORY_PER_FRONTIER[variant.category] ||
+      selected.includes(variant)
+    ) {
+      continue;
+    }
+    selected.push(variant);
+    categoryCounts[variant.category] += 1;
+  }
+  return selected;
+};
+
 interface ResolutionCandidate {
   readonly evaluation: ResolvedPlanEvaluation;
   readonly groupKey: string;
@@ -2110,7 +2544,7 @@ const compareResolutionCandidates = (
   return left.serializedPlan.localeCompare(right.serializedPlan);
 };
 
-const selectCollisionSearchBeam = (
+const selectGeometricSearchBeam = (
   candidates: readonly ResolutionCandidate[],
 ): readonly ResolvedPlanEvaluation[] => {
   const sorted = candidates.toSorted(compareResolutionCandidates);
@@ -2134,16 +2568,17 @@ const selectCollisionSearchBeam = (
 };
 
 /**
- * Sol chooses semantic topology and local attachments. For a fold tree, edge
- * numbering, fold orientation, and an orthogonal home pose are
- * discrete authoring choices that code can search inside a small budget. The
- * search follows the joint path between the measured colliding panels and
- * never changes panel dimensions, bodies, topology, or requested semantics.
+ * Sol chooses semantic panels and a proposed fold graph. Edge numbering, fold
+ * orientation, grounding, and equivalent equal-edge adjacencies are discrete
+ * authoring choices that code can search inside a bounded budget. The search
+ * follows the joint path implicated by the measured failure and never changes
+ * panel dimensions, roles, connectors, or requested semantics.
  */
 export const expandResolvedSemanticFabricationPlan = (
   intentInput: unknown,
   planInput: unknown,
   candidateOrdinal: number,
+  maximumEvaluations?: number,
 ): ResolvedSemanticPlanExpansionResult => {
   const intent = FabricationIntentV1Schema.safeParse(intentInput);
   const plan = FabricationPlanV2Schema.safeParse(planInput);
@@ -2153,6 +2588,18 @@ export const expandResolvedSemanticFabricationPlan = (
     candidateOrdinal,
   );
   if (!intent.success || !plan.success || !initial.ok) return initial;
+  const resolutionEvaluationLimit = Math.max(
+    2,
+    Math.min(
+      MAXIMUM_PLAN_RESOLUTION_EVALUATIONS,
+      Math.trunc(
+        maximumEvaluations ??
+          (intent.data.behavior === "static"
+            ? SEMANTIC_PLAN_RESOLUTION_BUDGETS.static
+            : SEMANTIC_PLAN_RESOLUTION_BUDGETS.moving),
+      ),
+    ),
+  );
 
   const evaluate = (
     candidatePlan: FabricationPlanV2,
@@ -2183,7 +2630,7 @@ export const expandResolvedSemanticFabricationPlan = (
   if (initialEvaluation.value.report.valid) {
     return { ok: true, value: initialEvaluation.value.program };
   }
-  if (!isStaticPoseFailure(initialEvaluation.value.report)) {
+  if (!isResolvableGeometricFailure(initialEvaluation.value.report)) {
     return {
       ok: false,
       error: hardVerificationFailureError(initialEvaluation.value, 1),
@@ -2194,39 +2641,101 @@ export const expandResolvedSemanticFabricationPlan = (
   let best = initialEvaluation.value;
   let frontier: readonly ResolvedPlanEvaluation[] = [initialEvaluation.value];
   const seenPlans = new Set([canonicalSerialize(initialEvaluation.value.plan)]);
+  const categoryEvaluationCounts: Record<ResolutionVariantCategory, number> = {
+    connector: 0,
+    joint: 0,
+    reroot: 0,
+    adjacency: 0,
+  };
+  const normalizedPlan = withDirectionConsistentStaticFolds(plan.data);
+  const normalizedSerialization = canonicalSerialize(normalizedPlan);
+  if (!seenPlans.has(normalizedSerialization)) {
+    seenPlans.add(normalizedSerialization);
+    categoryEvaluationCounts.joint += 1;
+    evaluationCount += 1;
+    const normalized = evaluate(normalizedPlan);
+    if (normalized.ok) {
+      if (normalized.value.report.valid) {
+        return { ok: true, value: normalized.value.program };
+      }
+      if (reportIsBetter(normalized.value.report, best.report)) {
+        best = normalized.value;
+      }
+      frontier = [normalized.value, initialEvaluation.value];
+    }
+  }
 
   for (
     let depth = 0;
     depth < MAXIMUM_COLLISION_SEARCH_DEPTH &&
-    evaluationCount < MAXIMUM_PLAN_RESOLUTION_EVALUATIONS &&
+    evaluationCount < resolutionEvaluationLimit &&
     !best.report.valid;
     depth += 1
   ) {
     const nextCandidates: ResolutionCandidate[] = [];
     for (const current of frontier) {
-      const context = collisionResolutionContext(current);
+      const context = geometricFailureContext(current);
       const relevantPanelKeys = context ? new Set(context.panelKeys) : null;
-      const variants: {
-        readonly groupKey: string;
-        readonly plan: FabricationPlanV2;
-      }[] = [
+      const jointVariants: ResolutionVariant[] = [
         {
+          category: "joint",
           groupKey: "fold:direction-consistency",
           plan: withDirectionConsistentStaticFolds(current.plan),
         },
         ...(context?.jointKeys.flatMap((jointKey) =>
           staticJointPlanVariants(current.plan, jointKey).map((variant) => ({
+            category: "joint" as const,
             groupKey: `joint:${jointKey}`,
             plan: variant,
           })),
         ) ?? []),
-        ...connectorPlanVariants(current.plan, relevantPanelKeys),
       ];
+      const connectorVariants = connectorPlanVariants(
+        current.plan,
+        relevantPanelKeys,
+        context?.failureCode === "collision.minimum_clearance",
+      );
+      const rerootVariants: ResolutionVariant[] =
+        depth === 0
+          ? []
+          : rerootedPlanVariants(current.plan, context?.bodyKeys ?? []).map(
+              (variant) => ({
+                category: "reroot",
+                groupKey: `reroot:${variant.bodies.find((body) => body.grounded)?.key ?? "unknown"}`,
+                plan: variant,
+              }),
+            );
+      const adjacencyVariants: ResolutionVariant[] =
+        depth === 0
+          ? []
+          : adjacencyPlanVariants(current.plan, context?.jointKeys ?? []).map(
+              (variant) => ({
+                ...variant,
+                category: "adjacency",
+              }),
+            );
+      const variants = selectCategorizedVariants([
+        ...(context?.failureCode.startsWith("connections.connector_")
+          ? connectorVariants
+          : jointVariants),
+        ...(context?.failureCode.startsWith("connections.connector_")
+          ? jointVariants
+          : connectorVariants),
+        ...rerootVariants,
+        ...adjacencyVariants,
+      ]);
       for (const variant of variants) {
-        if (evaluationCount >= MAXIMUM_PLAN_RESOLUTION_EVALUATIONS) break;
+        if (evaluationCount >= resolutionEvaluationLimit) break;
+        if (
+          categoryEvaluationCounts[variant.category] >=
+          RESOLUTION_CATEGORY_BUDGETS[variant.category]
+        ) {
+          continue;
+        }
         const serializedPlan = canonicalSerialize(variant.plan);
         if (seenPlans.has(serializedPlan)) continue;
         seenPlans.add(serializedPlan);
+        categoryEvaluationCounts[variant.category] += 1;
         evaluationCount += 1;
         const candidate = evaluate(variant.plan);
         if (!candidate.ok) continue;
@@ -2244,9 +2753,15 @@ export const expandResolvedSemanticFabricationPlan = (
       }
     }
     if (nextCandidates.length === 0) break;
-    frontier = selectCollisionSearchBeam(nextCandidates);
+    frontier = selectGeometricSearchBeam(nextCandidates);
   }
 
+  if (evaluationCount >= resolutionEvaluationLimit) {
+    return {
+      ok: false,
+      error: geometricResolutionExhaustedError(best, evaluationCount),
+    };
+  }
   return collisionFailure(best.report)
     ? { ok: false, error: structuralCollisionError(best, evaluationCount) }
     : {

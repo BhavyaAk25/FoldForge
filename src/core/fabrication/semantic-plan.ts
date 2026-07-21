@@ -267,7 +267,7 @@ const SemanticBodyV2Schema = z
   })
   .strict() satisfies z.ZodType<SemanticBodyV2>;
 
-const SemanticEdgeAttachmentV2Schema = z
+export const SemanticEdgeAttachmentV2Schema = z
   .object({
     panelKey: key,
     edgeIndex: z.number().int().min(0).max(63),
@@ -285,7 +285,7 @@ const angularJointFields = {
   maximumAngleDeg: finite.min(-360).max(360),
 } as const;
 
-const SemanticJointV2Schema = z.discriminatedUnion("kind", [
+export const SemanticJointV2Schema = z.discriminatedUnion("kind", [
   z
     .object({
       ...angularJointFields,
