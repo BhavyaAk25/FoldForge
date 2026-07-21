@@ -274,13 +274,14 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
       modelResponseId: "resp-program",
       planHash: sha256Hex(canonicalSerialize(fixtureSemanticPlan())),
       expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
+      proposalCount: 1,
+      selectedProposalIndex: 0,
+      terminalFailureCodes: [],
     });
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         model: FOLDFORGE_MODEL,
-        instructions: expect.stringContaining(
-          "one to three compact FabricationPlanV2 proposals",
-        ),
+        instructions: expect.stringContaining("one complete baseProposal"),
         reasoning: { effort: "low" },
         max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
         background: true,

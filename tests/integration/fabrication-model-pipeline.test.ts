@@ -38,8 +38,11 @@ describe("mocked model to real compile route", () => {
             type: "function_call",
             name: "submit_fabrication_plan",
             arguments: JSON.stringify({
-              diversityClaim: "Use one compact cross-net enclosure.",
-              plan: fixtureLiveAcceptancePlan(),
+              baseProposal: {
+                diversityClaim: "Use one compact cross-net enclosure.",
+                plan: fixtureLiveAcceptancePlan(),
+              },
+              structuralAlternatives: [],
             }),
           },
         ],
@@ -65,6 +68,10 @@ describe("mocked model to real compile route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(proposal.provenance).toMatchObject({
+      proposalCount: 1,
+      selectedProposalIndex: 0,
+    });
     expect(await response.json()).toMatchObject({
       status: "passed",
       candidateId: "candidate-sanitized-card-box",
@@ -131,5 +138,154 @@ describe("mocked model to real compile route", () => {
       status: "passed",
       report: { valid: true, failures: [] },
     });
+  });
+
+  it("expands a compact model-authored structural alternative and skips equivalent plans", () => {
+    const intent = cardBoxIntent();
+    const validPlan = fixtureLiveAcceptancePlan();
+    const invalidBase = {
+      ...validPlan,
+      topologyKey: "misattached-lid-base",
+      joints: validPlan.joints.map((joint) =>
+        joint.key === "lid"
+          ? {
+              ...joint,
+              childAttachment: {
+                ...joint.childAttachment,
+                edgeIndex: 9,
+              },
+            }
+          : joint,
+      ),
+    };
+    const proposal = fabricationProgramProposalFromResponse({
+      response: {
+        id: "resp-compact-alternative-card-box",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            name: "submit_fabrication_plan",
+            arguments: JSON.stringify({
+              baseProposal: {
+                diversityClaim: "Attach the lid to its opposite long edge.",
+                plan: invalidBase,
+              },
+              structuralAlternatives: [
+                {
+                  diversityClaim:
+                    "Attach the same model-authored lid to the matching back edge.",
+                  topologyKey: "corrected-lid-edge",
+                  groundedBodyKey: null,
+                  jointEdits: [
+                    {
+                      jointKey: "lid",
+                      parentBodyKey: null,
+                      childBodyKey: null,
+                      parentAttachment: null,
+                      childAttachment: { panelKey: "lid", edgeIndex: 0 },
+                      foldDirection: null,
+                      homeValue: null,
+                      minimumValue: null,
+                      maximumValue: null,
+                    },
+                  ],
+                  connectorEdits: [],
+                },
+                {
+                  diversityClaim: "Rename the corrected topology only.",
+                  topologyKey: "renamed-corrected-lid-edge",
+                  groundedBodyKey: null,
+                  jointEdits: [
+                    {
+                      jointKey: "lid",
+                      parentBodyKey: null,
+                      childBodyKey: null,
+                      parentAttachment: null,
+                      childAttachment: { panelKey: "lid", edgeIndex: 0 },
+                      foldDirection: null,
+                      homeValue: null,
+                      minimumValue: null,
+                      maximumValue: null,
+                    },
+                  ],
+                  connectorEdits: [],
+                },
+              ],
+            }),
+          },
+        ],
+      },
+      intent,
+      candidateOrdinal: 1,
+      modelId: "gpt-5.6-sol",
+    });
+
+    expect(proposal).toMatchObject({
+      diversityClaim:
+        "Attach the same model-authored lid to the matching back edge.",
+      provenance: {
+        proposalCount: 3,
+        selectedProposalIndex: 1,
+        terminalFailureCodes: expect.arrayContaining([
+          "duplicate_structural_fingerprint",
+        ]),
+      },
+    });
+  }, 20_000);
+
+  it("rejects malformed compact alternatives before deterministic expansion", () => {
+    expect(() =>
+      fabricationProgramProposalFromResponse({
+        response: {
+          id: "resp-invalid-compact-alternative",
+          status: "completed",
+          output: [
+            {
+              type: "function_call",
+              name: "submit_fabrication_plan",
+              arguments: JSON.stringify({
+                baseProposal: {
+                  diversityClaim: "Use one complete base plan.",
+                  plan: fixtureLiveAcceptancePlan(),
+                },
+                structuralAlternatives: [
+                  {
+                    diversityClaim:
+                      "Reference an unknown model-authored joint.",
+                    topologyKey: "unknown-reference-alternative",
+                    groundedBodyKey: null,
+                    jointEdits: [
+                      {
+                        jointKey: "unknown-joint",
+                        parentBodyKey: null,
+                        childBodyKey: null,
+                        parentAttachment: null,
+                        childAttachment: null,
+                        foldDirection: null,
+                        homeValue: null,
+                        minimumValue: null,
+                        maximumValue: null,
+                      },
+                    ],
+                    connectorEdits: [],
+                  },
+                ],
+              }),
+            },
+          ],
+        },
+        intent: cardBoxIntent(),
+        candidateOrdinal: 1,
+        modelId: "gpt-5.6-sol",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "invalid_plan",
+        safeDetail: expect.objectContaining({
+          code: "alternative_reference",
+        }),
+      }),
+    );
   });
 });

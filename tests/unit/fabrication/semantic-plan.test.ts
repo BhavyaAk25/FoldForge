@@ -600,12 +600,10 @@ describe("semantic FabricationPlanV2", () => {
     expect(resolved).toMatchObject({
       ok: false,
       error: {
-        kind: "structural_collision",
+        kind: "geometric_resolution_exhausted",
         code: "collision.minimum_clearance",
-        path: ["collision", "panel-left", "panel-lid"],
-        panelIds: ["panel-left", "panel-lid"],
-        actualClearanceMm: 0,
-        requiredClearanceMm: 0.5,
+        path: ["panel-left", "panel-lid"],
+        resolverEvaluationCount: 160,
         report: {
           valid: false,
           failedAtStage: "collision",

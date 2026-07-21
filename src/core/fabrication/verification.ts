@@ -3412,11 +3412,14 @@ const validateCollision = (
     );
   };
   let minimumClearanceMm = Number.POSITIVE_INFINITY;
+  let maximumUndeclaredOverlapAreaMm2 = 0;
+  let violatingMotionStateCount = 0;
   let minimumStateIndex = 0;
   let minimumStateLabel = "the static home state";
   let collisionRefs: readonly GeometryRefV1[] = [];
   const evaluateStates = (states: readonly EvaluatedMotionState[]): void => {
     for (const [stateIndex, motionState] of states.entries()) {
+      let stateViolatesClearance = false;
       for (let firstIndex = 0; firstIndex < ir.panels.length; firstIndex += 1) {
         const first = ir.panels[firstIndex];
         if (!first) continue;
@@ -3557,6 +3560,15 @@ const validateCollision = (
                   centerlineDistanceMm -
                     (first.thicknessMm + second.thicknessMm) / 2,
                 );
+          if (
+            clearanceMm < FABRICATION_KINEMATIC_LIMITS.minimumMovingClearanceMm
+          ) {
+            stateViolatesClearance = true;
+            maximumUndeclaredOverlapAreaMm2 = Math.max(
+              maximumUndeclaredOverlapAreaMm2,
+              overlapAreaMm2,
+            );
+          }
           if (clearanceMm < minimumClearanceMm) {
             minimumClearanceMm = clearanceMm;
             minimumStateIndex = stateIndex;
@@ -3571,6 +3583,7 @@ const validateCollision = (
           }
         }
       }
+      if (stateViolatesClearance) violatingMotionStateCount += 1;
     }
   };
   evaluateStates(baseMotion.baseStates);
@@ -3604,6 +3617,20 @@ const validateCollision = (
   const collisionFree = minimumClearanceMm > 1e-8;
   const clearancePasses =
     minimumClearanceMm >= FABRICATION_KINEMATIC_LIMITS.minimumMovingClearanceMm;
+  state.metrics.push(
+    {
+      metricId: "collision.maximum_undeclared_overlap_area",
+      value: maximumUndeclaredOverlapAreaMm2,
+      unit: "mm2",
+      geometryRefs: collisionRefs,
+    },
+    {
+      metricId: "collision.violating_motion_state_count",
+      value: violatingMotionStateCount,
+      unit: "count",
+      geometryRefs: collisionRefs,
+    },
+  );
   if (!collisionFree || !clearancePasses) {
     const [firstCollisionRef, secondCollisionRef] = collisionRefs;
     const collisionPair =
