@@ -286,7 +286,7 @@ describe("GPT-5.6 Sol fabrication model boundary", () => {
         instructions: expect.stringContaining(
           "submit_fabrication_design_spec exactly once",
         ),
-        reasoning: { effort: "low" },
+        reasoning: { effort: "medium" },
         max_output_tokens: FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
         background: true,
         store: false,
