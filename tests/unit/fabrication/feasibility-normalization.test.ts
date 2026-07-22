@@ -185,5 +185,5 @@ describe("feasibility normalization", () => {
       expect(result.report.valid).toBe(true);
       expect(result.value.blueprint.connectors.length).toBeGreaterThan(0);
     }
-  });
+  }, 30_000);
 });

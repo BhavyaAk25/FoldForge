@@ -1,4 +1,5 @@
 import { canonicalSerialize } from "@/core/canonical";
+import { templateSpecForIntent } from "@/core/fabrication/design-templates";
 import {
   FABRICATION_SYNTHESIZER_VERSION,
   synthesizeFabricationDesign,
@@ -130,13 +131,48 @@ export const fabricationProgramProposalFromResponse = (input: {
       },
     );
   }
-  const specHash = sha256Hex(canonicalSerialize(parsed.data.designSpec));
-  const synthesized = synthesizeFabricationDesign(
+  // From-scratch synthesis of the model's spec runs first. If it exhausts, fall
+  // back to a proven parametric template for the object class, fit to the user's
+  // dimensions, so a common request still yields a real, verified, buildable
+  // design instead of an error. Only fail when both paths fail.
+  const primary = synthesizeFabricationDesign(
     input.intent,
     parsed.data.designSpec,
     input.candidateOrdinal,
   );
+  let chosenSpec: unknown = parsed.data.designSpec;
+  let synthesized = primary;
+  if (!primary.ok) {
+    const templateSpec = templateSpecForIntent(input.intent);
+    if (templateSpec) {
+      const templated = synthesizeFabricationDesign(
+        input.intent,
+        templateSpec,
+        input.candidateOrdinal,
+      );
+      if (templated.ok) {
+        synthesized = templated;
+        chosenSpec = templateSpec;
+      }
+    }
+  }
+  const specHash = sha256Hex(canonicalSerialize(chosenSpec));
   if (!synthesized.ok) {
+    // Only reached when BOTH from-scratch synthesis and any parametric template
+    // fail — a genuinely unbuildable request. Log the exact inputs (no secrets)
+    // so the residual case can be reproduced and covered offline.
+    try {
+      console.error(
+        `FOLDFORGE_SPEC_CAPTURE_BEGIN ${JSON.stringify({
+          error: synthesized.error,
+          templateAttempted: templateSpecForIntent(input.intent) !== null,
+          intent: input.intent,
+          designSpec: parsed.data.designSpec,
+        })} FOLDFORGE_SPEC_CAPTURE_END`,
+      );
+    } catch {
+      // Diagnostic logging must never affect request handling.
+    }
     throw new FabricationProgramModelError(
       "invalid_plan",
       synthesized.error.message,

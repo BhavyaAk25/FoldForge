@@ -93,7 +93,7 @@ const relationParts = (relation: RelationV3): readonly [string, string] => [
  * single lock that secures the moving/driven part; everything else is dropped.
  */
 export const stripRedundantSpecRelations = (
-  specInput: DesignSpecV3,
+  specInput: unknown,
 ): DesignSpecV3 => {
   const spec = FabricationDesignSpecV3Schema.parse(specInput);
   const touchDegree = new Map<string, number>();
