@@ -7,20 +7,56 @@ import {
 } from "@/core/fabrication/candidate";
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import {
+  fabricationSynthesisAttemptCoordinates,
   safeSynthesisErrorCode,
   synthesizeFabricationDesign,
 } from "@/core/fabrication/design-synthesis";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 import {
   fixtureHomepageCardBoxDesignSpec,
+  fixtureModelShapedCardBoxDesignSpec,
+  fixtureNaturalCardBoxDesignSpec,
   fixtureSingleFoldDesignSpec,
   fixtureSliderDesignSpec,
   fixtureStaticPanelDesignSpec,
 } from "../../fixtures/design-spec";
 import { fixtureIntent } from "../../fixtures/fabrication";
-import { productionCardBoxIntent } from "../../fixtures/production-geometric-failures";
+import {
+  productionCardBoxIntent,
+  productionCardBoxIntentWithRecognizableForm,
+} from "../../fixtures/production-geometric-failures";
 
 describe("deterministic fabrication design synthesis", () => {
+  it("diversifies roots, layouts, and connector orientation on first lane attempts", () => {
+    const firstAttempts = Array.from({ length: 24 }, (_, laneOrdinal) =>
+      fabricationSynthesisAttemptCoordinates(5, laneOrdinal, 0),
+    );
+
+    expect(
+      new Set(firstAttempts.map((attempt) => attempt.rootIndex)).size,
+    ).toBe(5);
+    expect(
+      new Set(firstAttempts.map((attempt) => attempt.layoutOrdinal)).size,
+    ).toBe(4);
+    expect(
+      new Set(
+        firstAttempts.map((attempt) => attempt.connectorOrientationOrdinal),
+      ),
+    ).toEqual(new Set([0, 1]));
+
+    const oneLane = Array.from({ length: 40 }, (_, attemptOrdinal) =>
+      fabricationSynthesisAttemptCoordinates(5, 7, attemptOrdinal),
+    );
+    expect(
+      new Set(
+        oneLane.map(
+          (attempt) =>
+            `${attempt.rootIndex}:${attempt.layoutOrdinal}:${attempt.connectorOrientationOrdinal}`,
+        ),
+      ).size,
+    ).toBe(40);
+  });
+
   it("reduces internal failures to safe terminal codes", () => {
     expect(safeSynthesisErrorCode(null)).toBe("unknown");
     expect(safeSynthesisErrorCode("provider text")).toBe("unknown");
@@ -92,6 +128,63 @@ describe("deterministic fabrication design synthesis", () => {
     });
   }, 60_000);
 
+  it("realizes the natural floor-and-tall-walls model decomposition", () => {
+    const result = synthesizeFabricationDesign(
+      productionCardBoxIntent(),
+      fixtureNaturalCardBoxDesignSpec(),
+      1,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.report).toMatchObject({
+      valid: true,
+      failures: [],
+      motionSummary: { baseSampleCount: 201 },
+    });
+    expect(
+      result.value.blueprint.panels.map((panel) => [
+        panel.panelId,
+        panel.widthMm,
+        panel.heightMm,
+      ]),
+    ).toEqual([
+      ["panel-base", 70, 95],
+      ["panel-front", 70, 25],
+      ["panel-back", 70, 25],
+      ["panel-left", 24, 95],
+      ["panel-right", 24, 95],
+      ["panel-lid", 70, 95],
+    ]);
+  }, 30_000);
+
+  it("normalizes a realistic combined model response before real verification", () => {
+    const result = synthesizeFabricationDesign(
+      productionCardBoxIntent(),
+      fixtureModelShapedCardBoxDesignSpec(),
+      1,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.report).toMatchObject({
+      valid: true,
+      failures: [],
+      motionSummary: { baseSampleCount: 201 },
+    });
+    expect(
+      result.value.blueprint.panels.some(
+        (panel) => panel.panelId === "panel-tuck-tab",
+      ),
+    ).toBe(false);
+    expect(result.value.blueprint.driver).toMatchObject({
+      minimumValue: 0,
+      homeValue: 90,
+      maximumValue: 90,
+    });
+    expect(result.diagnostics.evaluatedCandidateCount).toBeLessThanOrEqual(24);
+  }, 30_000);
+
   it("returns a typed design_infeasible result when a required part cannot fit the sheet", () => {
     const sourceIntent = fixtureIntent();
     const intent = {
@@ -118,6 +211,28 @@ describe("deterministic fabrication design synthesis", () => {
       },
     });
   });
+
+  it("binds live-style recognizable-form constraints to canonical semantic geometry", () => {
+    const result = synthesizeFabricationDesign(
+      productionCardBoxIntentWithRecognizableForm(),
+      fixtureModelShapedCardBoxDesignSpec(),
+      1,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.report).toMatchObject({ valid: true, failures: [] });
+    expect(result.value.blueprint.semanticParts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ semanticPartId: "part-base" }),
+        expect.objectContaining({ semanticPartId: "part-lid" }),
+        expect.objectContaining({
+          semanticPartId: "part-connector-lid-lock",
+          label: expect.stringContaining("lid lock"),
+        }),
+      ]),
+    );
+  }, 30_000);
 
   it.each([
     [
@@ -203,6 +318,8 @@ describe("deterministic fabrication design synthesis", () => {
             ...spec.parts[0]!,
             key: "unconnected",
             label: "Unconnected panel",
+            width: { minimumMm: 37, preferredMm: 37, maximumMm: 37 },
+            height: { minimumMm: 23, preferredMm: 23, maximumMm: 23 },
           },
         ],
       }),

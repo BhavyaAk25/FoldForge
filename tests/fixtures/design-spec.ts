@@ -121,6 +121,85 @@ export const fixtureHomepageCardBoxDesignSpec =
     tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
   });
 
+/**
+ * A natural model decomposition uses the 70 x 25 face as the floor and 95 mm
+ * tall walls. It is semantically equivalent to the homepage request but was
+ * not realizable before code-owned face assignment.
+ */
+export const fixtureNaturalCardBoxDesignSpec = (): FabricationDesignSpecV3 => {
+  const source = fixtureHomepageCardBoxDesignSpec();
+  const dimensionsByPart = new Map<string, readonly [number, number]>([
+    ["base", [70, 25]],
+    ["front", [70, 95]],
+    ["back", [70, 95]],
+    ["left", [25, 95]],
+    ["right", [25, 95]],
+    ["lid", [70, 25]],
+  ]);
+  return {
+    ...source,
+    parts: source.parts.map((part) => {
+      const dimensions = dimensionsByPart.get(part.key);
+      return dimensions
+        ? {
+            ...part,
+            width: exactMm(dimensions[0]),
+            height: exactMm(dimensions[1]),
+          }
+        : part;
+    }),
+  };
+};
+
+/** A compact collection of schema-valid choices observed in realistic model output. */
+export const fixtureModelShapedCardBoxDesignSpec =
+  (): FabricationDesignSpecV3 => {
+    const source = fixtureNaturalCardBoxDesignSpec();
+    return {
+      ...source,
+      parts: [
+        ...source.parts,
+        boxPart("tuck-tab", "Tuck tab", "closure", 30, 10),
+      ],
+      relations: [
+        ...source.relations
+          .filter((relation) => relation.kind !== "lock")
+          .map((relation) =>
+            relation.kind === "open_close"
+              ? {
+                  ...relation,
+                  angleRangeDeg: { minimum: 0, home: 0, maximum: 120 },
+                }
+              : relation,
+          ),
+        {
+          key: "tab-fold",
+          kind: "fold",
+          partAKey: "lid",
+          partBKey: "tuck-tab",
+          angleRangeDeg: { minimum: 90, home: 90, maximum: 90 },
+        },
+        {
+          key: "lid-lock",
+          kind: "lock",
+          partAKey: "tuck-tab",
+          partBKey: "front",
+          lockStyle: "tab_slot",
+        },
+      ],
+      visibleLandmarks: [
+        ...source.visibleLandmarks,
+        {
+          key: "tuck-tab-landmark",
+          label: "Tuck tab",
+          partKeys: ["tuck-tab"],
+          importance: "preferred",
+        },
+      ],
+      tolerances: { ...source.tolerances, clearanceMm: 2 },
+    };
+  };
+
 export const fixtureStaticPanelDesignSpec = (): FabricationDesignSpecV3 => ({
   version: "3",
   label: "Static display panel",
