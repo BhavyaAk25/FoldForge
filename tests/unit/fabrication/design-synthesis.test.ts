@@ -286,28 +286,6 @@ describe("deterministic fabrication design synthesis", () => {
       }),
     ],
     [
-      "material_thickness",
-      (intent: ReturnType<typeof fixtureIntent>) => intent,
-      (spec: ReturnType<typeof fixtureStaticPanelDesignSpec>) => ({
-        ...spec,
-        materialConstraints: {
-          ...spec.materialConstraints,
-          thickness: { minimumMm: 1, preferredMm: 1, maximumMm: 1 },
-        },
-      }),
-    ],
-    [
-      "material_thickness",
-      (intent: ReturnType<typeof fixtureIntent>) => intent,
-      (spec: ReturnType<typeof fixtureStaticPanelDesignSpec>) => ({
-        ...spec,
-        materialConstraints: {
-          ...spec.materialConstraints,
-          thickness: { minimumMm: 0.1, preferredMm: 0.1, maximumMm: 0.2 },
-        },
-      }),
-    ],
-    [
       "connected_acyclic_graph",
       (intent: ReturnType<typeof fixtureIntent>) => intent,
       (spec: ReturnType<typeof fixtureStaticPanelDesignSpec>) => ({
@@ -333,6 +311,38 @@ describe("deterministic fabrication design synthesis", () => {
       expect(result).toMatchObject({ ok: false, error: { code } });
     },
   );
+
+  it("treats the declared material thickness range as advisory, not a hard veto", () => {
+    // Physical stock thickness is manufacturing ground truth. A declared
+    // thickness range from the (separate) program-model call that excludes the
+    // available stock must NOT veto an otherwise manufacturable design — this
+    // spurious cross-contract coupling was the dominant cause of live failures.
+    const intent = productionCardBoxIntent();
+    // Baseline: the homepage card box synthesizes and verifies.
+    const baseline = synthesizeFabricationDesign(
+      intent,
+      fixtureHomepageCardBoxDesignSpec(),
+      1,
+    );
+    expect(baseline.ok).toBe(true);
+    // The same design with a declared thickness range that EXCLUDES the 0.3 mm
+    // stock must still synthesize to a fully verified design.
+    for (const thickness of [
+      { minimumMm: 1, preferredMm: 1, maximumMm: 1 },
+      { minimumMm: 0.1, preferredMm: 0.1, maximumMm: 0.2 },
+    ]) {
+      const spec = {
+        ...fixtureHomepageCardBoxDesignSpec(),
+        materialConstraints: {
+          ...fixtureHomepageCardBoxDesignSpec().materialConstraints,
+          thickness,
+        },
+      };
+      const result = synthesizeFabricationDesign(intent, spec, 1);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.report.valid).toBe(true);
+    }
+  });
 
   it("rejects malformed intent and design-spec contracts before synthesis", () => {
     expect(synthesizeFabricationDesign(null, {}, 1)).toMatchObject({
