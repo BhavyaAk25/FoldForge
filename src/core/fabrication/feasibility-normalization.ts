@@ -69,8 +69,32 @@ export const normalizeFabricationIntentFeasibility = (
       material: { ...sheet.material, thicknessMm },
     };
   });
+
+  // Model-invented numeric engagement targets — a required tab/slot contact
+  // area, or a connector clearance — routinely over-constrain the deterministic
+  // connector search and veto an otherwise-buildable design (they also drag
+  // collision and mate-reach down with them). They are the intent model's
+  // formalization of a vague request ("a tab so it stays closed"), not a hard
+  // manufacturing limit, so treat them as advisory: still recorded and measured
+  // by the verifier, but non-blocking. Structural constraints (topology,
+  // geometry, packing, collision, kinematics, recognizable form) stay hard.
+  const semanticConstraints = intent.semanticConstraints.map((constraint) => {
+    if (
+      constraint.hard &&
+      (constraint.kind === "contact" || constraint.kind === "clearance")
+    ) {
+      changed = true;
+      return { ...constraint, hard: false };
+    }
+    return constraint;
+  });
+
   if (!changed) return intent;
-  return FabricationIntentV1Schema.parse({ ...intent, stockOptions });
+  return FabricationIntentV1Schema.parse({
+    ...intent,
+    stockOptions,
+    semanticConstraints,
+  });
 };
 
 type DesignSpecV3 = ReturnType<typeof FabricationDesignSpecV3Schema.parse>;

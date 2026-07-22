@@ -161,6 +161,32 @@ describe("feasibility normalization", () => {
     expect(stock.heightMm).toBeGreaterThanOrEqual(stock.widthMm);
   });
 
+  it("softens model-invented contact/clearance constraints to advisory", () => {
+    const intent = normalizeFabricationIntentFeasibility({
+      ...overConstrainedIntent(),
+      semanticConstraints: [
+        {
+          constraintId: "constraint-lid-lock-contact",
+          hard: true,
+          source: "user",
+          kind: "contact",
+          geometryRefs: [
+            { kind: "connector", id: "connector-lid-lock-tab" },
+            { kind: "connector", id: "connector-lid-lock-slot" },
+          ],
+          minimumAreaMm2: 10,
+          during: "closed",
+        },
+      ],
+    });
+    const contact = intent.semanticConstraints.find(
+      (c) => c.kind === "contact",
+    );
+    // Still present and measured, but no longer a hard veto.
+    expect(contact).toBeDefined();
+    expect(contact?.hard).toBe(false);
+  });
+
   it("drops redundant wall-to-wall relations and surplus seam locks", () => {
     const stripped = stripRedundantSpecRelations(overConstrainedSpec());
     const locks = stripped.relations.filter((r) => r.kind === "lock");
