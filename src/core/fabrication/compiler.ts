@@ -250,9 +250,7 @@ const geometryReferenceResolves = (
         (item) => item.connectorId === ref.id,
       );
     case "output":
-      return program.blueprint.outputs.some(
-        (item) => item.outputId === ref.id,
-      );
+      return program.blueprint.outputs.some((item) => item.outputId === ref.id);
     case "semantic_part":
       return program.blueprint.semanticParts.some(
         (item) => item.semanticPartId === ref.id,

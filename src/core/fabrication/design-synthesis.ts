@@ -15,6 +15,7 @@ import {
   normalizedFabricationDesignSpecVariants,
   type NormalizedDesignSpecVariant,
 } from "./design-spec-normalization";
+import { stripRedundantSpecRelations } from "./feasibility-normalization";
 import { FABRICATION_LIMITS } from "./limits";
 import {
   expandResolvedSemanticFabricationPlan,
@@ -1107,9 +1108,12 @@ export const synthesizeFabricationDesign = (
       issue?.message ?? "The fabrication design specification is invalid.",
     );
   }
+  // Strip redundant wall-to-wall relations and surplus seam locks that
+  // over-constrain a single-sheet net before enumerating realizations.
+  const feasibleSpec = stripRedundantSpecRelations(spec.data);
   const normalizedCandidates = normalizedFabricationDesignSpecVariants(
     intent.data,
-    spec.data,
+    feasibleSpec,
   );
   if (normalizedCandidates.length === 0) {
     return failure(
