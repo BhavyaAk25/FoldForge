@@ -8,6 +8,7 @@ import type {
 
 import { canonicalSerialize } from "@/core/canonical";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
+import { normalizeFabricationIntentFeasibility } from "@/core/fabrication/feasibility-normalization";
 import { normalizeFabricationIntentBudget } from "@/core/fabrication/intent-budget";
 import {
   FabricationIntentV1Schema,
@@ -529,12 +530,14 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
         "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
       );
     }
-    return FabricationIntentV1Schema.parse(
-      normalizeFabricationIntentBudget(
-        normalizeIntentSemanticPartIds(
-          FabricationIntentV1Schema.parse(response.output_parsed),
+    return normalizeFabricationIntentFeasibility(
+      FabricationIntentV1Schema.parse(
+        normalizeFabricationIntentBudget(
+          normalizeIntentSemanticPartIds(
+            FabricationIntentV1Schema.parse(response.output_parsed),
+          ),
+          prompt,
         ),
-        prompt,
       ),
     );
   }
