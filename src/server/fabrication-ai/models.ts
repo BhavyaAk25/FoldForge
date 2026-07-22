@@ -575,10 +575,12 @@ export class OpenAIFabricationProgramModel implements FabricationProgramModel {
           ),
         },
       ],
-      // Deterministic expansion and verification own correctness. Low effort
-      // leaves the model enough planning capacity while avoiding the large
-      // hidden-token overhead observed with medium-effort Sol responses.
-      reasoning: { effort: "low" },
+      // Deterministic expansion and verification own correctness, but the
+      // model still chooses the panel decomposition, stock sizing, and lock
+      // count that keep a design inside the synthesizer's feasible envelope.
+      // Medium effort measurably reduces over-constrained specs (redundant
+      // wall-to-wall relations, a lock on every seam, an undersized sheet).
+      reasoning: { effort: "medium" },
       tools: [
         zodResponsesFunction({
           name: "submit_fabrication_design_spec",
