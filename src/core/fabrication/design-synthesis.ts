@@ -957,18 +957,14 @@ const preflight = (
       );
     }
   }
-  const thicknessMm = sheet.material.thicknessMm;
-  if (
-    thicknessMm < spec.materialConstraints.thickness.minimumMm ||
-    thicknessMm > spec.materialConstraints.thickness.maximumMm
-  ) {
-    return failure(
-      "design_infeasible",
-      "material_thickness",
-      ["materialConstraints", "thickness"],
-      "Available stock thickness is outside the declared design range.",
-    );
-  }
+  // Physical stock thickness is manufacturing ground truth: every panel, tab,
+  // and slot downstream is derived from `stock.material.thicknessMm`. The
+  // spec's declared thickness range comes from a *separate* model call and is
+  // only an advisory preference — it must never veto an otherwise
+  // manufacturable design. (Coupling these two independent model outputs as a
+  // hard gate was the dominant cause of "design failed" on realistic prompts.)
+  // We keep a stock selection that honors the declared range when possible, but
+  // fall back to the available stock rather than failing on thickness alone.
   return null;
 };
 

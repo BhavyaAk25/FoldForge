@@ -7,6 +7,10 @@ import {
   slotConnectorContour,
 } from "./connector-geometry";
 import {
+  programHasLockConnectors,
+  reconcileLockConnectorPlacement,
+} from "./connector-reconciliation";
+import {
   isSimplePolygon,
   pointInPolygon,
   signedPolygonAreaMm2,
@@ -2875,16 +2879,46 @@ export const expandResolvedSemanticFabricationPlan = (
     if (!expanded.ok) return expanded;
     const compiled = compileFabricationProgram(intent.data, expanded.value);
     if (!compiled.ok) return compiled;
+    const verificationId = `candidate-plan-resolution-${candidateOrdinal}`;
+    let program = expanded.value;
+    let report = verifyFabricationIr(compiled.value, verificationId);
+    // Reciprocal tab/slot locks are authored in flat coordinates by centering
+    // the tab and its mating slot independently on their own panel edges. Those
+    // two points only coincide once folded when the mating panels are identical
+    // and symmetric (the exact authored fixture). For any other dimensions the
+    // tab and slot miss in the assembled frame, failing the reciprocal
+    // connector checks. Reposition the slot to mate its tab in the folded home
+    // pose and re-verify, adopting the result only when it strictly improves
+    // this plan's verification — so it can never regress a passing design.
+    if (!report.valid && programHasLockConnectors(program)) {
+      let reconcileProgram = program;
+      let reconcileIr = compiled.value;
+      for (let pass = 0; pass < 2 && !report.valid; pass += 1) {
+        const reconciled = reconcileLockConnectorPlacement(
+          reconcileProgram,
+          reconcileIr,
+        );
+        if (!reconciled) break;
+        const recompiled = compileFabricationProgram(intent.data, reconciled);
+        if (!recompiled.ok) break;
+        const reconciledReport = verifyFabricationIr(
+          recompiled.value,
+          verificationId,
+        );
+        reconcileProgram = reconciled;
+        reconcileIr = recompiled.value;
+        if (
+          reconciledReport.valid ||
+          reportIsBetter(reconciledReport, report)
+        ) {
+          program = reconciled;
+          report = reconciledReport;
+        }
+      }
+    }
     return {
       ok: true,
-      value: {
-        plan: candidatePlan,
-        program: expanded.value,
-        report: verifyFabricationIr(
-          compiled.value,
-          `candidate-plan-resolution-${candidateOrdinal}`,
-        ),
-      },
+      value: { plan: candidatePlan, program, report },
     };
   };
 
