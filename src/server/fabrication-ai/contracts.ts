@@ -72,6 +72,11 @@ export const ProgramProposalV1Schema = z
           .array(z.string().min(1).max(160))
           .max(12)
           .optional(),
+        // How the returned geometry was produced: "synthesis" means the model's
+        // own design spec was compiled and verified as-is; "template" means the
+        // model spec could not be built and a proven parametric template, fit to
+        // the requested dimensions, was used instead.
+        generationSource: z.enum(["synthesis", "template"]).optional(),
       })
       .strict(),
   })

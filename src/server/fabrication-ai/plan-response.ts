@@ -142,6 +142,7 @@ export const fabricationProgramProposalFromResponse = (input: {
   );
   let chosenSpec: unknown = parsed.data.designSpec;
   let synthesized = primary;
+  let generationSource: "synthesis" | "template" = "synthesis";
   if (!primary.ok) {
     const templateSpec = templateSpecForIntent(input.intent);
     if (templateSpec) {
@@ -153,6 +154,7 @@ export const fabricationProgramProposalFromResponse = (input: {
       if (templated.ok) {
         synthesized = templated;
         chosenSpec = templateSpec;
+        generationSource = "template";
       }
     }
   }
@@ -196,6 +198,15 @@ export const fabricationProgramProposalFromResponse = (input: {
       },
     );
   }
+  // Transparent record of which path produced the geometry, so a design is
+  // never mistaken for something it is not.
+  try {
+    console.error(
+      `FOLDFORGE_GENERATION_SOURCE=${generationSource} modelResponseId=${input.response.id}`,
+    );
+  } catch {
+    // Logging must never affect request handling.
+  }
   return ProgramProposalV1Schema.parse({
     diversityClaim: parsed.data.diversityClaim,
     program: synthesized.value,
@@ -211,6 +222,7 @@ export const fabricationProgramProposalFromResponse = (input: {
       synthesisEvaluationCount: synthesized.diagnostics.evaluatedCandidateCount,
       synthesisNogoodCount: synthesized.diagnostics.nogoodCount,
       terminalFailureCodes: synthesized.diagnostics.terminalFailureCodes,
+      generationSource,
     },
   });
 };

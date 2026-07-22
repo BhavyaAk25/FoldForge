@@ -175,6 +175,8 @@ describe("mocked V3 model specification to real compile route", () => {
       evaluatedProposalCount: 1,
       selectedProposalIndex: 0,
       synthesisEvaluationCount: expect.any(Number),
+      // The model's own spec built successfully: transparently marked.
+      generationSource: "synthesis",
     });
     expect(await response.json()).toMatchObject({
       status: "passed",
@@ -310,6 +312,8 @@ describe("mocked V3 model specification to real compile route", () => {
     });
     expect(proposal.program.blueprint.panels.length).toBeGreaterThan(0);
     expect(proposal.program.blueprint.connectors.length).toBeGreaterThan(0);
+    // Transparently marked as template-built, never mistaken for the model's spec.
+    expect(proposal.provenance.generationSource).toBe("template");
   });
 
   it("rejects malformed and duplicate V3 calls before synthesis", () => {
