@@ -26,6 +26,7 @@ import type {
   FabricationIRV1,
   FabricationPathV1,
   FabricationProgramV1,
+  GeometryRefV1,
   NormalizedPolygonContourV1,
   PanelBlueprintV1,
   PanelV1,
@@ -211,6 +212,58 @@ const validateProgramReferences = (
   return null;
 };
 
+// The geometry references a semantic constraint depends on, mirroring the
+// resolution the verifier performs at the topology stage.
+const constraintGeometryReferences = (
+  constraint: FabricationProgramV1["semanticConstraints"][number],
+): readonly GeometryRefV1[] => {
+  switch (constraint.kind) {
+    case "dimension":
+      return [constraint.geometryRef];
+    case "clearance":
+    case "contact":
+      return constraint.geometryRefs;
+    case "symmetry":
+    case "fold_flat":
+      return constraint.bodyIds.map((id) => ({ kind: "body", id }));
+    case "motion":
+      return [{ kind: "output", id: constraint.outputId }];
+    case "recognizable_form":
+      return constraint.semanticPartIds.map((id) => ({
+        kind: "semantic_part",
+        id,
+      }));
+  }
+};
+
+const geometryReferenceResolves = (
+  ref: GeometryRefV1,
+  program: FabricationProgramV1,
+): boolean => {
+  switch (ref.kind) {
+    case "body":
+      return program.blueprint.bodies.some((item) => item.bodyId === ref.id);
+    case "panel":
+      return program.blueprint.panels.some((item) => item.panelId === ref.id);
+    case "connector":
+      return program.blueprint.connectors.some(
+        (item) => item.connectorId === ref.id,
+      );
+    case "output":
+      return program.blueprint.outputs.some(
+        (item) => item.outputId === ref.id,
+      );
+    case "semantic_part":
+      return program.blueprint.semanticParts.some(
+        (item) => item.semanticPartId === ref.id,
+      );
+    default:
+      // Reference kinds a constraint never targets are validated elsewhere;
+      // never drop a constraint on their account.
+      return true;
+  }
+};
+
 const mergedSemanticConstraints = (
   intent: FabricationIntentV1,
   program: FabricationProgramV1,
@@ -240,7 +293,20 @@ const mergedSemanticConstraints = (
     }
     merged.set(constraint.constraintId, constraint);
   }
-  return fabricationOk([...merged.values()]);
+  // The intent and design spec come from two independent model calls. The
+  // intent routinely authors hard constraints against abstract geometry the
+  // program never materializes as a part — e.g. an interior "cavity" body whose
+  // size is really an emergent property of the walls. Such a reference can
+  // never be verified and, left in place, hard-fails the whole design at the
+  // topology stage (with no design produced at all). Drop constraints whose
+  // geometry references cannot be resolved against the synthesized design;
+  // every resolvable reference stays strictly enforced.
+  const resolved = [...merged.values()].filter((constraint) =>
+    constraintGeometryReferences(constraint).every((ref) =>
+      geometryReferenceResolves(ref, program),
+    ),
+  );
+  return fabricationOk(resolved);
 };
 
 const scaleContour = (

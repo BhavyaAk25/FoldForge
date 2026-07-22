@@ -137,21 +137,6 @@ export const fabricationProgramProposalFromResponse = (input: {
     input.candidateOrdinal,
   );
   if (!synthesized.ok) {
-    // Temporary diagnostic capture (debug branch only): emit the exact live Sol
-    // spec + intent + failure to the function log (visible in Vercel logs) so
-    // the deterministic failure can be reproduced and fixed offline.
-    const capture = {
-      error: synthesized.error,
-      intent: input.intent,
-      designSpec: parsed.data.designSpec,
-    };
-    try {
-      console.error(
-        `FOLDFORGE_SPEC_CAPTURE_BEGIN ${JSON.stringify(capture)} FOLDFORGE_SPEC_CAPTURE_END`,
-      );
-    } catch {
-      // Diagnostic capture must never affect request handling.
-    }
     throw new FabricationProgramModelError(
       "invalid_plan",
       synthesized.error.message,
