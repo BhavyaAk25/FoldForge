@@ -4,6 +4,7 @@ import { synthesizeFabricationDesign } from "@/core/fabrication/design-synthesis
 import {
   enclosureTemplateSpec,
   figureTemplateSpec,
+  popUpCardTemplateSpec,
   templateSpecForIntent,
 } from "@/core/fabrication/design-templates";
 import { normalizeFabricationIntentFeasibility } from "@/core/fabrication/feasibility-normalization";
@@ -86,6 +87,69 @@ describe("design templates", () => {
       const result = synthesizeFabricationDesign(
         intent,
         enclosureTemplateSpec(size.widthMm, size.heightMm, size.depthMm),
+        1,
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.report.valid).toBe(true);
+    }
+  }, 60_000);
+});
+
+const flowerIntent = (
+  size = { widthMm: 105, heightMm: 148, depthMm: 30 },
+): FabricationIntentV1 => ({
+  ...boxIntent("pop-up flower card", size),
+  behavior: "open_close",
+  sourcePrompt:
+    "A birthday card that opens so a flower rises from the center and folds flat when closed. Fits an A6 envelope.",
+  functionalGoal:
+    "A card that opens and a flower rises, then folds flat when closed.",
+  semanticConstraints: [
+    {
+      constraintId: "constraint-flower-form",
+      hard: true,
+      source: "user",
+      kind: "recognizable_form",
+      label: "pop-up flower card",
+      semanticPartIds: ["part-card", "part-flower"],
+      requiredLandmarks: ["card", "flower"],
+      evaluation: "landmark_geometry",
+    },
+  ],
+});
+
+describe("pop-up flower card template", () => {
+  it("routes a pop-up/flower request to the pop-up card template", () => {
+    const spec = templateSpecForIntent(flowerIntent());
+    expect(spec).not.toBeNull();
+    expect(spec?.driver).not.toBeNull();
+    expect(spec?.parts.map((p) => p.key).sort()).toEqual(["card", "flower"]);
+  });
+
+  it("synthesizes a verified pop-up mechanism (with the form constraint)", () => {
+    const intent = normalizeFabricationIntentFeasibility(flowerIntent());
+    const spec = templateSpecForIntent(intent);
+    expect(spec).not.toBeNull();
+    const result = synthesizeFabricationDesign(intent, spec!, 1);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.report.valid).toBe(true);
+      // a real driven open/close mechanism (a card that raises a flower)
+      expect(result.value.blueprint.driver).not.toBeNull();
+      expect(result.value.blueprint.outputs.length).toBeGreaterThan(0);
+    }
+  }, 30_000);
+
+  it("produces a verified pop-up across common card sizes", () => {
+    for (const size of [
+      { widthMm: 105, heightMm: 148, depthMm: 30 },
+      { widthMm: 100, heightMm: 140, depthMm: 20 },
+      { widthMm: 148, heightMm: 105, depthMm: 25 },
+    ]) {
+      const intent = normalizeFabricationIntentFeasibility(flowerIntent(size));
+      const result = synthesizeFabricationDesign(
+        intent,
+        popUpCardTemplateSpec(size.widthMm, size.heightMm, size.depthMm),
         1,
       );
       expect(result.ok).toBe(true);
