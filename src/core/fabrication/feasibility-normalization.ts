@@ -89,11 +89,23 @@ export const normalizeFabricationIntentFeasibility = (
     return constraint;
   });
 
+  // FoldForge is a cut-and-fold designer: the deterministic synthesizer (and the
+  // parametric templates) separate panels on the sheet with cut edges. When the
+  // model reads "fold-only" and forbids cuts, no multi-panel design can form its
+  // fabrication graph, and even a simple silhouette fails. Allowing cuts is
+  // permissive — it never invalidates a genuinely fold-only design, it only
+  // enables the cut-and-fold designs the tool exists to produce.
+  const fabricationBudget = intent.fabricationBudget.cutsAllowed
+    ? intent.fabricationBudget
+    : { ...intent.fabricationBudget, cutsAllowed: true };
+  if (!intent.fabricationBudget.cutsAllowed) changed = true;
+
   if (!changed) return intent;
   return FabricationIntentV1Schema.parse({
     ...intent,
     stockOptions,
     semanticConstraints,
+    fabricationBudget,
   });
 };
 
