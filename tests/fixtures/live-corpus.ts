@@ -147,21 +147,24 @@ const cardBoxOverConstrained = (): LiveCorpusCase => ({
 
 // ── Static faceted duck (a hard-to-synthesize model spec). ──
 const facetedDuck = (): LiveCorpusCase => ({
-  name: "static faceted duck",
+  name: "static faceted duck (fold-only, cuts forbidden, large envelope)",
   mustProduceDesign: true,
   intent: {
     version: "1",
     intentId: "intent-duck",
     sourcePrompt:
-      "Make a static, faceted duck crease pattern from one sheet of cardstock with a body, head, and beak. Fold-only, no glue.",
-    title: "Faceted Duck",
-    objectLabel: "faceted duck crease pattern",
-    functionalGoal: "A fold-only faceted duck with a body, head, and beak.",
-    visualDescription: "A faceted duck silhouette.",
+      "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.",
+    title: "One-Sheet Faceted Duck Crease Pattern",
+    objectLabel: "faceted duck",
+    functionalGoal:
+      "Create a static, self-supporting duck folded from a single uncut sheet without glue.",
+    visualDescription: "A simple angular duck with body, head, and beak.",
     behavior: "static",
-    requestedSize: { widthMm: 120, heightMm: 90, depthMm: 30 },
+    // The exact live envelope + the "fold-only, uncut sheet" budget the intent
+    // model produced for this prompt (cutsAllowed:false) — the case that broke.
+    requestedSize: { widthMm: 160, heightMm: 110, depthMm: 70 },
     stockOptions: a4(0.3),
-    fabricationBudget: budget,
+    fabricationBudget: { ...budget, cutsAllowed: false },
     semanticConstraints: [
       {
         constraintId: "constraint-duck-form",
