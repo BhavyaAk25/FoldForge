@@ -166,6 +166,9 @@ export function FoldForgeApp() {
   const [intent, setIntent] = useState<FabricationIntentV1 | null>(null);
   const [candidates, setCandidates] = useState<readonly CandidateV2[]>([]);
   const [experienceMode, setExperienceMode] = useState<ExperienceMode>("live");
+  const [generationSource, setGenerationSource] = useState<
+    "synthesis" | "template" | null
+  >(null);
   const [savedLimitation, setSavedLimitation] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [repairEvidence, setRepairEvidence] = useState<
@@ -363,6 +366,7 @@ export function FoldForgeApp() {
     setError("");
     setExperienceMode("live");
     setSavedLimitation(null);
+    setGenerationSource(null);
     setIntent(null);
     setCandidates([]);
     setSelectedId("");
@@ -482,6 +486,9 @@ export function FoldForgeApp() {
       setIntent(nextIntent);
       setCandidates([checkedDesign]);
       setSelectedId(checkedDesign.candidateId);
+      setGenerationSource(
+        generated.proposal.provenance.generationSource ?? null,
+      );
       setRepairEvidence(evidenceByCandidate);
       setNarrative(null);
       setResultBinding(forgeBinding);
@@ -515,6 +522,7 @@ export function FoldForgeApp() {
     latestPromptRef.current = example.prompt;
     setIntent(null);
     setCandidates([]);
+    setGenerationSource(null);
     setSelectedId("");
     setRepairEvidence({});
     setNarrative(null);
@@ -574,6 +582,7 @@ export function FoldForgeApp() {
     setResultBinding(savedBinding);
     resultBindingRef.current = savedBinding;
     setExperienceMode("saved");
+    setGenerationSource(null);
     setSavedLimitation(showcase.limitation);
     setPreviewMode("assembled");
     setMotionPosition(isDuck ? 0 : 0.65);
@@ -746,6 +755,7 @@ export function FoldForgeApp() {
             experienceMode={experienceMode}
             exportingFormat={exportingFormat}
             finalizing={finalizing}
+            generationSource={generationSource}
             limitations={limitations}
             liveGenerationAvailable={solAvailable}
             motionPosition={motionPosition}

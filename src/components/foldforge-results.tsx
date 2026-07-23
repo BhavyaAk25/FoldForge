@@ -51,6 +51,13 @@ interface FoldForgeResultsProps {
   readonly buildSha: string | null;
   readonly candidates: readonly CandidateV2[];
   readonly experienceMode: ExperienceMode;
+  /**
+   * How a live design was produced: "synthesis" means the model's own design
+   * spec was built as-is; "template" means a parametric template fit to the
+   * request was used because the model spec could not be built. Null for saved
+   * examples or when unknown.
+   */
+  readonly generationSource: "synthesis" | "template" | null;
   readonly exportingFormat: ExportFormat | null;
   readonly finalizing: boolean;
   readonly limitations: readonly string[];
@@ -77,6 +84,7 @@ export function FoldForgeResults({
   experienceMode,
   exportingFormat,
   finalizing,
+  generationSource,
   limitations,
   liveGenerationAvailable,
   motionPosition,
@@ -109,7 +117,11 @@ export function FoldForgeResults({
         <p className={styles.eyebrow}>
           {experienceMode === "saved"
             ? "Saved example · prepared in advance"
-            : "Design passed our checks"}
+            : generationSource === "template"
+              ? "Design passed our checks · Built from a parametric template"
+              : generationSource === "synthesis"
+                ? "Design passed our checks · Generated from your prompt"
+                : "Design passed our checks"}
         </p>
         <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
           {experienceMode === "saved"
