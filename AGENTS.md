@@ -19,7 +19,7 @@ The accepted grammar contains panels, cuts, folds, tabs, slots, revolute hinges,
 - direct-ratio, mirrored-pair, pull-tab, or cam-slot couplings;
 - static, open/close, flap, rotate, slide, or expand/collapse behaviour.
 
-Reject honestly when a request requires arbitrary smooth solids, deformable surfaces, electronics, motors, force-dependent behaviour, or a general closed-loop mechanism. Do not route prompts to hidden templates, keywords, canned winners, or fabricated examples.
+Reject honestly when a request requires arbitrary smooth solids, deformable surfaces, electronics, motors, force-dependent behaviour, or a general closed-loop mechanism. Generic synthesis must run first. A documented parametric enclosure, faceted-figure, or pop-up-card family may run only after generic synthesis fails, must be fitted to the user's dimensions, must pass the unchanged compiler and verifier, and must record `generationSource: "template"`. Never return an undisclosed preset, canned winner, prepared image, or saved export as generated geometry.
 
 ## Domain boundaries
 

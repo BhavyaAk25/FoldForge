@@ -6,7 +6,7 @@ This internal rubric maps reproducible FoldForge evidence to the four equally we
 
 The project must run, use Codex and GPT-5.6, fit **Work & Productivity**, include the required repository and README, and have a public narrated demo under three minutes. An offline fixture cannot satisfy the GPT-5.6 requirement.
 
-Current state: deterministic and offline evidence is strong, and the paid GPT-5.6 Sol intent contract passed. The first live program proposal failed, production remains live-disabled, and the headline prompt-to-fabrication journey is therefore not yet submission-ready.
+Current state: deterministic and offline evidence is strong, one exact live Sol path has completed, and the public workflow now has synthesis-first parametric fallbacks for three documented object classes. The screenshots in `docs/images/` show the product, verifier, exports, LibreCAD DXF handoff, and SVG pattern. Generic arbitrary-spec realization and broad live reliability remain unproven, and branch coverage is currently 89.84% against a 90% target.
 
 ## Scoring method
 
@@ -20,29 +20,29 @@ Release threshold:
 
 ## 1. Technological Implementation — 25 points
 
-| Evidence                                                                                                              | Points |
-| --------------------------------------------------------------------------------------------------------------------- | -----: |
-| An unseen brief becomes strict intent and program contracts through live GPT-5.6 Sol, without hidden template routing |    0–5 |
-| Pure deterministic compiler produces versioned panels, joints, connectors, transforms, motion, and provenance         |    0–5 |
-| Ordered verifier proves geometry, packing, kinematics, collision, semantics, and independent mutation rejection       |    0–5 |
-| Bounded Sol diagnosis repairs a real measured failure and code reruns every check                                     |    0–4 |
-| GLB/SVG/DXF/JSON and profile-scoped FOLD are source-equivalent to the selected IR                                     |    0–3 |
-| Codex work, architecture, tests, security, limitations, and reproduction are clear in the repository                  |    0–3 |
+| Evidence                                                                                                                         | Points |
+| -------------------------------------------------------------------------------------------------------------------------------- | -----: |
+| An unseen brief becomes strict intent and a topology-free design spec through live GPT-5.6 Sol, with generation source disclosed |    0–5 |
+| Pure deterministic compiler produces versioned panels, joints, connectors, transforms, motion, and provenance                    |    0–5 |
+| Ordered verifier proves geometry, packing, kinematics, collision, semantics, and independent mutation rejection                  |    0–5 |
+| Bounded Sol diagnosis repairs a real measured failure and code reruns every check                                                |    0–4 |
+| GLB/SVG/DXF/JSON and profile-scoped FOLD are source-equivalent to the selected IR                                                |    0–3 |
+| Codex work, architecture, tests, security, limitations, and reproduction are clear in the repository                             |    0–3 |
 
 Automatic deductions:
 
 - −5 if live Sol is replaced by mocked model output in the demo;
 - −5 if model JSON is trusted as geometry or validity;
-- −3 if candidate diversity is cosmetic rather than topological; and
+- −3 if a parametric result is described as model-authored topology; and
 - score is capped at 10 if any hard-invalid candidate is presented as valid.
 
 ## 2. Design — 25 points
 
 | Evidence                                                                                         | Points |
 | ------------------------------------------------------------------------------------------------ | -----: |
-| Describe → Forge → Compare → Export is obvious, concise, recoverable, and free of filler         |    0–5 |
-| Up to three valid candidates are understandable and meaningfully distinct                        |    0–4 |
-| 3D, pattern, program, motion, verifier, repair, selection, and exports stay synchronized         |    0–5 |
+| Describe → Forge → Export is obvious, concise, recoverable, and free of filler                   |    0–5 |
+| The single returned design clearly identifies synthesis/template provenance and limitations      |    0–4 |
+| 3D, pattern, program, motion, verifier, provenance, and exports stay synchronized                |    0–5 |
 | Export controls are legible, exact, calibrated, and paired with grounded build notes             |    0–4 |
 | Keyboard, reduced motion, automated accessibility, and four responsive widths pass               |    0–4 |
 | `USER` / `AI` / `CODE` provenance and live/offline state are clear without overwhelming the user |    0–3 |
@@ -72,7 +72,7 @@ Optional user timing studies can strengthen the impact story, but they are not i
 | ------------------------------------------------------------------------------------------------------------------- | -----: |
 | The prompt-to-typed-program-to-proof framing is clear and differentiated from image generation and generic CAD chat |    0–5 |
 | The grammar is broad enough for multiple objects and mechanisms but narrow enough for deterministic proof           |    0–5 |
-| Topology diversity and verifier-grounded repair expose genuine design exploration                                   |    0–4 |
+| Generic synthesis, disclosed fallbacks, and verifier-grounded repair expose genuine engineering trade-offs          |    0–4 |
 | Research and prior-art boundaries show technical understanding without borrowed novelty claims                      |    0–4 |
 | Honest exclusions make the product thesis sharper                                                                   |    0–4 |
 | The live demo is memorable, coherent, and ends on a usable artifact rather than a promise                           |    0–3 |
@@ -98,7 +98,7 @@ Automatic deductions:
 Do not release a final claim if:
 
 - Sol is off but narration says the prompt was interpreted live;
-- the prompt maps to a hidden or canned winner;
+- a parametric fallback is hidden or described as model-authored topology;
 - a hard-invalid candidate is shown, ranked, finalized, or exported;
 - export bytes differ from the exact selected IR;
 - a secret or prompt/response body reaches client storage or production logs;

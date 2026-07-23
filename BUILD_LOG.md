@@ -1,5 +1,17 @@
 # FoldForge build log
 
+## 2026-07-22–23 — Live-failure reproduction and disclosed parametric fallbacks
+
+- PR #20 reproduced the low live realization rate against model-shaped specifications. It removed a cross-contract thickness veto between the independently generated intent and design spec, then added folded-home-pose reconciliation for reciprocal tab/slot connectors.
+- PRs #21–#22 used a temporary sanitized specification capture to isolate an unresolvable semantic reference, fixed that boundary, and removed the temporary diagnostic payload.
+- PRs #23–#24 aligned the model and solver envelopes: prompts now request feasible stock and simpler relations, while deterministic normalization clamps supported stock thickness, enlarges undersized sheets, and removes redundant relations before bounded synthesis.
+- PR #25 preserved generic synthesis as the first attempt but added a parametric enclosure fallback when that attempt exhausts. The fallback builds a six-panel enclosure with four folded walls and a driven, tab-locked lid at the requested dimensions.
+- PR #26 made model-authored contact and clearance targets advisory when they merely formalize a vague request. User-supplied numeric constraints and every structural geometry, collision, kinematic, and source-equivalence check remain hard.
+- PR #27 added `provenance.generationSource` so every result records whether Sol's semantic specification was realized directly (`synthesis`) or a disclosed parametric family produced the geometry (`template`).
+- PRs #28–#29 added parametric families for a static faceted bird figure and a driven pop-up card. Both still compile and pass the real deterministic verifier; neither is a prepared image returned as geometry.
+- The merged PR #29 snapshot reports 604 passing Vitest tests. The architecture is now documented honestly as **synthesis first, transparent parametric fallback second**, rather than continuing the earlier claim that no object-class routing exists.
+- Added five product screenshots to `docs/images/` showing the Describe screen, 3D/verifier inspection, exports and assembly instructions, a DXF opened in LibreCAD, and the SVG cut-and-fold pattern.
+
 ## 2026-07-18 — Compact semantic plan and guarded acceptance build
 
 - Replaced the model-facing canonical program payload with `FabricationPlanV2`, a smaller semantic contract for bounded shapes, bodies, local-edge attachments, joints, tab-slot relationships, motion, landmarks, and assembly intent. Pure code expands it through the unchanged canonical program and verifier without prompt-keyword or prepared-object routing.

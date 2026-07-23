@@ -1,83 +1,66 @@
 # FoldForge skeptical scorecard
 
-Snapshot: 2026-07-18. The compact semantic-plan path passes every current no-cost gate. Historical paid Sol intent calls passed, but no live Sol program or exact live-selected artifact has succeeded. Production remains kill-switched.
+Snapshot: 2026-07-23 after merged PR #29. This is an internal adversarial review, not a prediction of external judges.
 
-This is an internal adversarial review, not a prediction of the judges. It awards points only for reproducible evidence under the four criteria in the [official OpenAI Build Week rules](https://openai.devpost.com/rules).
+## Current evidence score: 81/100
 
-## Current evidence score: 76/100
+| Criterion                    | Score | Evidence earned                                                                                                                                  | Evidence still missing                                                                                    |
+| ---------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Technological Implementation | 22/25 | Strict Sol contracts, generic bounded synthesis, deterministic compiler/verifier, disclosed fallback provenance, source-bound exports, 604 tests | Broad live reliability is unproven; current branch coverage is 89.84% versus the 90% target               |
+| Design                       | 21/25 | Concise single-design flow, synchronized 3D/pattern/proof/files, responsive and accessible browser coverage, clear export cards                  | Generation-source provenance should be easier to see in the primary UI; no independent usability study    |
+| Potential Impact             | 19/25 | Clear brief-to-fabrication handoff, real SVG/DXF/GLB/JSON outputs, LibreCAD evidence, specific professional audience                             | No measured team workflow, adoption, time saving, or physical manufacturing study                         |
+| Quality of the Idea          | 19/25 | Strong typed-spec-to-proof framing and honest bounded grammar                                                                                    | Parametric object-family fallbacks reduce the breadth and novelty of the original generic-synthesis claim |
 
-| Criterion                    | Score | Evidence earned                                                                                                            | Evidence missing                                                                       |
-| ---------------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Technological Implementation | 20/25 | Strict contracts, semantic-plan expander, pure compiler, ordered verifier, bounded repair, source-bound exports, 450 tests | No live compact plan, grounded live repair, or exact live-selected consumer proof      |
-| Design                       | 18/25 | Concise one-design flow, synchronized preview/pattern/files, prompt-result binding, accessibility, 7/7 browser flows       | Headline prompt journey is intentionally unavailable while production is kill-switched |
-| Potential Impact             | 16/25 | Specific flat-sheet handoff for packaging/product/operations teams and inspectable standard files                          | No complete live task, exact external-tool handoff, or user/workflow evidence          |
-| Quality of the Idea          | 22/25 | Clear prompt → typed plan → deterministic proof thesis; broad bounded grammar; honest refusal                              | Claimed breadth still depends mainly on prepared and offline programs                  |
+**81/100 is a credible technical prototype, not a 92/100 release claim.** The later Claude PRs made common demonstrations substantially more reliable, but the score does not hide the architectural trade-off: enclosure, faceted-bird, and pop-up-card results may come from disclosed parametric families rather than direct realization of Sol's topology-free design specification.
 
-**76 is not winning-ready.** The stronger offline architecture does not earn the missing live points. The central claim still requires one unseen prompt to produce a strict compact plan, a deterministically valid or repaired design, and exact downloadable files on the hosted build.
+## Strongest evidence
 
-## Release target: 92/100 — not earned
+1. Sol is restricted to intent and a strict `FabricationDesignSpecV3`; code owns trusted fabrication choices.
+2. A result must pass compilation and the complete deterministic verifier before display or export.
+3. Preview, pattern, verifier report, assembly instructions, and downloaded files remain tied to one canonical IR.
+4. DXF and SVG output are shown in downstream viewing tools, not only asserted in tests.
+5. `generationSource` distinguishes direct generic synthesis from parametric fallback.
+6. The latest merged test snapshot contains 604 passing Vitest tests.
 
-The internal release threshold is at least 92/100 overall and at least 22/25 in every category. A plausible target after complete evidence is:
+## Largest remaining risks
 
-| Criterion                    | Target | Evidence required                                                                                                          |
-| ---------------------------- | -----: | -------------------------------------------------------------------------------------------------------------------------- |
-| Technological Implementation |  24/25 | Usage-backed live plan, deterministic compile, a measured failure/repair when applicable, and exact source-bound consumers |
-| Design                       |  23/25 | Smooth hosted Describe → Forge → Export run with synchronized controls, trace, and downloads                               |
-| Potential Impact             |  22/25 | One continuous brief-to-handoff demo and the exact live file opened in a real downstream tool                              |
-| Quality of the Idea          |  23/25 | Live proof across the bounded grammar and a clear explanation of why typed plan-to-proof differs from generic CAD chat     |
-
-This target is not the current score and does not guarantee an award.
+1. **Reliability breadth:** three disclosed fallback families do not prove that arbitrary supported-looking prompts will work.
+2. **Semantic fidelity:** the faceted bird and pop-up card families preserve required landmarks and motion at a simplified geometric level, not detailed sculptural form.
+3. **Coverage gate:** 89.84% branch coverage currently misses the configured 90% threshold by 0.16 percentage points.
+4. **Impact evidence:** no external user study proves faster iteration or adoption.
+5. **Physical boundary:** geometric validity does not prove strength, foldability of a particular stock, fatigue, or manufacturing tolerance.
 
 ## Evidence hierarchy
 
-1. **Offline fixture:** proves deterministic code or a mocked contract only.
-2. **Prepared example:** proves the inspect/export experience for that saved program only.
-3. **Live acceptance smoke:** proves the exact paid case that completed.
-4. **Multi-case sealed suite:** supports a broader reliability statement only if its declared threshold passes.
-5. **Hosted exact-build demonstration:** proves the judge-facing deployment matches reviewed source and artifacts.
-
-Never promote a lower level to a higher claim.
-
-## Paid-evidence boundary
-
-The historical $3.70 reservation ledger is sealed at $3.6134275. It contains useful intent evidence and failed full-program attempts but zero valid live programs or exports. It remains immutable.
-
-The builder separately authorized at most **$2.00** for the smaller semantic-plan acceptance path. That run must use a fresh ledger, a clean build, sequential calls, conservative reservation, no model-generation retry, and immediate stop on the first failure. A successful exact case is still a smoke; it is not silently renamed as the older 4/5 release suite.
+1. **Offline contract or fixture:** proves deterministic code behavior only.
+2. **Parametric family test:** proves that documented family at tested dimensions.
+3. **Prepared example:** proves the inspect/export experience for that saved program.
+4. **Exact live acceptance:** proves the paid prompt and build that completed.
+5. **Multi-prompt live suite:** required before a broad reliability claim.
+6. **External workflow evidence:** required before quantified productivity or adoption claims.
 
 ## Automatic severe deductions
 
 - **−5 or eligibility risk:** a prepared program is presented as an unseen Sol result.
-- **−5:** a one-case smoke is described as a passing reliability suite.
+- **−5:** a `template` result is presented as AI-authored topology.
+- **−5:** a one-case smoke is described as universal or multi-case reliability.
 - **−5:** model output is trusted as geometry or validity.
-- **−4:** a measured failure is hidden or a repair is only narration.
 - **−4:** a download cannot be tied to the selected candidate hash.
-- **−3:** prepared-artifact consumer checks are presented as proof for a live-selected file.
 - **−3:** the pitch says “make anything” despite the bounded grammar.
-- **−3:** the project claims force, strength, durability, manufacturing performance, adoption, or time savings without evidence.
+- **−3:** the project claims strength, durability, manufacturing performance, adoption, or time savings without evidence.
 - **Technical score capped at 10/25:** any hard-invalid candidate is presented as valid.
 
-## Questions before enabling production
+## Questions for any future review
 
-1. Did the strict live intent preserve the complete prompt and every explicit requirement?
-2. Did Sol return one valid `FabricationPlanV2` tool call inside the token and time limits?
-3. Did deterministic expansion and verification enforce the requested topology, not only outer dimensions?
-4. If a measured failure occurred, did the diagnosis cite its real report field and did code recheck every constraint after the patch?
-5. Do the exact SVG, DXF, GLB, JSON, and conditional FOLD status bind to the selected IR hash?
-6. Did independent consumers inspect those exact live-selected bytes?
-7. Did a clean-browser hosted run complete on the same build SHA with metadata-only logs?
-8. Did the complete new run remain below the separately authorized $2 maximum?
-
-If any answer is no, keep the kill switch on and do not call the product complete.
-
-## Questions before submitting
-
-1. Can a judge explain the audience, problem, and prompt-to-proof difference within ten seconds?
-2. Does the under-three-minute public video show the working hosted path with audio?
-3. Does the narration clearly separate the builder's decisions, Codex acceleration, and runtime GPT-5.6 work?
-4. Is the primary Codex task's `/feedback` session ID in Devpost?
-5. Do repository `main`, deployment SHA, evidence, video, and downloaded artifacts match?
-6. Has an independent reviewer assigned at least 22/25 in every category and 92/100 overall?
+1. Did the live intent preserve the user's explicit dimensions, material, and behavior?
+2. Does the returned provenance say `synthesis` or `template`, and is that distinction explained?
+3. Did the exact program pass every hard verifier stage?
+4. Are the visible 3D model, pattern, report, and downloads bound to the same candidate hash?
+5. Does the DXF retain millimetres and fabrication layers in a real CAD viewer?
+6. Does FOLD appear only when its profile can preserve the source semantics?
+7. Are claims limited to geometric and kinematic verification?
+8. Have the current coverage miss and broader live-reliability gap been disclosed?
 
 ## Claims the evidence does not support
 
-FoldForge does not support universal “make anything” generation, certified fabrication, load-bearing performance, material strength, force, friction, fatigue, durability, unrestricted manufacturing tolerances, compatibility with every machine, measured adoption, or quantified time savings. FOLD remains conditional. Parser validation is narrower than opening the exact live file in the target application.
+FoldForge does not support unrestricted “make anything” generation, certified fabrication, load-bearing performance, material strength, force, friction, fatigue, durability, compatibility with every machine, measured adoption, or quantified time savings. It is a bounded prompt-to-fabrication compiler with generic synthesis, three disclosed parametric fallback families, deterministic geometric verification, and source-bound exports.
