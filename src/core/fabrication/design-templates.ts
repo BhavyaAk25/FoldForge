@@ -200,6 +200,102 @@ export const enclosureTemplateSpec = (
   });
 };
 
+const FIGURE_KEYWORDS = ["duck", "bird", "swan", "goose", "chick", "duckling"];
+
+const looksLikeFigure = (intent: FabricationIntentV1): boolean => {
+  const haystack =
+    `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`.toLowerCase();
+  return FIGURE_KEYWORDS.some((word) => haystack.includes(word));
+};
+
+/**
+ * A static, fold-only faceted bird figure: a base with a tall body panel and
+ * shorter head and beak panels folded up from it — the proven three-landmark
+ * silhouette, parameterized by the finished width, height, and depth. Rectangular
+ * facets keep the flat net packable; the assembled envelope is width x height x
+ * depth so it satisfies the requested-size check like the enclosure does.
+ */
+export const figureTemplateSpec = (
+  widthMm: number,
+  heightMm: number,
+  depthMm: number,
+): FabricationDesignSpecV3 => {
+  const w = Math.max(30, Math.round(widthMm));
+  const h = Math.max(30, Math.round(heightMm));
+  const d = Math.max(12, Math.round(depthMm));
+  const headHeight = Math.max(16, Math.round(h * 0.66));
+  const beakHeight = Math.max(10, Math.round(h * 0.35));
+  const wall = (
+    key: string,
+    label: string,
+    role: FabricationDesignSpecV3["parts"][number]["role"],
+    partWidth: number,
+    partHeight: number,
+  ) => ({
+    key,
+    label,
+    role,
+    width: exactMm(partWidth),
+    height: exactMm(partHeight),
+    shapePreference: "rectangle" as const,
+  });
+  const foldUp = (key: string, partBKey: string) => ({
+    key,
+    kind: "fold" as const,
+    partAKey: "base",
+    partBKey,
+    angleRangeDeg: { minimum: 90, home: 90, maximum: 90 },
+  });
+  return FabricationDesignSpecV3Schema.parse({
+    version: "3",
+    label: "Faceted figure",
+    summary:
+      "A fold-only faceted figure: a body panel with head and beak panels folded upright from a base.",
+    parts: [
+      wall("base", "Base", "support", w, d),
+      wall("body", "Body", "structural", w, h),
+      wall("head", "Head", "structural", d, headHeight),
+      wall("beak", "Beak", "decorative", d, beakHeight),
+    ],
+    relations: [
+      foldUp("base-body", "body"),
+      foldUp("base-head", "head"),
+      foldUp("base-beak", "beak"),
+    ],
+    materialConstraints: {
+      materialLabel: "Cardstock",
+      thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
+    },
+    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
+    glueAllowed: false,
+    driver: null,
+    outputs: [],
+    visibleLandmarks: [
+      {
+        key: "body-landmark",
+        label: "body",
+        partKeys: ["body"],
+        importance: "required",
+      },
+      {
+        key: "head-landmark",
+        label: "head",
+        partKeys: ["head"],
+        importance: "required",
+      },
+      {
+        key: "beak-landmark",
+        label: "beak",
+        partKeys: ["beak"],
+        importance: "required",
+      },
+    ],
+    aestheticPreferences: ["simple faceted bird silhouette, fold-only"],
+    priorities: ["mechanical_simplicity", "fabrication_efficiency"],
+    tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
+  });
+};
+
 /**
  * The proven parametric template for a request, or null when no template class
  * matches (the caller then keeps the original from-scratch failure).
@@ -208,15 +304,25 @@ export const templateSpecForIntent = (
   intent: FabricationIntentV1,
 ): FabricationDesignSpecV3 | null => {
   const { widthMm, heightMm, depthMm } = intent.requestedSize;
-  const hasEnclosureEnvelope =
+  const hasEnvelope =
     typeof widthMm === "number" &&
     typeof heightMm === "number" &&
     typeof depthMm === "number" &&
     widthMm > 0 &&
     heightMm > 0 &&
     depthMm > 0;
-  if (hasEnclosureEnvelope && looksLikeEnclosure(intent)) {
+  if (!hasEnvelope) return null;
+  // A static faceted figure (duck, bird) uses the fold-up silhouette template;
+  // an enclosure uses the box template. Figure is checked first so a "duck"
+  // routes to the static silhouette rather than a lidded box.
+  if (intent.behavior === "static" && looksLikeFigure(intent)) {
+    return figureTemplateSpec(widthMm, heightMm, depthMm);
+  }
+  if (looksLikeEnclosure(intent)) {
     return enclosureTemplateSpec(widthMm, heightMm, depthMm);
+  }
+  if (looksLikeFigure(intent)) {
+    return figureTemplateSpec(widthMm, heightMm, depthMm);
   }
   return null;
 };
