@@ -2,7 +2,34 @@
 
 ## Evidence status
 
-The current branch passes its deterministic, offline contract, repair, export, browser, and build gates. On clean commit `2dc57ed`, the compact semantic-plan path passed one exact paid local Sol prompt-to-artifact acceptance case. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also passed the exact hosted program, deterministic verification, and source-equivalent export confirmation described below. These exact cases are not a five-case reliability claim.
+The current implementation passes its deterministic contract, synthesis, fallback-family, repair, export, browser, and build gates. The merged PR #29 snapshot reports **604 passing Vitest tests**, including real-pipeline coverage for generic synthesis, the enclosure fallback, the faceted-figure fallback, and the driven pop-up-card fallback.
+
+On clean commit `2dc57ed`, the earlier compact semantic-plan path passed one exact paid local Sol prompt-to-artifact acceptance case. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also passed the exact hosted program, deterministic verification, and source-equivalent export confirmation described below. Those historical cases predate the final PR #20–#29 reliability architecture and are not a five-case or arbitrary-prompt reliability claim.
+
+## Post-PR #29 reliability boundary
+
+The current runtime uses this order:
+
+1. validate and normalize Sol's intent and topology-free `FabricationDesignSpecV3`;
+2. attempt generic bounded synthesis;
+3. if that fails for a documented common class, instantiate a parameterized enclosure, faceted-figure, or pop-up-card design;
+4. compile and run the same complete hard verifier; and
+5. return only a passing candidate with `generationSource` set to `synthesis` or `template`.
+
+The following claims are supported:
+
+- generated geometry is always compiled and checked before display or export;
+- the three disclosed families pass deterministic real-pipeline regression tests across representative dimensions;
+- reciprocal tab/slot placement is reconciled in the assembled home pose only when verification improves;
+- model-authored contact/clearance guesses cannot silently overrule user constraints or structural validity; and
+- downstream files stay tied to the selected canonical IR.
+
+The following claims are **not** supported:
+
+- every supported-looking natural-language prompt will produce a result;
+- a template result proves arbitrary semantic-to-geometry synthesis;
+- the latest architecture has passed a sealed multi-prompt paid reliability suite; or
+- geometric verification proves material strength or physical manufacturing performance.
 
 Generated reports are written under ignored `artifacts/evals/`. Public evidence contains bounded metrics and hashes, never credentials, prompt bodies, model bodies, response IDs, or private reasoning. Offline evidence never counts as live-model evidence.
 
@@ -24,16 +51,18 @@ A one-case paid run is an **acceptance smoke**. It can prove that exact case wor
 
 ### Test and coverage gates
 
-| Gate             | Result                              |
-| ---------------- | ----------------------------------- |
-| Vitest           | 457/457 passing                     |
-| Statements       | 96.95%                              |
-| Branches         | 90.36%                              |
-| Functions        | 97.79%                              |
-| Lines            | 97.97%                              |
-| Chromium E2E     | 7/7 passing                         |
-| Production build | Pass                                |
-| Production audit | No known production vulnerabilities |
+| Gate             | Result                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| Vitest           | 604/604 passing                                                |
+| Statements       | 96.38%                                                         |
+| Branches         | 89.84% — 0.16 points below the configured 90% threshold        |
+| Functions        | 98.04%                                                         |
+| Lines            | 97.71%                                                         |
+| Chromium E2E     | 7/7 at the last recorded browser milestone                     |
+| Production build | Pass at the merged PR #29 milestone                            |
+| Production audit | No known production vulnerabilities at the last recorded audit |
+
+The 2026-07-23 coverage run passed all 604 tests but exited non-zero because branch coverage is 89.84%. This is an open quality-gate miss, not a product-runtime failure and not recorded as a passing coverage gate.
 
 The browser suite covers the one-design flow, success followed by a different prompt's failure, required responsive widths, keyboard use, reduced motion, accessibility, slow/malformed responses, real preview and pattern controls, checkpoint restore, conditional formats, and exact result-bound downloads. It fails on unexpected console errors or warnings.
 

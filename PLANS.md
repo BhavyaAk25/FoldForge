@@ -1,82 +1,78 @@
-# FoldForge implementation plan
+# FoldForge implementation status
 
 ## Current state
 
-The product is now a single-design prompt-to-fabrication compiler. The deterministic compiler, verifier, repair engine, exports, browser experience, offline contracts, and live security boundary are implemented. The current no-cost gates pass **457 tests**, the four coverage thresholds, **7/7** rendered browser flows, offline compiler/mutation/repeatability suites, offline intent and end-to-end suites, repair/ablation gates, consumer parsers, and the production build.
+FoldForge is a single-design prompt-to-fabrication application with a strict GPT-5.6 Sol boundary, deterministic synthesis and compilation, ordered verification, synchronized previews, and source-bound exports.
 
-GPT-5.6 Sol now passes the smallest complete live product proof. On clean commit `2dc57ed`, the same-build compiler gate passed supported, unsupported, and injection controls; the exact playing-card-box request produced one strict plan, one deterministically verified candidate, and source-bound SVG, DXF, GLB, and JSON. All 63 acceptance checks passed. Production deployment `dpl_2JJv9jmcD4uQyr7UHB9N5QLFuPH4` also returned a strict hosted program that passed deterministic verification and exact export binding.
+The post-PR #29 architecture is deliberately hybrid:
 
-| Area                                                                   | Status   | Evidence boundary                                                   |
-| ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- |
-| Versioned intent, semantic plan, program, IR, report, patch, candidate | Complete | Strict Zod contracts and canonical round trips                      |
-| Pure compiler, geometry, and kinematics                                | Complete | 120/120 controls; 0/560 hard-invalid mutations accepted             |
-| Ordered verifier and bounded repair                                    | Complete | 40/40 repaired; 20/20 infeasible; 0/120 hostile patches accepted    |
-| SVG, DXF, GLB, JSON, and conditional FOLD                              | Complete | Source-bound exporters and independent prepared-artifact consumers  |
-| One-design Describe → Forge → Export experience                        | Complete | 7/7 Chromium flows at all required widths                           |
-| OpenAI boundary and production safety                                  | Complete | Strict tools, access, origin/body caps, quotas, dedupe, kill switch |
-| Compact live Sol plan                                                  | Complete | Strict plan completed inside the bounded route                      |
-| Exact live prompt → verified files                                     | Complete | 63/63 checks; SVG/DXF/GLB/JSON consumers pass                       |
-| Final deployment and hosted verification                               | Complete | Production program, verification, and exact exports passed          |
-| PR merge, video, `/feedback`                                           | Pending  | Merge follows checks; video and task ID are user-owned              |
+1. Sol returns strict intent plus a topology-free `FabricationDesignSpecV3`.
+2. Code normalizes conflicts between the independently generated contracts.
+3. The generic bounded synthesizer tries to realize the semantic specification.
+4. If that search exhausts for a documented common class, code may use a parametric enclosure, faceted-figure, or pop-up-card family fitted to the requested dimensions.
+5. Every result records whether its geometry came from `synthesis` or `template`.
+6. Compilation and the complete hard verifier remain mandatory for both paths.
 
-## Immediate sequence
+The latest merged snapshot reports **604 passing Vitest tests**. The existing browser, property, mutation, repeatability, export-equivalence, consumer, strict TypeScript, lint, formatting, and production-build gates remain part of the no-cost release workflow.
 
-Calendar dates are not gates. Complete each ready step and stop only for a real blocker.
+## Completed product areas
 
-1. **Complete — exact offline acceptance contract.** The full source prompt, shape-edge convention, six-panel topology, dimensions, stock, lock, and negative two-panel control are enforced.
-2. **Complete — static seam verification.** Only complete positive-length coincident boundary loci receive the seam exemption; adversarial interior crossings remain invalid.
-3. **Complete — no-cost gates.** The full check, coverage, properties, offline evaluations, browser suite, consumer validation, audit, and independent reviews pass at the recorded milestones.
-4. **Complete — immutable acceptance builds.** Every paid report names its clean build SHA; ignored ledgers and secrets remain outside Git.
-5. **Complete — separate $2 ledger.** The immutable continuation carries every prior charge and remains capped at the original authorization.
-6. **Complete — smallest useful live proof.** Clean commit `2dc57ed` passed the same-build compiler controls and exact static acceptance within the separate ledger.
-7. **Complete — validate exact bytes.** The selected SVG scale/layers/calibration, DXF parser/layers, GLB validator, canonical JSON source binding, and FOLD omission reason all passed.
-8. **Complete — production verification.** The accepted runtime is live. Production Sol returned a strict program; deterministic verification passed with zero hard failures; and source-equivalent SVG, DXF, GLB, and JSON were generated from that exact hosted program.
-9. **Complete — publish truthfully.** The evidence records both the hosted success and the clipped-status assertion mistake. A single exact case is not called a five-case reliability suite or a 92/100 score.
-10. **Finish delivery.** Push the branch, complete PR review/checks, merge to `main` under the user's explicit authorization, and verify production matches `main`. The public narrated demo and primary Codex task's `/feedback` session ID remain user-owned submission steps.
+| Area                                                                 | Status                                 | Evidence boundary                                                      |
+| -------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Versioned intent, design spec, program, IR, report, patch, candidate | Complete                               | Strict Zod contracts and canonical serialization                       |
+| Generic bounded synthesis                                            | Complete within documented work limits | May return typed infeasible/exhausted results                          |
+| Parametric enclosure, faceted figure, and pop-up card families       | Complete                               | Used only after generic synthesis fails; provenance says `template`    |
+| Pure compiler, geometry, and kinematics                              | Complete                               | No OpenAI or browser dependency in `src/core`                          |
+| Ordered verifier and bounded repair                                  | Complete                               | Hard-invalid candidates cannot be selected or exported                 |
+| SVG, DXF, GLB, JSON, conditional FOLD                                | Complete                               | All derive from the selected canonical IR                              |
+| Describe → Forge → Export interface                                  | Complete                               | Responsive, keyboard and reduced-motion aware                          |
+| OpenAI and production security boundary                              | Complete                               | Server-only secrets, access, origin/body limits, quota and kill switch |
+| Exact live Sol acceptance                                            | Complete for the recorded case         | Not a universal-prompt or five-case reliability claim                  |
+| Product and external-tool screenshots                                | Complete                               | Stored in `docs/images/` and explained in README                       |
 
-## Paid-evidence boundaries
+## Reliability improvements after the original build
 
-The historical ledger is immutable:
+- **PR #20:** removed the cross-model material-thickness veto and reconciled tab/slot geometry in the folded home pose.
+- **PRs #21–#22:** captured one sanitized failing spec, fixed unresolvable semantic references, then removed the temporary capture.
+- **PRs #23–#24:** steered and normalized stock, sheet size, relation count, and locks into the synthesizer's feasible envelope.
+- **PR #25:** added synthesis-first enclosure fallback.
+- **PR #26:** made model-invented contact/clearance targets advisory without weakening structural checks.
+- **PR #27:** exposed `generationSource`.
+- **PRs #28–#29:** added verified parametric faceted-figure and pop-up-card families.
 
-- earlier authorization: $4.00;
-- historical client reservation ceiling: $3.70;
-- preserved cumulative charge: $3.6134275;
-- result: live intent evidence, but no valid live program or artifact.
+## Remaining engineering opportunities
 
-The new acceptance allowance is separate:
+These are improvements, not hidden completion claims:
 
-- maximum: **$2.00** total;
-- charged through the successful exact acceptance: **$1.6265905**;
-- remaining in that auditable local ledger before hosted verification: **$0.3734095**;
-- fresh run-specific report and ledger paths;
-- sequential calls only;
-- no model-generation retry;
-- conservative pre-request reservation and provider-usage reconciliation;
-- stop on first schema, provider, budget, verification, or consumer failure; and
-- no claim beyond the exact cases observed.
+1. Generalize beyond the three disclosed fallback families while keeping provenance explicit.
+2. Replace keyword family matching with a strict model-authored object-class field or a deterministic semantic classifier.
+3. Improve arbitrary `FabricationDesignSpecV3` realization rates without increasing the work budget or weakening the verifier.
+4. Persist production quotas and deduplication across serverless instances.
+5. Run a broader multi-prompt live reliability study only under a new explicit paid authorization.
+6. Add real user workflow evidence before claiming quantified productivity impact.
 
-The process-local interactive quota/deduplication store is best-effort across serverless instances. It is not a durable cross-instance billing cap. The paid-evaluation ledger is auditable but is still a client-side guard, not an account-level provider limit.
+## Evidence boundaries
 
-## Implemented architecture
+- Passing deterministic tests prove code behavior, not arbitrary model reliability.
+- A parametric fallback proves that family at the tested dimensions; it is not generic semantic synthesis.
+- One successful live prompt proves that exact path, not universal generation.
+- Parser and validator checks prove file structure and source equivalence, not material strength or manufacturing performance.
+- FoldForge checks geometry and bounded rigid motion. It does not simulate force, friction, fatigue, durability, or deformable material behavior.
 
-- `src/core/fabrication` is pure, deterministic, versioned, and independent of React and OpenAI.
-- Sol authors a compact semantic plan: bounded shapes, bodies, local-edge attachments, joint/connector relationships, motion, semantic landmarks, and assembly intent.
-- Pure code selects intent stock, derives transforms and packing, constructs reciprocal connector geometry, creates stable IDs and assembly order, and validates the canonical program.
-- The verifier fails fast across schema, topology, geometry, connections, packing, transforms, motion, collision, semantics, and export equivalence.
-- Moving designs use 201 fixed driver states plus bounded adaptive event samples. Static designs use one canonical assembled state.
-- Repair cites actual report fields, accepts at most three allowlisted operations per cycle, blocks duplicate/no-op inputs, recompiles, and stops after five cycles.
-- Only a verified candidate may be shown, finalized, or exported. Prompt/result hashes prevent a failed new prompt from exposing an older result.
-- 3D, pattern, program, report, trace, and downloads remain bound to the same selected IR.
-- Live routes enforce same-origin JSON, access, route body limits, quotas, conservative token reservations, bounded concurrency, deduplication, and the independent kill switch.
+## No-cost verification
 
-## Scope
+```bash
+pnpm run check
+pnpm run coverage
+FC_SEED=20260714 FC_NUM_RUNS=1000 pnpm run test:property
+pnpm run eval:offline
+pnpm run eval:compiler
+pnpm run eval:repair
+pnpm run eval:e2e
+pnpm run eval:ablation
+pnpm run test:e2e
+pnpm run validate:consumers
+pnpm audit --prod
+```
 
-Version 1 supports bounded flat-sheet objects and acyclic mechanisms. Smooth solids, deformable simulation, electronics, motors, force-dependent behavior, and general closed-loop mechanisms are honest refusals, not hidden templates or incomplete success states.
-
-FoldForge verifies geometry, bounded motion, clearance, and source equivalence. It does not claim material strength, force, friction, fatigue, durability, adoption, or quantified time savings.
-
-## Release discipline
-
-Offline, prepared, mocked, smoke, and live evidence are labelled separately. A partial request is never promoted to a successful design. A hard-invalid candidate is never displayed or exported as valid.
-
-The harsh target remains at least **92/100** overall and **22/25** in each official category, but it is not earned yet. Current missing evidence is the broader five-case reliability gate, a final reviewer score, and the public narrated submission.
+Paid evaluation is excluded from ordinary verification and requires explicit authorization, live flags, a clean committed build, and a new run-specific ledger.

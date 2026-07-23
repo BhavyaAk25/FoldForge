@@ -74,9 +74,25 @@ No invalid candidate can be rescued by a high soft score. Hard tolerances are 0.
 
 ## D-17 — Sol specifies semantics; code synthesizes topology
 
-**Accepted, superseding D-16 at the production model boundary.** Repeated live failures showed that asking a stochastic model to choose a nearly complete panel graph, grounded root, exact attachment edges, fold signs, and connector edges produced new unverified topologies that bounded local repair could not reliably rescue. Sol now returns one strict `FabricationDesignSpecV3` containing only semantic parts, dimension ranges, required relationships and motion, material and sheet constraints, landmarks, priorities, and tolerances.
+**Accepted, superseding D-16 at the production model boundary and later qualified by D-19.** Repeated live failures showed that asking a stochastic model to choose a nearly complete panel graph, grounded root, exact attachment edges, fold signs, and connector edges produced new unverified topologies that bounded local repair could not reliably rescue. Sol now returns one strict `FabricationDesignSpecV3` containing only semantic parts, dimension ranges, required relationships and motion, material and sheet constraints, landmarks, priorities, and tolerances.
 
 Pure code owns graph generation, root selection, equal-length attachment matching, fold orientation, connector geometry, packing, transforms, compilation, full static or 201-state motion verification, nogoods, scoring, and final selection. The bounded search distinguishes proven infeasibility from work-budget exhaustion and returns only a fully verified program. `FabricationPlanV2` remains an internal synthesis representation and historical replay contract; it is no longer accepted from the production model tool. No object-specific constructor or saved valid design is used.
+
+## D-18 — Normalize independently generated contracts at the code boundary
+
+**Accepted after reproducing the live card-box failures.** Intent generation and design-spec generation are separate Sol calls. Individually valid outputs can still disagree about stock thickness, sheet size, abstract geometry references, relation count, or numeric contact expectations.
+
+Code therefore owns a visible deterministic compatibility layer. It may enlarge an undersized sheet, clamp stock to the documented synthesizable thickness range, remove redundant model-authored relations, ignore semantic references that cannot resolve to generated geometry, and treat model-invented contact/clearance numbers as advisory. It may not weaken a user-authored numeric constraint or any hard structural, collision, kinematic, or export-equivalence check.
+
+## D-19 — Generic synthesis remains first; common fallbacks are parametric and disclosed
+
+**Accepted after generic synthesis remained unreliable for common demonstrations.** FoldForge first attempts to realize the model-authored `FabricationDesignSpecV3`. If bounded synthesis exhausts, code may instantiate one of the documented parametric families for enclosures, faceted bird figures, or pop-up cards, fitted to the user's requested dimensions.
+
+This is a reliability trade-off. It narrows the claim from unrestricted semantic-to-geometry generation to a hybrid system with generic synthesis plus supported object families. Every result records `generationSource: "synthesis"` or `"template"`, and documentation must name the available families. A template result cannot be described as model-authored topology, and no prepared image or saved export may be substituted for generated geometry.
+
+## D-20 — Reciprocal connector placement is solved in the assembled frame
+
+**Accepted.** A tab and slot centered independently in the flat sheet can miss after folding. Deterministic reconciliation may move the slot within its source panel so its centerline aligns with the tab engagement anchor in the verified home pose. The change is accepted only when the slot remains valid and verification strictly improves or passes; it cannot regress an already valid result.
 
 ## Rejected alternatives
 
@@ -84,5 +100,5 @@ Pure code owns graph generation, root selection, equal-length attachment matchin
 - **Model-authored compiled coordinates or export bytes:** breaks the deterministic authority and makes repair/equivalence unverifiable. Normalized untrusted plan geometry remains allowed and must compile and verify.
 - **General closed-loop mechanism solving:** outside the bounded graph and verification budget.
 - **Soft penalties for collision or closure:** allows invalid designs to rank; hard failures remain disqualifying.
-- **Canned prompt-to-template routing:** undermines unseen-prompt evidence and Quality of the Idea.
+- **Undisclosed canned winners:** a prepared result or hidden preset presented as model-authored geometry is rejected. Disclosed parametric families are permitted only after generic synthesis fails, must be fitted to the user's dimensions, must pass the unchanged compiler/verifier, and must record template provenance.
 - **Material load testing as release proof:** tests one material/build and cannot establish software correctness for the supported language.

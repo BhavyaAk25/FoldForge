@@ -2,6 +2,18 @@
 
 This record captures the primary sources that shape the product contract, submission plan, standards support, and prior-art boundaries. It separates sourced facts from FoldForge design choices. Last checked: 2026-07-14.
 
+## 2026-07-22–23 production postmortem
+
+The later Claude Code investigation changed the architectural conclusion:
+
+- The dominant live failure was not one isolated collision bug. Two independent model calls produced contracts that were valid separately but incompatible together: stock thickness, sheet size, abstract semantic references, redundant relations, and connector expectations could jointly eliminate every deterministic candidate.
+- Reciprocal connectors must be reconciled in the assembled home pose. Centering a tab and slot independently in their flat panel coordinates does not guarantee that they mate after folding.
+- Prompt steering improves the model distribution but is not a reliability guarantee. Deterministic feasibility normalization is required at the intent/spec boundary.
+- Bounded generic semantic-to-fabrication synthesis remains a research-hard problem. FoldForge now attempts it first, then uses documented parametric families for enclosures, faceted bird figures, and pop-up cards when needed.
+- The architectural cost of that reliability choice must stay visible. `generationSource` records whether the model's semantic spec was realized directly or a code-owned parametric family produced the geometry.
+
+This postmortem supersedes earlier claims that object-class routing was unnecessary. It does not weaken the compiler or verifier: both generic and fallback results still require the same complete deterministic proof.
+
 ## OpenAI Build Week
 
 Primary sources:

@@ -1,6 +1,6 @@
 # FoldForge fabrication compiler specification
 
-Status: **implemented and release-tested offline; paid intent evaluation passed, but live program-generation readiness failed and remains gated**. This document is normative. “Must” and “must not” are release requirements.
+Status: **implemented with deterministic verification, one exact live acceptance path, and disclosed parametric fallbacks for three common object classes**. This document is normative. “Must” and “must not” are release requirements.
 
 ## 1. Scope
 
@@ -12,15 +12,16 @@ The compiler reasons about dimensions, connectivity, rigid transforms, collision
 
 Every external object must include an exact schema version. Unknown or partially migrated versions fail closed.
 
-| Contract               | Authority                                        | Purpose                                                                                                                  |
-| ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `FabricationIntentV1`  | User constraints normalized by code              | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns                       |
-| `FabricationPlanV1`    | Untrusted Sol proposal validated by code         | Compact panel, transform, mechanism, semantic-part, and assembly-strategy choices                                        |
-| `FabricationProgramV1` | Deterministic plan expander                      | Canonical complete program with intent fields, provenance, assembly order, and all plan geometry                         |
-| `FabricationIRV1`      | Deterministic compiler                           | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs            |
-| `VerificationReportV2` | Deterministic verifier                           | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                   |
-| `ProgramPatchV1`       | Untrusted Sol proposal validated/applied by code | At most three typed, local operations against existing program identifiers                                               |
-| `CandidateV2`          | Deterministic pipeline                           | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, plan hash, and expander provenance |
+| Contract                  | Authority                                                  | Purpose                                                                                                                    |
+| ------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `FabricationIntentV1`     | User constraints interpreted by Sol and normalized by code | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns                         |
+| `FabricationDesignSpecV3` | Untrusted Sol proposal or disclosed code-owned fallback    | Topology-free semantic parts, ranges, relationships, motion intent, landmarks, priorities, and tolerances                  |
+| `FabricationPlanV1/V2`    | Internal deterministic synthesis and replay                | Bounded panel graph and mechanism choices used before the canonical program                                                |
+| `FabricationProgramV1`    | Deterministic synthesizer/expander                         | Canonical complete program with provenance, assembly order, and all fabrication geometry                                   |
+| `FabricationIRV1`         | Deterministic compiler                                     | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs              |
+| `VerificationReportV2`    | Deterministic verifier                                     | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                     |
+| `ProgramPatchV1`          | Untrusted Sol proposal validated/applied by code           | At most three typed, local operations against existing program identifiers                                                 |
+| `CandidateV2`             | Deterministic pipeline                                     | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, spec hash, and generation provenance |
 
 The canonical serializer must:
 
@@ -81,7 +82,29 @@ The compiler must refuse or request one minimal clarification for:
 - more than four sheets or any other cardinality above this specification; and
 - a request whose essential dimensions, output behavior, or fabrication limits cannot be inferred without inventing intent.
 
-Refusal must name the unsupported feature and, when possible, the nearest supported reformulation. Prompt keywords must not select hidden templates or bypass compilation.
+Refusal must name the unsupported feature and, when possible, the nearest supported reformulation. Prompt text may select only the documented parametric families described below. That selection must be disclosed as `generationSource: "template"` and may never bypass compilation or verification.
+
+### 3.5 Synthesis and disclosed parametric families
+
+The production model returns `FabricationDesignSpecV3`; it does not choose the body graph, grounded root, exact attachment edges, fold signs, connector coordinates, packing, or global transforms.
+
+Code first attempts bounded generic synthesis. Before search, code may reconcile independently generated contracts by:
+
+- enlarging an undersized stock sheet for the requested unfolded envelope;
+- clamping stock thickness to the documented synthesizable range;
+- removing redundant model-authored relations;
+- dropping geometry references that cannot resolve against the generated parts; and
+- treating model-invented contact or clearance numbers as advisory.
+
+Explicit user numeric constraints and every structural, packing, collision, kinematic, and source-equivalence rule remain hard.
+
+When generic synthesis exhausts, code may instantiate one of these documented parametric families at the user's requested dimensions:
+
+- a folded enclosure with four walls and a hinged tab-slot lid;
+- a static faceted bird figure with body, head, and beak landmarks; or
+- a pop-up card with one driven rising panel.
+
+Both generic and template paths must compile and pass the same complete verifier. Provenance must record `generationSource: "synthesis"` or `"template"`. No prepared image, saved export, or unchecked geometry may be returned as a generated result.
 
 ## 4. Compilation
 
