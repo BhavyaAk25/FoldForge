@@ -399,6 +399,32 @@ export const popUpCardTemplateSpec = (
   });
 };
 
+interface TemplateDescriptor {
+  /** Whether this template class serves the request. */
+  readonly matches: (intent: FabricationIntentV1) => boolean;
+  /** Build the parametric spec for the finished width/height/depth (mm). */
+  readonly build: (
+    widthMm: number,
+    heightMm: number,
+    depthMm: number,
+  ) => FabricationDesignSpecV3;
+}
+
+// Ordered by specificity: a static faceted figure (duck, bird) uses the fold-up
+// silhouette; a pop-up/flower card uses the rising-panel mechanism; an enclosure
+// uses the box. Figure and pop-up precede the enclosure so a "duck" is never
+// turned into a box, nor a "flower card". Append a descriptor to add a class.
+const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
+  {
+    matches: (intent) =>
+      intent.behavior === "static" && looksLikeFigure(intent),
+    build: figureTemplateSpec,
+  },
+  { matches: looksLikePopUp, build: popUpCardTemplateSpec },
+  { matches: looksLikeEnclosure, build: enclosureTemplateSpec },
+  { matches: looksLikeFigure, build: figureTemplateSpec },
+];
+
 /**
  * The proven parametric template for a request, or null when no template class
  * matches (the caller then keeps the original from-scratch failure).
@@ -415,21 +441,8 @@ export const templateSpecForIntent = (
     heightMm > 0 &&
     depthMm > 0;
   if (!hasEnvelope) return null;
-  // A static faceted figure (duck, bird) uses the fold-up silhouette template.
-  // A pop-up/flower card uses the open/close rising-panel template. An enclosure
-  // uses the box template. Figure and pop-up are checked before the enclosure so
-  // a "duck" is not turned into a box and a "flower card" is not either.
-  if (intent.behavior === "static" && looksLikeFigure(intent)) {
-    return figureTemplateSpec(widthMm, heightMm, depthMm);
-  }
-  if (looksLikePopUp(intent)) {
-    return popUpCardTemplateSpec(widthMm, heightMm, depthMm);
-  }
-  if (looksLikeEnclosure(intent)) {
-    return enclosureTemplateSpec(widthMm, heightMm, depthMm);
-  }
-  if (looksLikeFigure(intent)) {
-    return figureTemplateSpec(widthMm, heightMm, depthMm);
-  }
-  return null;
+  const descriptor = TEMPLATE_DESCRIPTORS.find((candidate) =>
+    candidate.matches(intent),
+  );
+  return descriptor ? descriptor.build(widthMm, heightMm, depthMm) : null;
 };
