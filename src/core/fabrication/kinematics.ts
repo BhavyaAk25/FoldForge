@@ -429,11 +429,27 @@ export const evaluateMotionState = (
   });
 };
 
+// The home pose is a pure function of the (immutable) IR, and the verifier
+// solves it independently in several stages (motion, collision, semantics,
+// export equivalence). Memoize it by IR identity so the forward-kinematics and
+// panel triangulation run once per IR instead of once per stage. This is a
+// behaviour-preserving optimization: same IR object -> identical result. The
+// WeakMap releases entries when the IR is garbage-collected.
+const homeMotionStateByIr = new WeakMap<
+  FabricationIRV1,
+  Result<EvaluatedMotionState, MotionFailure>
+>();
+
 export const homeMotionState = (
   ir: FabricationIRV1,
-): Result<EvaluatedMotionState, MotionFailure> =>
-  ir.driver
+): Result<EvaluatedMotionState, MotionFailure> => {
+  const cached = homeMotionStateByIr.get(ir);
+  if (cached) return cached;
+  const result = ir.driver
     ? evaluateMotionState(ir, ir.driver.homeValue)
     : evaluateMotionState(ir);
+  homeMotionStateByIr.set(ir, result);
+  return result;
+};
 
 export const identityBodyMatrix = (): Matrix4 => IDENTITY_MATRIX_4;
