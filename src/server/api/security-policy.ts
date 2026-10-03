@@ -16,7 +16,7 @@ export const MODEL_ROUTE_LIMITS = {
 /** Best-effort protection for CPU-bound deterministic compile/export routes. */
 export const DETERMINISTIC_ROUTE_LIMITS = {
   windowMs: 10 * 60 * 1_000,
-  maximumRequestsPerWindow: 60,
+  maximumRequestsPerWindow: 30,
   maximumConcurrentGlobal: 4,
   maximumConcurrentPerSubject: 1,
 } as const;

@@ -12,20 +12,16 @@ export const programStructureFingerprint = (
   programInput: FabricationProgramV1,
 ): string => {
   const program = FabricationProgramV1Schema.parse(programInput);
-  const panelIndex = new Map(
-    program.blueprint.panels.map((panel, index) => [panel.panelId, index]),
-  );
-  const bodyIndex = new Map(
-    program.blueprint.bodies.map((body, index) => [body.bodyId, index]),
-  );
-  const jointIndex = new Map(
-    program.blueprint.joints.map((joint, index) => [joint.jointId, index]),
-  );
+  // Array.indexOf yields -1 for an unresolved reference, which still hashes
+  // deterministically; the compiler rejects such programs separately.
+  const panelIds = program.blueprint.panels.map((panel) => panel.panelId);
+  const bodyIds = program.blueprint.bodies.map((body) => body.bodyId);
+  const jointIds = program.blueprint.joints.map((joint) => joint.jointId);
   return sha256Hex(
     canonicalSerialize({
       behavior: program.behavior,
       panels: program.blueprint.panels.map((panel) => ({
-        body: bodyIndex.get(panel.bodyId) ?? -1,
+        body: bodyIds.indexOf(panel.bodyId),
         role: panel.role,
         outerVertexCount: panel.contour.vertices.length,
         innerVertexCounts: panel.innerCutContours.map(
@@ -34,26 +30,26 @@ export const programStructureFingerprint = (
       })),
       bodies: program.blueprint.bodies.map((body) => ({
         grounded: body.grounded,
-        panels: body.panelIds.map((panelId) => panelIndex.get(panelId) ?? -1),
+        panels: body.panelIds.map((panelId) => panelIds.indexOf(panelId)),
       })),
       joints: program.blueprint.joints.map((joint) => ({
         kind: joint.kind,
-        parent: bodyIndex.get(joint.parentBodyId) ?? -1,
-        child: bodyIndex.get(joint.childBodyId) ?? -1,
+        parent: bodyIds.indexOf(joint.parentBodyId),
+        child: bodyIds.indexOf(joint.childBodyId),
       })),
       connectors: program.blueprint.connectors.map((connector) => ({
         kind: connector.kind,
-        panel: panelIndex.get(connector.panelId) ?? -1,
+        panel: panelIds.indexOf(connector.panelId),
       })),
       driver: program.blueprint.driver
         ? {
             control: program.blueprint.driver.control,
-            joint: jointIndex.get(program.blueprint.driver.jointId) ?? -1,
+            joint: jointIds.indexOf(program.blueprint.driver.jointId),
           }
         : null,
       outputs: program.blueprint.outputs.map((output) => ({
-        joint: jointIndex.get(output.jointId) ?? -1,
-        body: bodyIndex.get(output.bodyId) ?? -1,
+        joint: jointIds.indexOf(output.jointId),
+        body: bodyIds.indexOf(output.bodyId),
         unit: output.unit,
       })),
       couplings: program.blueprint.couplings.map((coupling) => coupling.kind),

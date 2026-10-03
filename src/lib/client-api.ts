@@ -67,7 +67,6 @@ const responseError = async (
 
 export interface ForgeRequestOptions {
   readonly stage?: ForgeDiagnosticStage;
-  readonly attemptId?: string;
 }
 
 const connectionFailure = (
@@ -104,9 +103,6 @@ export const postJson = async <Schema extends z.ZodType>(
   options: ForgeRequestOptions = {},
 ): Promise<z.infer<Schema>> => {
   const headers = new Headers({ "Content-Type": "application/json" });
-  if (options.attemptId) {
-    headers.set("X-FoldForge-Attempt-Id", options.attemptId);
-  }
   let response: Response;
   try {
     response = await fetch(url, {

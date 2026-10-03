@@ -9,7 +9,12 @@ import {
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 import type { FabricationDesignSpecV3 } from "@/core/fabrication/design-spec";
 
-// An over-constrained playing-card box like GPT-5.6 Sol emits live: A4 stock,
+import {
+  fixtureSingleFoldDesignSpec,
+  fixtureStaticPanelDesignSpec,
+} from "../../fixtures/design-spec";
+
+// An over-constrained playing-card box like a language model emits: A4 stock,
 // 0.5 mm cardstock, a touch between every adjacent wall, and a tab-slot lock on
 // all seven seams. Before normalization this exhausts the synthesis budget.
 const overConstrainedIntent = (): FabricationIntentV1 => ({
@@ -212,4 +217,43 @@ describe("feasibility normalization", () => {
       expect(result.value.blueprint.connectors.length).toBeGreaterThan(0);
     }
   }, 30_000);
+
+  it("returns an already feasible intent unchanged", () => {
+    const feasible = normalizeFabricationIntentFeasibility(
+      overConstrainedIntent(),
+    );
+    expect(normalizeFabricationIntentFeasibility(feasible)).toEqual(feasible);
+  });
+
+  it("re-enables cuts when a request forbids them", () => {
+    const base = overConstrainedIntent();
+    const normalized = normalizeFabricationIntentFeasibility({
+      ...base,
+      fabricationBudget: { ...base.fabricationBudget, cutsAllowed: false },
+    });
+    expect(normalized.fabricationBudget.cutsAllowed).toBe(true);
+  });
+
+  it("leaves specs without touch relations or locks untouched", () => {
+    const staticSpec = fixtureStaticPanelDesignSpec();
+    expect(stripRedundantSpecRelations(staticSpec)).toEqual(staticSpec);
+    const foldSpec = fixtureSingleFoldDesignSpec();
+    expect(stripRedundantSpecRelations(foldSpec).relations).toEqual(
+      foldSpec.relations,
+    );
+  });
+
+  it("keeps the first lock when none secures the moving part", () => {
+    const spec = overConstrainedSpec();
+    const stripped = stripRedundantSpecRelations({
+      ...spec,
+      driver: null,
+      outputs: [],
+    });
+    const locks = stripped.relations.filter((r) => r.kind === "lock");
+    expect(locks).toHaveLength(1);
+    expect(locks[0]!.key).toBe(
+      spec.relations.find((r) => r.kind === "lock")!.key,
+    );
+  });
 });

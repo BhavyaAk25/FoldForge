@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   CandidateV2Schema,
   FabricationIntentV1Schema,
-  FabricationPlanV1Schema,
   FabricationProgramV1Schema,
   ProgramPatchV1Schema,
 } from "@/core/fabrication/schemas";
@@ -89,14 +88,6 @@ export const FabricationDesignSpecProposalV3Schema = z
   })
   .strict();
 
-/** Historical paid-response evidence only; production generation accepts V3. */
-export const FabricationPlanProposalV1Schema = z
-  .object({
-    diversityClaim: z.string().min(1).max(500),
-    plan: FabricationPlanV1Schema,
-  })
-  .strict();
-
 export const FabricationNarrativeV1Schema = z
   .object({
     summary: z.string().min(1).max(600),
@@ -120,9 +111,6 @@ export const FabricationNarrativeV1Schema = z
 export type ProgramProposalV1 = z.infer<typeof ProgramProposalV1Schema>;
 export type FabricationDesignSpecProposalV3 = z.infer<
   typeof FabricationDesignSpecProposalV3Schema
->;
-export type FabricationPlanProposalV1 = z.infer<
-  typeof FabricationPlanProposalV1Schema
 >;
 export type FabricationNarrativeV1 = z.infer<
   typeof FabricationNarrativeV1Schema

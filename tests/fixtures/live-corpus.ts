@@ -1,7 +1,7 @@
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 
 /**
- * A corpus of realistic, PRE-normalization intents + GPT-5.6 Sol design specs
+ * A corpus of realistic, PRE-normalization intents + model-authored design specs
  * captured from (or representative of) the live homepage prompts. Each case
  * must yield a real, verified design through the full
  * intent-normalization -> programs -> compile -> verify path — either the

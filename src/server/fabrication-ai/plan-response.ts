@@ -9,11 +9,7 @@ import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 import { sha256Hex } from "@/core/sha256";
 
-import {
-  ProgramProposalV1Schema,
-  type FabricationDesignSpecProposalV3,
-  type ProgramProposalV1,
-} from "./contracts";
+import { ProgramProposalV1Schema, type ProgramProposalV1 } from "./contracts";
 import {
   FabricationModelContractError,
   type FabricationModelContractErrorCode,
@@ -117,7 +113,10 @@ export const templateProgramProposal = (
  * `generationSource: "template"` so it is never mistaken for model geometry.
  */
 export const programProposalFromDesignSpec = (input: {
-  readonly proposal: FabricationDesignSpecProposalV3;
+  readonly proposal: {
+    readonly diversityClaim: string;
+    readonly designSpec: FabricationDesignSpecV3;
+  };
   readonly intent: FabricationIntentV1;
   readonly candidateOrdinal: number;
   readonly modelId: string;

@@ -341,7 +341,7 @@ export function FoldForgeApp() {
         "/api/intent",
         { prompt: requestedPrompt },
         IntentApiResponseSchema,
-        { attemptId: forgeAttemptId, stage: "intent" },
+        { stage: "intent" },
       );
       if (nextIntent.scopeStatus !== "supported") {
         setPhase("idle");
@@ -365,7 +365,7 @@ export function FoldForgeApp() {
           usedTopologyIds: [],
         },
         ProgramsApiResponseSchema,
-        { attemptId: forgeAttemptId, stage: "program" },
+        { stage: "program" },
       );
 
       const candidateId = candidateIdFor(ordinal, generated.proposal.program);
@@ -585,7 +585,7 @@ export function FoldForgeApp() {
         "/api/finalize",
         { candidate: exportCandidate },
         FinalizeApiResponseSchema,
-        { attemptId: finalizingBinding.attemptId, stage: "finalize" },
+        { stage: "finalize" },
       );
       if (
         !sameForgeResultBinding(resultBindingRef.current, finalizingBinding) ||

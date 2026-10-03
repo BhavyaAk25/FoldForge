@@ -84,3 +84,35 @@ describe("intentFromPromptKeywords", () => {
     expect(intentFromPromptKeywords("a walking robot")).toBeNull();
   });
 });
+
+describe("parsePromptSizeMm units and fallbacks", () => {
+  it("converts inches and keeps a missing depth null", () => {
+    expect(parsePromptSizeMm('a card 4" x 6"')).toEqual({
+      widthMm: 102,
+      heightMm: 152,
+      depthMm: null,
+    });
+  });
+
+  it("uses per-unit values when each number has its own unit", () => {
+    expect(parsePromptSizeMm("10 cm x 80 mm x 1 in")).toEqual({
+      widthMm: 100,
+      heightMm: 80,
+      depthMm: 25,
+    });
+  });
+
+  it("falls back to the class default depth", () => {
+    expect(
+      intentFromPromptKeywords("a box 70 mm wide and 95 mm tall")
+        ?.requestedSize,
+    ).toEqual({ widthMm: 70, heightMm: 95, depthMm: 40 });
+  });
+
+  it("adds landmark constraints only for figures and cards", () => {
+    expect(intentFromPromptKeywords("a box")?.semanticConstraints).toEqual([]);
+    expect(
+      intentFromPromptKeywords("a duck")?.semanticConstraints[0]?.kind,
+    ).toBe("recognizable_form");
+  });
+});
