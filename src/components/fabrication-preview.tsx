@@ -165,14 +165,33 @@ const roleColor = (role: PanelV1["role"], highlighted: boolean): string => {
   }
 };
 
+/**
+ * Whether the design's home pose sits mostly below the sheet plane, as when a
+ * card's flap folds away from the printed side. Such designs are shown turned
+ * over (a rigid 180° rotation, so geometry and handedness are unchanged) so the
+ * object reads upright; the source IR and every export stay as verified.
+ */
+const homePoseHangsBelowSheet = (ir: FabricationIRV1): boolean => {
+  const home = evaluateMotionState(ir, ir.driver?.homeValue);
+  if (!home.ok) return false;
+  const zValues = Object.values(home.value.panelVertices).flatMap((points) =>
+    points.map((point) => point.zMm),
+  );
+  if (zValues.length === 0) return false;
+  return -Math.min(...zValues) > Math.max(...zValues);
+};
+
 const sceneCoordinates = (
   point: Point3Mm,
   center: Point3Mm,
-): readonly [number, number, number] => [
-  point.xMm - center.xMm,
-  point.zMm - center.zMm,
-  center.yMm - point.yMm,
-];
+  turnedOver: boolean,
+): readonly [number, number, number] => {
+  const up = point.zMm - center.zMm;
+  const toward = center.yMm - point.yMm;
+  return turnedOver
+    ? [point.xMm - center.xMm, -up, -toward]
+    : [point.xMm - center.xMm, up, toward];
+};
 
 const buildSceneData = (
   ir: FabricationIRV1,
@@ -207,6 +226,7 @@ const buildSceneData = (
     1,
   );
   const highlighted = new Set(highlightedPanelIds);
+  const turnedOver = homePoseHangsBelowSheet(ir);
   let checksum = 0;
   let coordinateIndex = 1;
   const panels = ir.panels.flatMap((panel): readonly ScenePanel[] => {
@@ -215,7 +235,7 @@ const buildSceneData = (
     const positions: number[] = [];
     for (const triangle of triangles) {
       for (const point of triangle) {
-        const coordinates = sceneCoordinates(point, center);
+        const coordinates = sceneCoordinates(point, center, turnedOver);
         positions.push(...coordinates);
         checksum +=
           coordinateIndex *

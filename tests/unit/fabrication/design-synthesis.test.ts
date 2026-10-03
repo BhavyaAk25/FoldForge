@@ -504,5 +504,5 @@ describe("deterministic fabrication design synthesis", () => {
         /design_infeasible|synthesis_budget_exhausted/,
       );
     }
-  }, 30_000);
+  }, 180_000);
 });

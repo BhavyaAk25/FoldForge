@@ -30,7 +30,7 @@ const invalidRequest = (): NextResponse =>
 const templateOnlyUnsupported = (): NextResponse =>
   apiError(
     "PROMPT_NEEDS_AI",
-    "Without an AI provider FoldForge recognizes boxes, pop-up cards, and bird figures. Set AI_API_KEY for other objects.",
+    "Without an AI provider FoldForge recognizes boxes, pop-up cards, and stand-up ducks, trees, houses, or stars. Set AI_API_KEY for other objects.",
     422,
     [],
     forgeDiagnostic({
@@ -38,7 +38,7 @@ const templateOnlyUnsupported = (): NextResponse =>
       kind: "request",
       code: "PROMPT_NEEDS_AI",
       message:
-        "Without an AI provider FoldForge recognizes boxes, pop-up cards, and bird figures. Set AI_API_KEY for other objects.",
+        "Without an AI provider FoldForge recognizes boxes, pop-up cards, and stand-up ducks, trees, houses, or stars. Set AI_API_KEY for other objects.",
       modelCall: "not_started",
     }),
   );

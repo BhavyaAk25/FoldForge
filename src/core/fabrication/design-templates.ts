@@ -1,5 +1,10 @@
 import { FabricationDesignSpecV3Schema } from "./design-spec";
 import type { FabricationDesignSpecV3 } from "./design-spec";
+import {
+  FIGURE_LANDMARKS,
+  figureSilhouetteForText,
+  type FigureSilhouette,
+} from "./silhouettes";
 import type { FabricationIntentV1 } from "./types";
 
 /**
@@ -200,44 +205,35 @@ export const enclosureTemplateSpec = (
   });
 };
 
-const FIGURE_KEYWORDS = ["duck", "bird", "swan", "goose", "chick", "duckling"];
+const figureText = (intent: FabricationIntentV1): string =>
+  `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`;
 
-const looksLikeFigure = (intent: FabricationIntentV1): boolean => {
-  const haystack =
-    `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`.toLowerCase();
-  return FIGURE_KEYWORDS.some((word) => haystack.includes(word));
-};
+const looksLikeFigure = (intent: FabricationIntentV1): boolean =>
+  figureSilhouetteForText(figureText(intent)) !== null;
 
 /**
- * A static, fold-only faceted bird figure: a base with a tall body panel and
- * shorter head and beak panels folded up from it — the proven three-landmark
- * silhouette, parameterized by the finished width, height, and depth. Rectangular
- * facets keep the flat net packable; the assembled envelope is width x height x
- * depth so it satisfies the requested-size check like the enclosure does.
+ * A static stand-up figure: two matching silhouette sides folded upright from
+ * the long edges of a base, so the figure reads from either side. The
+ * assembled envelope is width x height x depth, matching the requested size.
  */
 export const figureTemplateSpec = (
   widthMm: number,
   heightMm: number,
   depthMm: number,
+  silhouette: FigureSilhouette = "duck",
 ): FabricationDesignSpecV3 => {
   const w = Math.max(30, Math.round(widthMm));
   const h = Math.max(30, Math.round(heightMm));
   const d = Math.max(12, Math.round(depthMm));
-  const headHeight = Math.max(16, Math.round(h * 0.66));
-  const beakHeight = Math.max(10, Math.round(h * 0.35));
-  const wall = (
-    key: string,
-    label: string,
-    role: FabricationDesignSpecV3["parts"][number]["role"],
-    partWidth: number,
-    partHeight: number,
-  ) => ({
+  const name = silhouette === "duck" ? "duck" : silhouette;
+  const side = (key: string, label: string) => ({
     key,
     label,
-    role,
-    width: exactMm(partWidth),
-    height: exactMm(partHeight),
+    role: "structural" as const,
+    width: exactMm(w),
+    height: exactMm(h),
     shapePreference: "rectangle" as const,
+    silhouette,
   });
   const foldUp = (key: string, partBKey: string) => ({
     key,
@@ -248,20 +244,21 @@ export const figureTemplateSpec = (
   });
   return FabricationDesignSpecV3Schema.parse({
     version: "3",
-    label: "Faceted figure",
-    summary:
-      "A fold-only faceted figure: a body panel with head and beak panels folded upright from a base.",
+    label: `Stand-up ${name}`,
+    summary: `A fold-only stand-up ${name}: two ${name}-shaped sides folded upright from a shared base.`,
     parts: [
-      wall("base", "Base", "support", w, d),
-      wall("body", "Body", "structural", w, h),
-      wall("head", "Head", "structural", d, headHeight),
-      wall("beak", "Beak", "decorative", d, beakHeight),
+      {
+        key: "base",
+        label: "Base",
+        role: "support",
+        width: exactMm(w),
+        height: exactMm(d),
+        shapePreference: "rectangle",
+      },
+      side("body", `${name} body, front side`),
+      side("back", `${name} body, back side`),
     ],
-    relations: [
-      foldUp("base-body", "body"),
-      foldUp("base-head", "head"),
-      foldUp("base-beak", "beak"),
-    ],
+    relations: [foldUp("base-body", "body"), foldUp("base-back", "back")],
     materialConstraints: {
       materialLabel: "Cardstock",
       thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
@@ -270,28 +267,14 @@ export const figureTemplateSpec = (
     glueAllowed: false,
     driver: null,
     outputs: [],
-    visibleLandmarks: [
-      {
-        key: "body-landmark",
-        label: "body",
-        partKeys: ["body"],
-        importance: "required",
-      },
-      {
-        key: "head-landmark",
-        label: "head",
-        partKeys: ["head"],
-        importance: "required",
-      },
-      {
-        key: "beak-landmark",
-        label: "beak",
-        partKeys: ["beak"],
-        importance: "required",
-      },
-    ],
-    aestheticPreferences: ["simple faceted bird silhouette, fold-only"],
-    priorities: ["mechanical_simplicity", "fabrication_efficiency"],
+    visibleLandmarks: FIGURE_LANDMARKS[silhouette].map((landmark) => ({
+      key: landmark,
+      label: landmark,
+      partKeys: ["body", "back"],
+      importance: "required",
+    })),
+    aestheticPreferences: [`recognizable ${name} silhouette, fold-only`],
+    priorities: ["visual_expression", "mechanical_simplicity"],
     tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
   });
 };
@@ -347,8 +330,11 @@ export const popUpCardTemplateSpec = (
         label: "Flower",
         role: "moving",
         width: exactMm(w),
+        // The flower's height is the requested pop-up depth, which keeps the
+        // assembled envelope equal to the requested size.
         height: exactMm(d),
         shapePreference: "rectangle",
+        silhouette: "flower",
       },
     ],
     relations: [
@@ -407,22 +393,27 @@ interface TemplateDescriptor {
     widthMm: number,
     heightMm: number,
     depthMm: number,
+    intent: FabricationIntentV1,
   ) => FabricationDesignSpecV3;
 }
 
-// Ordered by specificity: a static faceted figure (duck, bird) uses the fold-up
-// silhouette; a pop-up/flower card uses the rising-panel mechanism; an enclosure
-// uses the box. Figure and pop-up precede the enclosure so a "duck" is never
-// turned into a box, nor a "flower card". Append a descriptor to add a class.
+const buildFigure: TemplateDescriptor["build"] = (w, h, d, intent) =>
+  figureTemplateSpec(
+    w,
+    h,
+    d,
+    figureSilhouetteForText(figureText(intent)) ?? "duck",
+  );
+
 const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
   {
     matches: (intent) =>
       intent.behavior === "static" && looksLikeFigure(intent),
-    build: figureTemplateSpec,
+    build: buildFigure,
   },
   { matches: looksLikePopUp, build: popUpCardTemplateSpec },
   { matches: looksLikeEnclosure, build: enclosureTemplateSpec },
-  { matches: looksLikeFigure, build: figureTemplateSpec },
+  { matches: looksLikeFigure, build: buildFigure },
 ];
 
 /**
@@ -444,5 +435,7 @@ export const templateSpecForIntent = (
   const descriptor = TEMPLATE_DESCRIPTORS.find((candidate) =>
     candidate.matches(intent),
   );
-  return descriptor ? descriptor.build(widthMm, heightMm, depthMm) : null;
+  return descriptor
+    ? descriptor.build(widthMm, heightMm, depthMm, intent)
+    : null;
 };

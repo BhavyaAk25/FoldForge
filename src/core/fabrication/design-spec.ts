@@ -1,3 +1,4 @@
+import { PANEL_SILHOUETTES, type PanelSilhouette } from "./silhouettes";
 import { z } from "zod";
 
 import { FABRICATION_LIMITS } from "./limits";
@@ -35,6 +36,11 @@ export interface FabricationDesignPartV3 {
   readonly width: FabricationDimensionRangeV3;
   readonly height: FabricationDimensionRangeV3;
   readonly shapePreference: "rectangle" | "triangle" | "trapezoid";
+  /**
+   * Optional recognizable outline drawn inside the realized rectangle after
+   * synthesis (see silhouettes.ts); ignored when it would not verify.
+   */
+  readonly silhouette?: PanelSilhouette | null | undefined;
 }
 
 interface FabricationPartRelationBaseV3 {
@@ -269,6 +275,7 @@ export const FabricationDesignSpecV3Schema = z
             width: DimensionRangeSchema,
             height: DimensionRangeSchema,
             shapePreference: z.enum(["rectangle", "triangle", "trapezoid"]),
+            silhouette: z.enum(PANEL_SILHOUETTES).nullish(),
           })
           .strict(),
       )

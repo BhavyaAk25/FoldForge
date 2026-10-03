@@ -8,8 +8,8 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## How a prompt becomes a design
 
-1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, pop-up cards, and bird figures and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
-2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, a parametric template from `design-templates.ts` is fitted to the requested size. Template output always records `generationSource: "template"`.
+1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, pop-up cards, and stand-up figures (birds, trees, houses, stars) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
+2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, a parametric template from `design-templates.ts` is fitted to the requested size. Template output always records `generationSource: "template"`. Parts may request a `silhouette` (duck, flower, tree, house, star, arch): after synthesis, `silhouettes.ts` redraws that rectangular panel inside its bounds, keeping the hinge edge, and `upright.ts` mirrors fold-only designs that hang below their base. Both are kept only if the full verifier still passes.
 3. **Compile and verify** (`/api/compile`). Pure, deterministic, and repeated on the server before anything is shown.
 4. **Repair** (`/api/repair`, needs AI): a bounded typed patch, re-verified from scratch.
 5. **Build notes** (`/api/finalize`, needs AI): a narrative for an already verified candidate.
@@ -48,3 +48,13 @@ Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 m
 ## Git
 
 Work on a feature branch, keep commits small and passing, and open a PR into `main`. CI runs `pnpm check` plus the browser flow. Never commit `.env.local`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
