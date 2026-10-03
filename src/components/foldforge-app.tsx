@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import type { FabricationPreviewMode } from "@/components/fabrication-preview";
@@ -9,7 +9,6 @@ import {
   DEFAULT_PROMPT,
   DUCK_CREASE_PATTERN_PROMPT,
   FoldForgeStart,
-  type AccessState,
   type ExamplePrompt,
   type SavedExampleId,
 } from "@/components/foldforge-start";
@@ -26,7 +25,6 @@ import type {
   FabricationProgramV1,
 } from "@/core/fabrication/types";
 import {
-  AccessApiResponseSchema,
   CompileApiResponseSchema,
   FinalizeApiResponseSchema,
   HealthApiResponseSchema,
@@ -157,8 +155,6 @@ const fallbackLimitations = (candidate: CandidateV2): readonly string[] => [
 
 export function FoldForgeApp() {
   const [health, setHealth] = useState<HealthApiResponse | null>(null);
-  const [accessState, setAccessState] = useState<AccessState>("unknown");
-  const [accessCode, setAccessCode] = useState("");
   const [prompt, setPrompt] = useState<string>(DEFAULT_PROMPT);
   const [resultBinding, setResultBinding] = useState<ForgeResultBinding | null>(
     null,
@@ -189,7 +185,6 @@ export function FoldForgeApp() {
   );
   const [finalizing, setFinalizing] = useState(false);
   const [checkpointReady, setCheckpointReady] = useState(false);
-  const accessCodeInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusResultsRef = useRef(false);
@@ -199,7 +194,7 @@ export function FoldForgeApp() {
   const resultBindingRef = useRef<ForgeResultBinding | null>(null);
 
   const busy = phase === "intent" || phase === "programs" || phase === "repair";
-  const solAvailable = health?.liveAiEnabled === true;
+  const aiAvailable = health?.liveAiEnabled === true;
   const baseSelected = useMemo(
     () =>
       experienceMode === "saved" ||
@@ -226,7 +221,7 @@ export function FoldForgeApp() {
         setHealth(nextHealth);
         if (!nextHealth.liveAiEnabled) {
           setStatusMessage(
-            "Live generation is off. Saved examples are still available.",
+            "No AI key configured: boxes, pop-up cards, and bird figures still work through parametric templates.",
           );
         }
       })
@@ -312,45 +307,8 @@ export function FoldForgeApp() {
     resultsHeadingRef.current?.focus();
   }, [candidates, phase]);
 
-  useEffect(() => {
-    if (accessState === "needed") accessCodeInputRef.current?.focus();
-  }, [accessState]);
-
-  const requireAccess = useCallback((requestError: unknown): boolean => {
-    if (
-      requestError instanceof FoldForgeApiError &&
-      requestError.code === "ACCESS_REQUIRED"
-    ) {
-      setAccessState("needed");
-      setError("Enter the demo access code, then try again.");
-      return true;
-    }
-    return false;
-  }, []);
-
-  const unlock = async () => {
-    setError("");
-    try {
-      await postJson(
-        "/api/access",
-        { code: accessCode },
-        AccessApiResponseSchema,
-      );
-      setAccessCode("");
-      setAccessState("granted");
-      setStatusMessage("Access granted.");
-    } catch (unlockError) {
-      setError(formatFailure(unlockError));
-    }
-  };
-
   const forge = async () => {
-    if (
-      !solAvailable ||
-      busy ||
-      forgeInFlightRef.current ||
-      prompt.trim().length === 0
-    ) {
+    if (busy || forgeInFlightRef.current || prompt.trim().length === 0) {
       return;
     }
     forgeInFlightRef.current = true;
@@ -383,7 +341,7 @@ export function FoldForgeApp() {
         "/api/intent",
         { prompt: requestedPrompt },
         IntentApiResponseSchema,
-        { attemptId: forgeAttemptId, stage: "intent" },
+        { stage: "intent" },
       );
       if (nextIntent.scopeStatus !== "supported") {
         setPhase("idle");
@@ -407,7 +365,7 @@ export function FoldForgeApp() {
           usedTopologyIds: [],
         },
         ProgramsApiResponseSchema,
-        { attemptId: forgeAttemptId, stage: "program" },
+        { stage: "program" },
       );
 
       const candidateId = candidateIdFor(ordinal, generated.proposal.program);
@@ -428,7 +386,7 @@ export function FoldForgeApp() {
             kind: "contract",
             code: "SERVER_VERIFICATION_DRIFT",
             message:
-              "The server-selected program did not reproduce its verified result. No paid repair was attempted.",
+              "The server-selected program did not reproduce its verified result. No repair was attempted.",
             modelCall: "not_applicable",
             failureIds: evaluation.diagnostic.failureIds,
             failedAtStage: evaluation.diagnostic.failedAtStage,
@@ -495,12 +453,11 @@ export function FoldForgeApp() {
       resultBindingRef.current = forgeBinding;
       shouldFocusResultsRef.current = true;
       setPhase("ready");
-      setAccessState("granted");
       setStatusMessage("Your checked design is ready.");
     } catch (forgeError) {
       if (sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)) {
         setPhase("idle");
-        if (!requireAccess(forgeError)) setError(formatFailure(forgeError));
+        setError(formatFailure(forgeError));
       }
     } finally {
       if (sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)) {
@@ -615,7 +572,7 @@ export function FoldForgeApp() {
       !resultBinding ||
       !forgeResultMatchesPrompt(resultBinding, prompt) ||
       finalizing ||
-      !solAvailable
+      !aiAvailable
     ) {
       return;
     }
@@ -628,7 +585,7 @@ export function FoldForgeApp() {
         "/api/finalize",
         { candidate: exportCandidate },
         FinalizeApiResponseSchema,
-        { attemptId: finalizingBinding.attemptId, stage: "finalize" },
+        { stage: "finalize" },
       );
       if (
         !sameForgeResultBinding(resultBindingRef.current, finalizingBinding) ||
@@ -637,13 +594,11 @@ export function FoldForgeApp() {
         return;
       }
       setNarrative(result.narrative);
-      setAccessState("granted");
       setStatusMessage("Build notes ready.");
     } catch (finalizeError) {
       if (
         sameForgeResultBinding(resultBindingRef.current, finalizingBinding) &&
-        forgeResultMatchesPrompt(finalizingBinding, latestPromptRef.current) &&
-        !requireAccess(finalizeError)
+        forgeResultMatchesPrompt(finalizingBinding, latestPromptRef.current)
       ) {
         setError(formatFailure(finalizeError));
       }
@@ -676,18 +631,14 @@ export function FoldForgeApp() {
         </a>
         <div className={styles.healthGroup}>
           <span
-            className={`${styles.statusPill ?? ""} ${solAvailable ? (styles.live ?? "") : (styles.offline ?? "")}`}
+            className={`${styles.statusPill ?? ""} ${aiAvailable ? (styles.live ?? "") : (styles.offline ?? "")}`}
           >
             <span aria-hidden="true" />
             {!health
-              ? "Checking live generation"
-              : solAvailable
-                ? accessState === "granted"
-                  ? "Live generation ready · access granted"
-                  : accessState === "needed"
-                    ? "Live generation ready · access needed"
-                    : "Live generation ready"
-                : "Live generation off"}
+              ? "Checking AI"
+              : aiAvailable
+                ? `AI ready · ${health.aiModel ?? "model"}`
+                : "Template mode · no AI key"}
           </span>
           {candidates.length > 0 ? (
             <span className={styles.checkpointLabel}>
@@ -701,13 +652,9 @@ export function FoldForgeApp() {
 
       <main className={styles.main} id="studio-main">
         <FoldForgeStart
-          accessCode={accessCode}
-          accessCodeInputRef={accessCodeInputRef}
-          accessState={accessState}
           busy={busy}
           healthKnown={health !== null}
-          liveGenerationAvailable={solAvailable}
-          onAccessCodeChange={setAccessCode}
+          aiAvailable={aiAvailable}
           onCreate={() => void forge()}
           onOpenSavedExample={openSavedExample}
           onPromptChange={(nextPrompt) => {
@@ -730,7 +677,6 @@ export function FoldForgeApp() {
             }
           }}
           onSelectExample={applyExamplePrompt}
-          onSubmitAccess={() => void unlock()}
           prompt={prompt}
           promptRef={promptRef}
         />
@@ -757,7 +703,7 @@ export function FoldForgeApp() {
             finalizing={finalizing}
             generationSource={generationSource}
             limitations={limitations}
-            liveGenerationAvailable={solAvailable}
+            liveGenerationAvailable={aiAvailable}
             motionPosition={motionPosition}
             narrative={narrative}
             onChooseCandidate={chooseCandidate}

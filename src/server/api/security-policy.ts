@@ -1,5 +1,4 @@
 export const API_BODY_LIMIT_BYTES = {
-  access: 1 * 1024,
   intent: 32 * 1024,
   programs: 32 * 1024,
   compile: 32 * 1024,
@@ -8,73 +7,13 @@ export const API_BODY_LIMIT_BYTES = {
   exports: 256 * 1024,
 } as const;
 
-export type LiveOperation = "intent" | "programs" | "repair" | "finalize";
-
-export type LiveOperationQuotaGroup = "generation" | "repair" | "finalize";
-
-interface LiveOperationPolicy {
-  readonly bodyLimitBytes: number;
-  readonly maximumOutputTokens: number;
-  readonly maximumRequestsPerHour: number;
-  readonly quotaGroup: LiveOperationQuotaGroup;
-}
-
-export const LIVE_OPERATION_POLICIES: Readonly<
-  Record<LiveOperation, LiveOperationPolicy>
-> = {
-  intent: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.intent,
-    maximumOutputTokens: 4_000,
-    maximumRequestsPerHour: 20,
-    quotaGroup: "generation",
-  },
-  programs: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.programs,
-    maximumOutputTokens: 4_000,
-    maximumRequestsPerHour: 20,
-    quotaGroup: "generation",
-  },
-  repair: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.repair,
-    maximumOutputTokens: 2_500,
-    maximumRequestsPerHour: 5,
-    quotaGroup: "repair",
-  },
-  finalize: {
-    bodyLimitBytes: API_BODY_LIMIT_BYTES.finalize,
-    maximumOutputTokens: 2_000,
-    maximumRequestsPerHour: 2,
-    quotaGroup: "finalize",
-  },
-};
-
-export const LIVE_SESSION_LIMITS = {
-  windowMs: 60 * 60 * 1_000,
-  maximumRequests: 10,
-  // The public forge uses one intent and one multi-proposal program call.
-  // The remaining headroom supports bounded explicit repair/finalize routes
-  // without allowing parallel duplicate generations.
-  maximumReservedTokens: 140_000,
-  maximumConcurrentPerSession: 1,
-  maximumConcurrentGlobal: 8,
+/** Per-client budget for routes that may call the AI provider. */
+export const MODEL_ROUTE_LIMITS = {
+  windowMs: 10 * 60 * 1_000,
+  maximumRequestsPerWindow: 30,
 } as const;
 
-/**
- * Best-effort aggregate protection for one warm deployment process. Session
- * limits keep judges independent; this separate ceiling still bounds repeated
- * access-code logins on that process.
- */
-export const LIVE_DEPLOYMENT_LIMITS = {
-  windowMs: 60 * 60 * 1_000,
-  maximumRequests: 40,
-  maximumReservedTokens: 560_000,
-} as const;
-
-export const LIVE_ATTEMPT_LIMITS = {
-  windowMs: 60 * 60 * 1_000,
-  maximumEntries: 2_000,
-} as const;
-
+/** Best-effort protection for CPU-bound deterministic compile/export routes. */
 export const DETERMINISTIC_ROUTE_LIMITS = {
   windowMs: 10 * 60 * 1_000,
   maximumRequestsPerWindow: 30,

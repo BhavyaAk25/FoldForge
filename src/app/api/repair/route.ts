@@ -1,4 +1,3 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
@@ -26,17 +25,13 @@ import {
   modelFailureDiagnostic,
   verificationFailureDiagnostic,
 } from "@/server/api/forge-diagnostic";
-import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
+import { runModelRoute } from "@/server/api/model-route";
 import { apiError } from "@/server/api/response";
-import {
-  API_BODY_LIMIT_BYTES,
-  LIVE_OPERATION_POLICIES,
-} from "@/server/api/security-policy";
 import { RepairFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
-import { OpenAIFabricationRepairModel } from "@/server/fabrication-ai/models";
+import { LlmFabricationRepairModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 240;
+export const maxDuration = 120;
 
 type RepairStatus = "infeasible" | "passed" | "still_invalid";
 
@@ -134,214 +129,165 @@ const invalidModelResponse = (): NextResponse =>
     }),
   );
 
-export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const response = await runAuthorizedLiveRoute(
-    {
-      request,
-      operation: "repair",
-      reservedInputTokens: API_BODY_LIMIT_BYTES.repair / 4,
-      reservedOutputTokens: LIVE_OPERATION_POLICIES.repair.maximumOutputTokens,
-    },
-    async ({ body, safetyIdentifier }) => {
-      const parsedRequest = RepairFabricationRequestSchema.safeParse(body);
-      if (!parsedRequest.success) return invalidRequest();
-      const { candidateId, intent, program, repairCycle } = parsedRequest.data;
-      const before = evaluate(intent, program, candidateId);
-      if (!before.ok) {
+export const POST = (request: Request): Promise<NextResponse> =>
+  runModelRoute(request, "repair", async (body) => {
+    const parsedRequest = RepairFabricationRequestSchema.safeParse(body);
+    if (!parsedRequest.success) return invalidRequest();
+    const { candidateId, intent, program, repairCycle } = parsedRequest.data;
+    const before = evaluate(intent, program, candidateId);
+    if (!before.ok) {
+      return outcome(
+        "infeasible",
+        candidateId,
+        null,
+        program,
+        null,
+        repairCompileDiagnostic(before.failureKind, repairCycle, "not_started"),
+      );
+    }
+    if (before.value.report.valid) {
+      return outcome("passed", candidateId, null, program, before.value, null);
+    }
+    if (
+      !before.value.report.failures.some(
+        (failure) =>
+          failure.severity === "hard" &&
+          failure.repairableProgramPaths.length > 0,
+      )
+    ) {
+      return outcome(
+        "infeasible",
+        candidateId,
+        null,
+        program,
+        before.value,
+        verificationFailureDiagnostic({
+          stage: "repair",
+          report: before.value.report,
+          repairCycle,
+          code: "REPAIR_INFEASIBLE",
+          modelCall: "not_started",
+        }),
+      );
+    }
+
+    try {
+      const proposedPatch =
+        await new LlmFabricationRepairModel().diagnoseRepair(
+          program,
+          before.value.report,
+          repairCycle,
+        );
+      const parsedPatch = ProgramPatchV1Schema.safeParse(proposedPatch);
+      if (!parsedPatch.success) return invalidModelResponse();
+      if (parsedPatch.data.repairCycle !== repairCycle) {
         return outcome(
           "infeasible",
           candidateId,
           null,
           program,
-          null,
-          repairCompileDiagnostic(
-            before.failureKind,
-            repairCycle,
-            "not_started",
-          ),
-        );
-      }
-      if (before.value.report.valid) {
-        return outcome(
-          "passed",
-          candidateId,
-          null,
-          program,
           before.value,
-          null,
-        );
-      }
-      if (
-        !before.value.report.failures.some(
-          (failure) =>
-            failure.severity === "hard" &&
-            failure.repairableProgramPaths.length > 0,
-        )
-      ) {
-        return outcome(
-          "infeasible",
-          candidateId,
-          null,
-          program,
-          before.value,
-          verificationFailureDiagnostic({
+          forgeDiagnostic({
             stage: "repair",
-            report: before.value.report,
+            kind: "contract",
+            code: "REPAIR_PATCH_REJECTED",
+            message: "The repair patch targeted the wrong repair cycle.",
+            modelCall: "attempted",
+            failureIds: before.value.report.failures
+              .slice(0, 24)
+              .map((failure) => failure.failureId),
+            failedAtStage: before.value.report.failedAtStage,
             repairCycle,
-            code: "REPAIR_INFEASIBLE",
-            modelCall: "not_started",
           }),
         );
       }
-
-      try {
-        const proposedPatch =
-          await new OpenAIFabricationRepairModel().diagnoseRepair(
-            program,
-            before.value.report,
-            repairCycle,
-            safetyIdentifier,
-          );
-        if (!proposedPatch) {
-          return outcome(
-            "infeasible",
-            candidateId,
-            null,
-            program,
-            before.value,
-            verificationFailureDiagnostic({
-              stage: "repair",
-              report: before.value.report,
-              repairCycle,
-              code: "REPAIR_INFEASIBLE",
-              modelCall: "attempted",
-            }),
-          );
-        }
-        const parsedPatch = ProgramPatchV1Schema.safeParse(proposedPatch);
-        if (!parsedPatch.success) return invalidModelResponse();
-        if (parsedPatch.data.repairCycle !== repairCycle) {
-          return outcome(
-            "infeasible",
-            candidateId,
-            null,
-            program,
-            before.value,
-            forgeDiagnostic({
-              stage: "repair",
-              kind: "contract",
-              code: "REPAIR_PATCH_REJECTED",
-              message: "The repair patch targeted the wrong repair cycle.",
-              modelCall: "attempted",
-              failureIds: before.value.report.failures
-                .slice(0, 24)
-                .map((failure) => failure.failureId),
-              failedAtStage: before.value.report.failedAtStage,
-              repairCycle,
-            }),
-          );
-        }
-        const applied = applyProgramPatch(
-          program,
-          parsedPatch.data,
-          before.value.report,
-        );
-        if (!applied.ok) {
-          return outcome(
-            "infeasible",
-            candidateId,
-            null,
-            program,
-            before.value,
-            forgeDiagnostic({
-              stage: "repair",
-              kind: "repair",
-              code: "REPAIR_PATCH_REJECTED",
-              message: `The repair patch could not be applied safely (${applied.error.id}).`,
-              modelCall: "attempted",
-              failureIds: [
-                applied.error.id,
-                ...before.value.report.failures.map(
-                  (failure) => failure.failureId,
-                ),
-              ].slice(0, 24),
-              failedAtStage: before.value.report.failedAtStage,
-              repairCycle,
-            }),
-          );
-        }
-        const after = evaluate(intent, applied.value, candidateId);
-        if (!after.ok) {
-          return outcome(
-            "infeasible",
-            candidateId,
-            parsedPatch.data,
-            applied.value,
-            null,
-            repairCompileDiagnostic(
-              after.failureKind,
-              repairCycle,
-              "attempted",
-            ),
-          );
-        }
-        const progress = evaluateRepairProgress(
-          before.value.report,
-          after.value.report,
-          parsedPatch.data,
-        );
-        if (!progress.ok) {
-          return outcome(
-            "infeasible",
-            candidateId,
-            parsedPatch.data,
-            program,
-            before.value,
-            forgeDiagnostic({
-              stage: "repair",
-              kind: "repair",
-              code: "REPAIR_NO_GEOMETRIC_EFFECT",
-              message: repairProgressMessage(progress),
-              modelCall: "attempted",
-              failureIds: [
-                "repair.no_geometric_effect",
-                ...progress.measurements.map(
-                  (measurement) => measurement.failureId,
-                ),
-              ].slice(0, 24),
-              failedAtStage: before.value.report.failedAtStage,
-              repairCycle,
-            }),
-          );
-        }
+      const applied = applyProgramPatch(
+        program,
+        parsedPatch.data,
+        before.value.report,
+      );
+      if (!applied.ok) {
         return outcome(
-          after.value.report.valid ? "passed" : "still_invalid",
+          "infeasible",
+          candidateId,
+          null,
+          program,
+          before.value,
+          forgeDiagnostic({
+            stage: "repair",
+            kind: "repair",
+            code: "REPAIR_PATCH_REJECTED",
+            message: `The repair patch could not be applied safely (${applied.error.id}).`,
+            modelCall: "attempted",
+            failureIds: [
+              applied.error.id,
+              ...before.value.report.failures.map(
+                (failure) => failure.failureId,
+              ),
+            ].slice(0, 24),
+            failedAtStage: before.value.report.failedAtStage,
+            repairCycle,
+          }),
+        );
+      }
+      const after = evaluate(intent, applied.value, candidateId);
+      if (!after.ok) {
+        return outcome(
+          "infeasible",
           candidateId,
           parsedPatch.data,
           applied.value,
-          after.value,
-          after.value.report.valid
-            ? null
-            : verificationFailureDiagnostic({
-                stage: "repair",
-                report: after.value.report,
-                repairCycle,
-                code: "REPAIR_INCOMPLETE",
-                modelCall: "attempted",
-              }),
-        );
-      } catch (error) {
-        const diagnostic = modelFailureDiagnostic("repair", error);
-        return apiError(
-          diagnostic.code,
-          diagnostic.message,
-          502,
-          [],
-          diagnostic,
+          null,
+          repairCompileDiagnostic(after.failureKind, repairCycle, "attempted"),
         );
       }
-    },
-  );
-  response.headers.set("Cache-Control", "no-store");
-  return response;
-};
+      const progress = evaluateRepairProgress(
+        before.value.report,
+        after.value.report,
+        parsedPatch.data,
+      );
+      if (!progress.ok) {
+        return outcome(
+          "infeasible",
+          candidateId,
+          parsedPatch.data,
+          program,
+          before.value,
+          forgeDiagnostic({
+            stage: "repair",
+            kind: "repair",
+            code: "REPAIR_NO_GEOMETRIC_EFFECT",
+            message: repairProgressMessage(progress),
+            modelCall: "attempted",
+            failureIds: [
+              "repair.no_geometric_effect",
+              ...progress.measurements.map(
+                (measurement) => measurement.failureId,
+              ),
+            ].slice(0, 24),
+            failedAtStage: before.value.report.failedAtStage,
+            repairCycle,
+          }),
+        );
+      }
+      return outcome(
+        after.value.report.valid ? "passed" : "still_invalid",
+        candidateId,
+        parsedPatch.data,
+        applied.value,
+        after.value,
+        after.value.report.valid
+          ? null
+          : verificationFailureDiagnostic({
+              stage: "repair",
+              report: after.value.report,
+              repairCycle,
+              code: "REPAIR_INCOMPLETE",
+              modelCall: "attempted",
+            }),
+      );
+    } catch (error) {
+      const diagnostic = modelFailureDiagnostic("repair", error);
+      return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
+    }
+  });

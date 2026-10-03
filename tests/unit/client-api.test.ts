@@ -37,7 +37,7 @@ describe("forge client diagnostics", () => {
       "/api/programs",
       { value: "private request body" },
       z.object({ ok: z.literal(true) }).strict(),
-      { stage: "program", attemptId: crypto.randomUUID() },
+      { stage: "program" },
     );
 
     await expect(request).rejects.toMatchObject({
@@ -54,7 +54,7 @@ describe("forge client diagnostics", () => {
       "/api/programs",
       { value: "private request body" },
       z.object({ ok: z.literal(true) }).strict(),
-      { stage: "program", attemptId: crypto.randomUUID() },
+      { stage: "program" },
     );
 
     await expect(request).rejects.toMatchObject({
@@ -68,8 +68,7 @@ describe("forge client diagnostics", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("sends the forge attempt identifier and rejects a malformed success", async () => {
-    const attemptId = crypto.randomUUID();
+  it("rejects a malformed success", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(Response.json({ unexpected: true }));
@@ -79,7 +78,7 @@ describe("forge client diagnostics", () => {
       "/api/intent",
       { prompt: "private prompt" },
       z.object({ ok: z.literal(true) }).strict(),
-      { stage: "intent", attemptId },
+      { stage: "intent" },
     );
 
     await expect(request).rejects.toMatchObject({
@@ -89,9 +88,5 @@ describe("forge client diagnostics", () => {
         modelCall: "attempted",
       },
     });
-    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect(
-      new Headers(requestInit?.headers).get("X-FoldForge-Attempt-Id"),
-    ).toBe(attemptId);
   });
 });

@@ -1,11 +1,3 @@
-import { zodResponsesFunction, zodTextFormat } from "openai/helpers/zod";
-import type { ResponseCreateParamsWithTools } from "openai/lib/ResponsesParser";
-import type {
-  Response as OpenAIResponse,
-  ResponseCreateParamsNonStreaming,
-  ResponseUsage,
-} from "openai/resources/responses/responses";
-
 import { canonicalSerialize } from "@/core/canonical";
 import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { normalizeFabricationIntentFeasibility } from "@/core/fabrication/feasibility-normalization";
@@ -22,11 +14,6 @@ import type {
   ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
-import { getOpenAIClient } from "@/server/ai/client";
-import type {
-  PaidEvalBudget,
-  PaidEvalOperation,
-} from "@/server/ai/paid-eval-budget";
 
 import {
   FabricationDesignSpecProposalV3Schema,
@@ -34,145 +21,17 @@ import {
   type FabricationNarrativeV1,
   type ProgramProposalV1,
 } from "./contracts";
-import { fabricationProgramProposalFromResponse } from "./plan-response";
+import { generateStructured } from "./llm";
+import { programProposalFromDesignSpec } from "./plan-response";
 import {
   FABRICATION_INTENT_PROMPT,
   FABRICATION_NARRATIVE_PROMPT,
   FABRICATION_PROGRAM_PROMPT,
   FABRICATION_REPAIR_PROMPT,
 } from "./prompts";
-import { FabricationIntentModelError } from "./model-contract-error";
-
-export const FOLDFORGE_MODEL = "gpt-5.6-sol";
-export const FABRICATION_INTENT_MAX_OUTPUT_TOKENS = 4_000;
-export const FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS = 4_000;
-
-const PROGRAM_BACKGROUND_POLL_INTERVAL_MS = 2_000;
-const PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS = 3;
-export const FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS = 210_000;
-const PROGRAM_BACKGROUND_CREATE_TIMEOUT_MS = 15_000;
-const PROGRAM_BACKGROUND_RETRIEVAL_TIMEOUT_MS = 10_000;
-const PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS = 5_000;
-
-const delay = async (durationMs: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, durationMs));
-
-const retrieveBackgroundResponse = async (
-  openAI: ReturnType<typeof getOpenAIClient>,
-  responseId: string,
-  retrievalDeadlineMs: number,
-): Promise<OpenAIResponse | null> => {
-  let lastError: unknown = new Error("Background response retrieval failed.");
-  for (
-    let attempt = 1;
-    attempt <= PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS;
-    attempt += 1
-  ) {
-    const remainingMs = retrievalDeadlineMs - Date.now();
-    if (remainingMs <= 0) return null;
-    try {
-      return await openAI.responses.retrieve(responseId, undefined, {
-        maxRetries: 0,
-        timeout: Math.min(PROGRAM_BACKGROUND_RETRIEVAL_TIMEOUT_MS, remainingMs),
-      });
-    } catch (error) {
-      lastError = error;
-      if (attempt < PROGRAM_BACKGROUND_RETRIEVAL_ATTEMPTS) {
-        // Retrievals do not start model work, so bounded retries improve
-        // connection resilience without risking duplicate paid generations.
-        const retryDelayMs = Math.min(
-          PROGRAM_BACKGROUND_POLL_INTERVAL_MS,
-          retrievalDeadlineMs - Date.now(),
-        );
-        if (retryDelayMs <= 0) return null;
-        await delay(retryDelayMs);
-      }
-    }
-  }
-  throw lastError;
-};
-
-const runBackgroundResponse = async (
-  openAI: ReturnType<typeof getOpenAIClient>,
-  request: ResponseCreateParamsNonStreaming,
-): Promise<OpenAIResponse> => {
-  const startedAtMs = Date.now();
-  const responseDeadlineMs =
-    startedAtMs + FABRICATION_PROGRAM_BACKGROUND_MAX_WAIT_MS;
-  const retrievalDeadlineMs =
-    responseDeadlineMs - PROGRAM_BACKGROUND_CANCELLATION_RESERVE_MS;
-  let response = await openAI.responses.create(request, {
-    maxRetries: 0,
-    timeout: Math.min(
-      PROGRAM_BACKGROUND_CREATE_TIMEOUT_MS,
-      retrievalDeadlineMs - startedAtMs,
-    ),
-  });
-  while (response.status === "queued" || response.status === "in_progress") {
-    const remainingRetrievalMs = retrievalDeadlineMs - Date.now();
-    if (remainingRetrievalMs <= 0) {
-      const remainingResponseMs = responseDeadlineMs - Date.now();
-      if (remainingResponseMs <= 0) return response;
-      return openAI.responses.cancel(response.id, {
-        maxRetries: 0,
-        timeout: remainingResponseMs,
-      });
-    }
-    await delay(
-      Math.min(PROGRAM_BACKGROUND_POLL_INTERVAL_MS, remainingRetrievalMs),
-    );
-    const retrieved = await retrieveBackgroundResponse(
-      openAI,
-      response.id,
-      retrievalDeadlineMs,
-    );
-    if (retrieved) response = retrieved;
-  }
-  return response;
-};
-
-const runMeteredRequest = async <
-  Request extends { readonly max_output_tokens: number },
-  Response extends {
-    readonly id: string;
-    readonly usage?: ResponseUsage | null;
-  },
->(input: {
-  readonly budget: PaidEvalBudget | null;
-  readonly operation: PaidEvalOperation;
-  readonly request: Request;
-  readonly execute: (request: Request) => Promise<Response>;
-}): Promise<Response> => {
-  if (!input.budget) return input.execute(input.request);
-  return input.budget.run({
-    operation: input.operation,
-    request: input.request,
-    execute: input.execute,
-  });
-};
-
-class LiveEvaluationBudgetRequiredError extends Error {
-  readonly code = "budget_required";
-
-  constructor() {
-    super(
-      "Live OpenAI evaluations require the persistent paid-evaluation budget.",
-    );
-    this.name = "LiveEvaluationBudgetRequiredError";
-  }
-}
-
-const assertEvaluationBudget = (budget: PaidEvalBudget | null): void => {
-  if (process.env.ENABLE_LIVE_OPENAI_EVALS === "true" && !budget) {
-    throw new LiveEvaluationBudgetRequiredError();
-  }
-};
 
 export interface FabricationIntentModel {
-  compileIntent(
-    prompt: string,
-    safetyIdentifier: string,
-  ): Promise<FabricationIntentV1>;
+  compileIntent(prompt: string): Promise<FabricationIntentV1>;
 }
 
 export interface FabricationProgramModel {
@@ -180,7 +39,6 @@ export interface FabricationProgramModel {
     intent: FabricationIntentV1,
     candidateOrdinal: number,
     usedTopologyIds: readonly string[],
-    safetyIdentifier: string,
   ): Promise<ProgramProposalV1>;
 }
 
@@ -189,15 +47,11 @@ export interface FabricationRepairModel {
     program: FabricationProgramV1,
     report: VerificationReportV2,
     repairCycle: number,
-    safetyIdentifier: string,
-  ): Promise<ProgramPatchV1 | null>;
+  ): Promise<ProgramPatchV1>;
 }
 
 export interface FabricationNarrativeModel {
-  generateNarrative(
-    candidate: CandidateV2,
-    safetyIdentifier: string,
-  ): Promise<FabricationNarrativeV1>;
+  generateNarrative(candidate: CandidateV2): Promise<FabricationNarrativeV1>;
 }
 
 type SemanticReferenceKind =
@@ -489,53 +343,21 @@ export const fabricationNarrativeInput = (candidate: CandidateV2) => ({
   },
 });
 
-export class OpenAIFabricationIntentModel implements FabricationIntentModel {
-  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
-    assertEvaluationBudget(usageBudget);
-  }
-
-  async compileIntent(
-    prompt: string,
-    safetyIdentifier: string,
-  ): Promise<FabricationIntentV1> {
-    const maxOutputTokens = FABRICATION_INTENT_MAX_OUTPUT_TOKENS;
-    const request = {
-      model: FOLDFORGE_MODEL,
+export class LlmFabricationIntentModel implements FabricationIntentModel {
+  async compileIntent(prompt: string): Promise<FabricationIntentV1> {
+    const { value } = await generateStructured({
+      schema: FabricationIntentV1Schema,
+      schemaName: "FabricationIntentV1",
       instructions: FABRICATION_INTENT_PROMPT,
-      input: [{ role: "user", content: prompt }],
-      reasoning: { effort: "medium" },
-      text: {
-        format: zodTextFormat(
-          FabricationIntentV1Schema,
-          "fabrication_intent_v1",
-        ),
-      },
-      max_output_tokens: maxOutputTokens,
-      parallel_tool_calls: false,
-      safety_identifier: safetyIdentifier,
-      store: false,
-      service_tier: "default",
-    } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient({
-      paidEvaluation: this.usageBudget !== null,
+      input: prompt,
     });
-    const response = await runMeteredRequest({
-      budget: this.usageBudget,
-      operation: "compile_intent",
-      request,
-      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
-    });
-    if (!response.output_parsed) {
-      throw new FabricationIntentModelError(
-        "GPT-5.6 Sol stopped before returning a parsed fabrication intent.",
-      );
-    }
+    // The model fills the semantic fields; code normalizes reference IDs,
+    // capacity budgets, and stock feasibility so they cannot contradict the
+    // compiler limits.
     return normalizeFabricationIntentFeasibility(
       FabricationIntentV1Schema.parse(
         normalizeFabricationIntentBudget(
-          normalizeIntentSemanticPartIds(
-            FabricationIntentV1Schema.parse(response.output_parsed),
-          ),
+          normalizeIntentSemanticPartIds({ ...value, sourcePrompt: prompt }),
           prompt,
         ),
       ),
@@ -543,148 +365,51 @@ export class OpenAIFabricationIntentModel implements FabricationIntentModel {
   }
 }
 
-export class OpenAIFabricationProgramModel implements FabricationProgramModel {
-  constructor(
-    private readonly usageBudget: PaidEvalBudget | null = null,
-    private readonly maximumOutputTokens: number = FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS,
-  ) {
-    assertEvaluationBudget(usageBudget);
-    if (
-      !Number.isSafeInteger(maximumOutputTokens) ||
-      maximumOutputTokens < 1_000 ||
-      maximumOutputTokens > FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS
-    ) {
-      throw new Error(
-        `Program output tokens must be an integer between 1000 and ${FABRICATION_PROGRAM_MAX_OUTPUT_TOKENS}.`,
-      );
-    }
-  }
-
+export class LlmFabricationProgramModel implements FabricationProgramModel {
   async generateProgram(
     intent: FabricationIntentV1,
     candidateOrdinal: number,
     usedTopologyIds: readonly string[],
-    safetyIdentifier: string,
   ): Promise<ProgramProposalV1> {
-    const maxOutputTokens = this.maximumOutputTokens;
-    const request = {
-      model: FOLDFORGE_MODEL,
+    const result = await generateStructured({
+      schema: FabricationDesignSpecProposalV3Schema,
+      schemaName: "FabricationDesignSpecProposalV3",
       instructions: FABRICATION_PROGRAM_PROMPT,
-      input: [
-        {
-          role: "user",
-          content: canonicalSerialize(
-            fabricationPlanningInput(intent, usedTopologyIds),
-          ),
-        },
-      ],
-      // Deterministic expansion and verification own correctness, but the
-      // model still chooses the panel decomposition, stock sizing, and lock
-      // count that keep a design inside the synthesizer's feasible envelope.
-      // Medium effort measurably reduces over-constrained specs (redundant
-      // wall-to-wall relations, a lock on every seam, an undersized sheet).
-      reasoning: { effort: "medium" },
-      tools: [
-        zodResponsesFunction({
-          name: "submit_fabrication_design_spec",
-          description:
-            "Submit semantic parts, relationships, ranges, constraints, motion intent, and landmarks for deterministic fabrication synthesis.",
-          parameters: FabricationDesignSpecProposalV3Schema,
-        }),
-      ],
-      tool_choice: {
-        type: "function",
-        name: "submit_fabrication_design_spec",
-      },
-      max_output_tokens: maxOutputTokens,
-      background: true,
-      parallel_tool_calls: false,
-      safety_identifier: safetyIdentifier,
-      store: false,
-      service_tier: "default",
-    } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient({
-      paidEvaluation: this.usageBudget !== null,
+      input: canonicalSerialize(
+        fabricationPlanningInput(intent, usedTopologyIds),
+      ),
     });
-    const response = await runMeteredRequest({
-      budget: this.usageBudget,
-      operation: "generate_program",
-      request,
-      execute: (meteredRequest) =>
-        runBackgroundResponse(openAI, meteredRequest),
-    });
-    return fabricationProgramProposalFromResponse({
-      response,
+    return programProposalFromDesignSpec({
+      proposal: result.value,
       intent,
       candidateOrdinal,
-      modelId: FOLDFORGE_MODEL,
+      modelId: result.modelId,
+      responseId: result.responseId,
     });
   }
 }
 
-export class OpenAIFabricationRepairModel implements FabricationRepairModel {
-  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
-    assertEvaluationBudget(usageBudget);
-  }
-
+export class LlmFabricationRepairModel implements FabricationRepairModel {
   async diagnoseRepair(
     program: FabricationProgramV1,
     report: VerificationReportV2,
     repairCycle: number,
-    safetyIdentifier: string,
-  ): Promise<ProgramPatchV1 | null> {
-    const maxOutputTokens = 2_000;
+  ): Promise<ProgramPatchV1> {
     const baseProgramHash = fabricationProgramHash(program);
-    const request = {
-      model: FOLDFORGE_MODEL,
+    const { value: proposedPatch } = await generateStructured({
+      schema: ProgramPatchV1Schema,
+      schemaName: "ProgramPatchV1",
       instructions: FABRICATION_REPAIR_PROMPT,
-      input: [
-        {
-          role: "user",
-          content: canonicalSerialize({
-            program,
-            report,
-            patchContext: {
-              programId: program.programId,
-              baseProgramHash,
-              repairCycle,
-            },
-          }),
+      input: canonicalSerialize({
+        program,
+        report,
+        patchContext: {
+          programId: program.programId,
+          baseProgramHash,
+          repairCycle,
         },
-      ],
-      reasoning: { effort: "high" },
-      tools: [
-        zodResponsesFunction({
-          name: "apply_parameter_patch",
-          description:
-            "Propose one bounded patch grounded in deterministic failure fields.",
-          parameters: ProgramPatchV1Schema,
-        }),
-      ],
-      tool_choice: { type: "function", name: "apply_parameter_patch" },
-      max_output_tokens: maxOutputTokens,
-      parallel_tool_calls: false,
-      safety_identifier: safetyIdentifier,
-      store: false,
-      service_tier: "default",
-    } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient({
-      paidEvaluation: this.usageBudget !== null,
+      }),
     });
-    const response = await runMeteredRequest({
-      budget: this.usageBudget,
-      operation: "diagnose_repair",
-      request,
-      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
-    });
-    const toolCall = response.output.find(
-      (item) =>
-        item.type === "function_call" && item.name === "apply_parameter_patch",
-    );
-    if (!toolCall || toolCall.type !== "function_call") return null;
-    const proposedPatch = ProgramPatchV1Schema.parse(
-      JSON.parse(toolCall.arguments),
-    );
     return ProgramPatchV1Schema.parse({
       ...proposedPatch,
       // These fields describe the current server transaction, not an AI
@@ -706,50 +431,16 @@ export class OpenAIFabricationRepairModel implements FabricationRepairModel {
   }
 }
 
-export class OpenAIFabricationNarrativeModel implements FabricationNarrativeModel {
-  constructor(private readonly usageBudget: PaidEvalBudget | null = null) {
-    assertEvaluationBudget(usageBudget);
-  }
-
+export class LlmFabricationNarrativeModel implements FabricationNarrativeModel {
   async generateNarrative(
     candidate: CandidateV2,
-    safetyIdentifier: string,
   ): Promise<FabricationNarrativeV1> {
-    const maxOutputTokens = 2_000;
-    const request = {
-      model: FOLDFORGE_MODEL,
+    const { value } = await generateStructured({
+      schema: FabricationNarrativeV1Schema,
+      schemaName: "FabricationNarrativeV1",
       instructions: FABRICATION_NARRATIVE_PROMPT,
-      input: [
-        {
-          role: "user",
-          content: canonicalSerialize(fabricationNarrativeInput(candidate)),
-        },
-      ],
-      reasoning: { effort: "medium" },
-      text: {
-        format: zodTextFormat(
-          FabricationNarrativeV1Schema,
-          "fabrication_narrative_v1",
-        ),
-      },
-      max_output_tokens: maxOutputTokens,
-      parallel_tool_calls: false,
-      safety_identifier: safetyIdentifier,
-      store: false,
-      service_tier: "default",
-    } satisfies ResponseCreateParamsWithTools;
-    const openAI = getOpenAIClient({
-      paidEvaluation: this.usageBudget !== null,
+      input: canonicalSerialize(fabricationNarrativeInput(candidate)),
     });
-    const response = await runMeteredRequest({
-      budget: this.usageBudget,
-      operation: "generate_narrative",
-      request,
-      execute: (meteredRequest) => openAI.responses.parse(meteredRequest),
-    });
-    if (!response.output_parsed) {
-      throw new Error("GPT-5.6 Sol returned no parsed fabrication narrative.");
-    }
-    return FabricationNarrativeV1Schema.parse(response.output_parsed);
+    return value;
   }
 }

@@ -196,15 +196,13 @@
   box-shadow: 10px 10px 0 rgb(32 32 29 / 5%);
 }
 
-.promptPanel > label,
-.accessBar label {
+.promptPanel > label {
   margin-bottom: 10px;
   font-size: 0.78rem;
   font-weight: 720;
 }
 
-.promptPanel textarea,
-.accessBar input {
+.promptPanel textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
@@ -273,8 +271,7 @@
 
 .forgeButton:disabled,
 .exportButtons button:disabled,
-.narrativeButton:disabled,
-.accessBar button:disabled {
+.narrativeButton:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -393,37 +390,6 @@
   font-weight: 720;
 }
 
-.accessBar {
-  display: grid;
-  grid-template-columns: max-content minmax(160px, 300px) max-content;
-  align-items: end;
-  gap: 12px;
-  margin: 0 0 16px;
-  padding: 16px;
-  border: 1px solid var(--warning);
-  background: var(--warning-soft);
-}
-
-.promptPanel .accessBar {
-  grid-template-columns: minmax(0, 1fr) max-content;
-  margin: 6px 0 0;
-}
-
-.promptPanel .accessBar label {
-  grid-column: 1 / -1;
-}
-
-.accessBar label {
-  margin: 0;
-  align-self: center;
-}
-
-.accessBar input {
-  min-height: 40px;
-  padding: 0 10px;
-}
-
-.accessBar button,
 .errorBanner button {
   min-height: 40px;
   padding: 0 16px;
@@ -913,8 +879,7 @@
   .candidateRail > button:hover,
   .exportButtons button:hover,
   .narrativeButton:hover,
-  .errorBanner button:hover,
-  .accessBar button:hover {
+  .errorBanner button:hover {
     border-color: var(--accent);
   }
 
@@ -993,15 +958,6 @@
   }
 
   .controls {
-    grid-template-columns: 1fr;
-  }
-
-  .accessBar {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  .promptPanel .accessBar {
     grid-template-columns: 1fr;
   }
 

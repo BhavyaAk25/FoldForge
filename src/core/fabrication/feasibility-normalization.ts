@@ -6,8 +6,8 @@ import type { FabricationIntentV1 } from "./types";
  * Deterministic normalization that pulls a model-authored intent and design
  * spec into the region the deterministic synthesizer can actually realize.
  *
- * The intent and program stages are two independent GPT-5.6 Sol calls, and at
- * their chosen effort they routinely emit designs just outside the synthesis
+ * The intent and program stages are two independent language-model calls, and
+ * they routinely emit designs just outside the synthesis
  * envelope: an undersized sheet, a stock thickness the folding/collision
  * geometry cannot pack, or a lock on every seam of a box. None of those are
  * fixable by nudging one verifier stage; instead we normalize the inputs so the

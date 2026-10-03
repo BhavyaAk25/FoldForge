@@ -24,7 +24,6 @@ interface StudioMockOptions {
   readonly failIntentAfterFirst?: boolean;
   readonly liveAiEnabled?: boolean;
   readonly malformedIntent?: boolean;
-  readonly requireAccessOnce?: boolean;
 }
 
 interface ProgramRequestBody {
@@ -49,7 +48,6 @@ interface ExportRequest {
 }
 
 interface StudioMockState {
-  readonly accessCodes: string[];
   readonly compileRequests: CompileRequestBody[];
   readonly endpointOrder: string[];
   readonly exportRequests: ExportRequest[];
@@ -169,7 +167,6 @@ const installStudioMocks = async (
   options: StudioMockOptions = {},
 ): Promise<StudioMockState> => {
   const state: StudioMockState = {
-    accessCodes: [],
     compileRequests: [],
     endpointOrder: [],
     exportRequests: [],
@@ -179,7 +176,6 @@ const installStudioMocks = async (
     unexpectedPaths: [],
   };
   const liveAiEnabled = options.liveAiEnabled ?? true;
-  let deniedAccess = false;
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -191,39 +187,15 @@ const installStudioMocks = async (
         status: "ok",
         service: "foldforge",
         liveAiEnabled,
-        liveAiBlockReason: liveAiEnabled ? null : "disabled",
+        aiModel: liveAiEnabled ? "e2e-model" : null,
         buildSha: "e2e-mock",
       });
-      return;
-    }
-
-    if (pathname === "/api/access") {
-      const body = request.postDataJSON() as { readonly code: string };
-      state.endpointOrder.push("access");
-      state.accessCodes.push(body.code);
-      await respondJson(route, { granted: true, required: true });
       return;
     }
 
     if (pathname === "/api/intent") {
       const body = request.postDataJSON() as { readonly prompt: string };
       state.intentPrompts.push(body.prompt);
-      if (options.requireAccessOnce && !deniedAccess) {
-        deniedAccess = true;
-        state.endpointOrder.push("intent:access-required");
-        await respondJson(
-          route,
-          {
-            error: {
-              code: "ACCESS_REQUIRED",
-              message: "Studio access is required.",
-              details: [],
-            },
-          },
-          401,
-        );
-        return;
-      }
       if (options.failIntentAfterFirst && state.intentPrompts.length > 1) {
         const diagnostic = forgeDiagnostic({
           stage: "intent",
@@ -388,29 +360,19 @@ const installStudioMocks = async (
   return state;
 };
 
-test("runs access, a server-verified single design, checkpoint, and exact exports", async ({
+test("runs a server-verified single design, checkpoint, and exact exports", async ({
   page,
 }) => {
-  const state = await installStudioMocks(page, { requireAccessOnce: true });
+  const state = await installStudioMocks(page);
 
   await page.goto("/");
   await expect(
-    page.getByText("Live generation ready", { exact: true }),
+    page.getByText("AI ready · e2e-model", { exact: true }),
   ).toBeVisible();
   const prompt = page.getByLabel("What do you want to make?");
   await prompt.fill(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
-  await page.getByRole("button", { name: "Create design" }).click();
-
-  const access = page.getByLabel("Demo access code");
-  await expect(access).toBeVisible();
-  await expect(access).toBeFocused();
-  await access.fill("e2e-secret");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(
-    page.getByText("Access granted.", { exact: true }),
-  ).toBeVisible();
   await page.getByRole("button", { name: "Create design" }).click();
 
   await expect(
@@ -421,10 +383,8 @@ test("runs access, a server-verified single design, checkpoint, and exact export
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
   ]);
-  expect(state.endpointOrder.slice(0, 6)).toEqual([
+  expect(state.endpointOrder.slice(0, 4)).toEqual([
     "health",
-    "intent:access-required",
-    "access",
     "intent",
     "programs:1",
     "compile:candidate-1-two-panel-fold-a",
@@ -573,11 +533,10 @@ test("runs access, a server-verified single design, checkpoint, and exact export
       exact: false,
     }),
   ).toBeVisible();
-  expect(state.accessCodes).toEqual(["e2e-secret"]);
   expect(state.unexpectedPaths).toEqual([]);
 });
 
-test("keeps prompt examples honest and provides a saved result when live generation is off", async ({
+test("keeps prompt examples honest and provides a saved result in template mode", async ({
   page,
 }) => {
   const state = await installStudioMocks(page, { liveAiEnabled: false });
@@ -602,21 +561,16 @@ test("keeps prompt examples honest and provides a saved result when live generat
   await expect(
     page.getByText("Prompt inspiration", { exact: true }),
   ).toHaveCount(3);
-  await flowerExample
-    .getByRole("button", { name: "Load future prompt" })
-    .click();
+  await flowerExample.getByRole("button", { name: "Use this prompt" }).click();
   await expect(prompt).toBeFocused();
   await expect(prompt).toHaveValue(
     "Make a birthday card from one sheet of cardstock. When the card opens, a simple five-petal flower should rise from the center. It should fold flat again when the card closes. The finished card should fit inside an A6 envelope.",
   );
   await expect(
     page.getByRole("button", { name: "Create design" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(
-    page.getByText(
-      "Live generation is currently unavailable. You can still explore saved examples.",
-      { exact: true },
-    ),
+    page.getByText("Template mode: no AI key is configured", { exact: false }),
   ).toBeVisible();
 
   await page

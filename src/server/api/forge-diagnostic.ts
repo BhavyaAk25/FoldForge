@@ -11,6 +11,7 @@ import {
 } from "@/server/fabrication-ai/model-contract-error";
 
 type ProviderFailureClass =
+  | "not_configured"
   | "authentication"
   | "model_access"
   | "quota"
@@ -40,6 +41,7 @@ const providerFailureClass = (error: unknown): ProviderFailureClass => {
   const code = safeProviderCode(error);
   const status = safeProviderStatus(error);
   const name = recordValue(error)?.name;
+  if (name === "LlmNotConfiguredError") return "not_configured";
   if (status === 401 || code === "invalid_api_key") return "authentication";
   if (status === 403 || code === "model_not_found") return "model_access";
   if (code === "insufficient_quota") return "quota";
@@ -119,40 +121,45 @@ const PROVIDER_FAILURES: Readonly<
     }
   >
 > = {
+  not_configured: {
+    code: "AI_NOT_CONFIGURED",
+    message: "No AI provider is configured. Set AI_API_KEY to enable this.",
+    retryable: false,
+  },
   authentication: {
     code: "PROVIDER_AUTHENTICATION_FAILED",
-    message: "The live model could not authenticate with its configured key.",
+    message: "The AI provider rejected the configured key.",
     retryable: false,
   },
   model_access: {
     code: "PROVIDER_MODEL_UNAVAILABLE",
-    message: "The configured project cannot access the live fabrication model.",
+    message: "The configured key cannot access the configured AI model.",
     retryable: false,
   },
   quota: {
     code: "PROVIDER_CREDITS_EXHAUSTED",
-    message: "The live model project has no available credit budget.",
+    message: "The AI provider quota is exhausted.",
     retryable: false,
   },
   rate_limit: {
     code: "PROVIDER_RATE_LIMITED",
-    message: "The live model rate limit was reached.",
+    message:
+      "The AI provider's rate limit was reached. Wait a minute and retry.",
     retryable: true,
   },
   timeout: {
     code: "PROVIDER_TIMEOUT",
-    message:
-      "The live model request did not finish before its bounded timeout.",
+    message: "The AI provider did not respond in time.",
     retryable: true,
   },
   unavailable: {
     code: "PROVIDER_UNAVAILABLE",
-    message: "The live model service returned a temporary failure.",
+    message: "The AI provider returned a temporary failure.",
     retryable: true,
   },
   unknown: {
     code: "MODEL_RESPONSE_ERROR",
-    message: "The live model did not return a usable fabrication response.",
+    message: "The AI model did not return a usable fabrication response.",
     retryable: false,
   },
 };

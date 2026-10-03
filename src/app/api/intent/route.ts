@@ -1,20 +1,16 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { FabricationIntentV1Schema } from "@/core/fabrication/schemas";
+import { intentFromPromptKeywords } from "@/core/fabrication/prompt-intent";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import { modelFailureDiagnostic } from "@/server/api/forge-diagnostic";
+import { runModelRoute } from "@/server/api/model-route";
 import { apiError } from "@/server/api/response";
-import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
-import { LIVE_OPERATION_POLICIES } from "@/server/api/security-policy";
-import {
-  DescribeFabricationRequestSchema,
-  PROMPT_MAXIMUM_CHARACTERS,
-} from "@/server/fabrication-ai/contracts";
-import { OpenAIFabricationIntentModel } from "@/server/fabrication-ai/models";
+import { DescribeFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
+import { isLlmConfigured } from "@/server/fabrication-ai/llm";
+import { LlmFabricationIntentModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 240;
+export const maxDuration = 120;
 
 const invalidRequest = (): NextResponse =>
   apiError(
@@ -31,55 +27,45 @@ const invalidRequest = (): NextResponse =>
     }),
   );
 
-const invalidModelResponse = (): NextResponse =>
+const templateOnlyUnsupported = (): NextResponse =>
   apiError(
-    "MODEL_RESPONSE_ERROR",
-    "The model did not return a valid fabrication intent.",
-    502,
+    "PROMPT_NEEDS_AI",
+    "Without an AI provider FoldForge recognizes boxes, pop-up cards, and bird figures. Set AI_API_KEY for other objects.",
+    422,
     [],
     forgeDiagnostic({
       stage: "intent",
-      kind: "contract",
-      code: "MODEL_INTENT_INVALID",
-      message: "The model response did not satisfy the intent contract.",
-      modelCall: "attempted",
+      kind: "request",
+      code: "PROMPT_NEEDS_AI",
+      message:
+        "Without an AI provider FoldForge recognizes boxes, pop-up cards, and bird figures. Set AI_API_KEY for other objects.",
+      modelCall: "not_started",
     }),
   );
 
-export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const response = await runAuthorizedLiveRoute(
-    {
-      request,
-      operation: "intent",
-      reservedInputTokens: PROMPT_MAXIMUM_CHARACTERS,
-      reservedOutputTokens: LIVE_OPERATION_POLICIES.intent.maximumOutputTokens,
-    },
-    async ({ body, safetyIdentifier }) => {
-      const parsedRequest = DescribeFabricationRequestSchema.safeParse(body);
-      if (!parsedRequest.success) return invalidRequest();
+export const POST = (request: Request): Promise<NextResponse> =>
+  runModelRoute(request, "intent", async (body) => {
+    const parsedRequest = DescribeFabricationRequestSchema.safeParse(body);
+    if (!parsedRequest.success) return invalidRequest();
+    const { prompt } = parsedRequest.data;
 
-      try {
-        const proposedIntent =
-          await new OpenAIFabricationIntentModel().compileIntent(
-            parsedRequest.data.prompt,
-            safetyIdentifier,
-          );
-        const parsedIntent =
-          FabricationIntentV1Schema.safeParse(proposedIntent);
-        if (!parsedIntent.success) return invalidModelResponse();
-        return NextResponse.json(parsedIntent.data);
-      } catch (error) {
-        const diagnostic = modelFailureDiagnostic("intent", error);
-        return apiError(
-          diagnostic.code,
-          diagnostic.message,
-          502,
-          [],
-          diagnostic,
-        );
-      }
-    },
-  );
-  response.headers.set("Cache-Control", "no-store");
-  return response;
-};
+    if (!isLlmConfigured()) {
+      const keywordIntent = intentFromPromptKeywords(prompt);
+      return keywordIntent
+        ? NextResponse.json(keywordIntent)
+        : templateOnlyUnsupported();
+    }
+
+    try {
+      return NextResponse.json(
+        await new LlmFabricationIntentModel().compileIntent(prompt),
+      );
+    } catch (error) {
+      // A free-tier provider is often rate limited; a recognized object class
+      // still gets a template-ready intent instead of a dead end.
+      const keywordIntent = intentFromPromptKeywords(prompt);
+      if (keywordIntent) return NextResponse.json(keywordIntent);
+      const diagnostic = modelFailureDiagnostic("intent", error);
+      return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
+    }
+  });
