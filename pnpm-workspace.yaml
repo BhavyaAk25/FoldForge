@@ -3,6 +3,8 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
 overrides:
-  postcss: 8.5.10
+  baseline-browser-mapping: 2.11.27
+  browserslist: 4.29.3
+  postcss: 8.5.28
   "@xmldom/xmldom": 0.8.13
-  sharp: 0.35.0
+  sharp: 0.35.5

@@ -221,7 +221,7 @@ export function FoldForgeApp() {
         setHealth(nextHealth);
         if (!nextHealth.liveAiEnabled) {
           setStatusMessage(
-            "No AI key configured: boxes, pop-up cards, and bird figures still work through parametric templates.",
+            "No AI key configured: boxes, pop-up cards, and stand-up figures still work through parametric templates.",
           );
         }
       })

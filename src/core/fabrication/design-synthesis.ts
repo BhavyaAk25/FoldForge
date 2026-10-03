@@ -29,6 +29,8 @@ import type {
   SemanticPanelV2,
 } from "./semantic-plan";
 import { FabricationIntentV1Schema } from "./schemas";
+import { applyPanelSilhouettes, type PanelSilhouette } from "./silhouettes";
+import { uprightFoldedProgram } from "./upright";
 import type {
   FabricationIntentV1,
   FabricationProgramV1,
@@ -1083,6 +1085,44 @@ const nextPlanFromLane = (lane: SynthesisLane): FabricationPlanV2 | null => {
   );
 };
 
+/**
+ * Redraws parts that request a silhouette and keeps the result only when the
+ * complete verifier still passes; otherwise the verified rectangles stand.
+ */
+const withVerifiedSilhouettes = (
+  intent: FabricationIntentV1,
+  spec: FabricationDesignSpecV3,
+  program: FabricationProgramV1,
+  report: VerificationReportV2,
+  reportId: string,
+): {
+  readonly program: FabricationProgramV1;
+  readonly report: VerificationReportV2;
+} => {
+  const requested = new Map<string, PanelSilhouette>();
+  for (const part of spec.parts) {
+    if (part.silhouette) {
+      // Expansion names each realized panel `panel-<part key>`.
+      requested.set(`panel-${part.key}`, part.silhouette);
+    }
+  }
+  if (requested.size === 0) return { program, report };
+  // Prefer the upright, shaped design; then shaped as synthesized; otherwise
+  // the verified rectangles stand.
+  const options = [
+    applyPanelSilhouettes(uprightFoldedProgram(program), requested),
+    applyPanelSilhouettes(program, requested),
+  ];
+  for (const option of options) {
+    if (option === program) continue;
+    const compiled = compileFabricationProgram(intent, option);
+    if (!compiled.ok) continue;
+    const optionReport = verifyFabricationIr(compiled.value, reportId);
+    if (optionReport.valid) return { program: option, report: optionReport };
+  }
+  return { program, report };
+};
+
 export const synthesizeFabricationDesign = (
   intentInput: unknown,
   specInput: unknown,
@@ -1301,14 +1341,21 @@ export const synthesizeFabricationDesign = (
       nogoods.add(structure);
       continue;
     }
-    const programHash = sha256Hex(canonicalSerialize(expanded.value));
+    const finished = withVerifiedSilhouettes(
+      intent.data,
+      spec.data,
+      expanded.value,
+      report,
+      `candidate-v3-synthesis-${candidateOrdinal}-${evaluatedCandidateCount}-silhouette`,
+    );
+    const programHash = sha256Hex(canonicalSerialize(finished.program));
     // The public forge exposes one candidate. The ranked synthesis frontier is
     // deterministic, so a later alternative must not replace an already fully
     // verified design or add unnecessary server work.
     return {
       ok: true,
-      value: expanded.value,
-      report,
+      value: finished.program,
+      report: finished.report,
       diagnostics: {
         specHash: sha256Hex(canonicalSerialize(spec.data)),
         graphCandidateCount: uniqueGraphFingerprints.size,

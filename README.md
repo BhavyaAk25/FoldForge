@@ -28,7 +28,7 @@ pnpm dev
 
 Open http://localhost:3000.
 
-**No key needed** for boxes, organizers, trays, pop-up cards, and bird figures (template mode).
+**No key needed** for boxes, organizers, trays, pop-up flower cards, and stand-up figures such as ducks, trees, houses, and stars (template mode).
 
 **For any other object**, add a free AI key. Copy `.env.example` to `.env.local` and set:
 

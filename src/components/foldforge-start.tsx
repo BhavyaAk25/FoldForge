@@ -149,8 +149,9 @@ export function FoldForgeStart({
           {!aiAvailable && healthKnown ? (
             <p className={styles.offlineNote}>
               Template mode: no AI key is configured, so FoldForge recognizes
-              boxes, pop-up cards, and bird figures (with sizes like &ldquo;90 x
-              60 x 40 mm&rdquo;). Add a free AI_API_KEY for other objects.
+              boxes, pop-up cards, and stand-up ducks, trees, houses, or stars
+              (with sizes like &ldquo;90 x 60 x 40 mm&rdquo;). Add a free
+              AI_API_KEY for other objects.
             </p>
           ) : null}
         </div>

@@ -25,7 +25,7 @@ export const HealthApiResponseSchema = z
     status: z.literal("ok"),
     service: z.literal("foldforge"),
     // True when an AI provider is configured. Without one, prompts for boxes,
-    // pop-up cards, and bird figures still work through parametric templates.
+    // pop-up cards, and stand-up figures still work through parametric templates.
     liveAiEnabled: z.boolean(),
     aiModel: z.string().nullable(),
     buildSha: z.string().nullable(),

@@ -185,11 +185,13 @@ describe("figure (duck) template", () => {
     const spec = templateSpecForIntent(duckIntent());
     expect(spec).not.toBeNull();
     expect(spec?.parts.map((p) => p.key).sort()).toEqual([
+      "back",
       "base",
-      "beak",
       "body",
-      "head",
     ]);
+    expect(
+      spec?.parts.filter((p) => p.silhouette === "duck").map((p) => p.key),
+    ).toEqual(["body", "back"]);
     // A lidded card box must not become a duck.
     expect(templateSpecForIntent(boxIntent("card box"))?.driver).not.toBeNull();
   });
@@ -202,7 +204,19 @@ describe("figure (duck) template", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.report.valid).toBe(true);
-      expect(result.value.blueprint.panels).toHaveLength(4);
+      const panels = result.value.blueprint.panels;
+      expect(panels).toHaveLength(3);
+      // Both sides carry the duck outline rather than a plain rectangle,
+      // and they fold up from the base instead of hanging below it.
+      expect(
+        panels.filter((panel) => panel.contour.vertices.length > 4),
+      ).toHaveLength(2);
+      expect(
+        result.value.blueprint.joints.every(
+          (joint) =>
+            joint.kind === "fold" && joint.foldDirection === "mountain",
+        ),
+      ).toBe(true);
     }
   }, 30_000);
 

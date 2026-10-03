@@ -1,5 +1,10 @@
 import { normalizeFabricationIntentFeasibility } from "./feasibility-normalization";
 import { sha256Hex } from "../sha256";
+import {
+  FIGURE_SILHOUETTE_KEYWORDS,
+  FIGURE_LANDMARKS,
+  figureSilhouetteForText,
+} from "./silhouettes";
 import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
 
 /**
@@ -64,13 +69,14 @@ const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
     landmarks: [],
   },
   figure: {
-    keywords: ["duck", "bird", "swan", "goose", "chick", "duckling"],
-    title: "Faceted bird figure",
+    // Matched through figureSilhouetteForText; listed for documentation.
+    keywords: Object.values(FIGURE_SILHOUETTE_KEYWORDS).flat(),
+    title: "Stand-up figure",
     behavior: "static",
     defaultSizeMm: [120, 90, 30],
-    functionalGoal: "A static faceted bird figure folded from one sheet.",
-    visualDescription: "A faceted bird silhouette with body, head, and beak.",
-    landmarks: ["body", "head", "beak"],
+    functionalGoal: "A static stand-up figure folded from one sheet.",
+    visualDescription: "Two matching silhouette sides folded up from a base.",
+    landmarks: [],
   },
 };
 
@@ -86,13 +92,31 @@ export const promptTemplateClass = (
   const text = prompt.toLowerCase();
   return (
     CLASS_ORDER.find((templateClass) =>
-      PROFILES[templateClass].keywords.some((keyword) =>
-        text.includes(keyword),
-      ),
+      templateClass === "figure"
+        ? figureSilhouetteForText(text) !== null
+        : PROFILES[templateClass].keywords.some((keyword) =>
+            text.includes(keyword),
+          ),
     ) ?? null
   );
 };
 
+/** Title and landmarks for the class, specialized by figure silhouette. */
+const profileFor = (
+  templateClass: PromptTemplateClass,
+  prompt: string,
+): ClassProfile => {
+  const profile = PROFILES[templateClass];
+  if (templateClass !== "figure") return profile;
+  const silhouette = figureSilhouetteForText(prompt) ?? "duck";
+  return {
+    ...profile,
+    title: `Stand-up ${silhouette}`,
+    functionalGoal: `A static stand-up ${silhouette} folded from one sheet.`,
+    visualDescription: `Two ${silhouette}-shaped sides folded up from a base.`,
+    landmarks: FIGURE_LANDMARKS[silhouette],
+  };
+};
 const UNIT_TO_MM: Readonly<Record<string, number>> = {
   mm: 1,
   cm: 10,
@@ -216,7 +240,7 @@ export const intentFromPromptKeywords = (
 ): FabricationIntentV1 | null => {
   const templateClass = promptTemplateClass(prompt);
   if (!templateClass) return null;
-  const profile = PROFILES[templateClass];
+  const profile = profileFor(templateClass, prompt);
   const parsed = parsePromptSizeMm(prompt);
   const [defaultWidth, defaultHeight, defaultDepth] = profile.defaultSizeMm;
   const sourcePrompt = prompt.trim().slice(0, 4_000);
@@ -232,7 +256,12 @@ export const intentFromPromptKeywords = (
     requestedSize: {
       widthMm: parsed?.widthMm ?? defaultWidth,
       heightMm: parsed?.heightMm ?? defaultHeight,
-      depthMm: parsed?.depthMm ?? defaultDepth,
+      depthMm:
+        parsed?.depthMm ??
+        (templateClass === "pop_up_card"
+          ? // A pop-up rises about half the card height when no depth is given.
+            Math.round((parsed?.heightMm ?? defaultHeight) / 2)
+          : defaultDepth),
     },
     stockOptions: [
       {

@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - "codex/**"
   pull_request:
 
 permissions:
@@ -16,52 +15,61 @@ concurrency:
 
 jobs:
   verify:
-    name: Deterministic release gates
+    name: Lint, types, tests, and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Check out source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           run_install: false
       - name: Install Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Run strict checks
-        run: pnpm run check
-      - name: Enforce coverage
+      - name: Lint
+        run: pnpm run lint
+      - name: Type-check
+        run: pnpm run typecheck
+      - name: Check formatting
+        run: pnpm run format:check
+      # One test run, with the coverage gate from vitest.config.ts.
+      - name: Test with coverage
         run: pnpm run coverage
-      - name: Run deterministic properties
+      - name: Property tests
         run: pnpm run test:property
         env:
           FC_NUM_RUNS: "1000"
           FC_SEED: "20260714"
+      - name: Validate exports with real consumers
+        run: pnpm run validate:consumers
+      - name: Production build
+        run: pnpm run build
       - name: Audit production dependencies
         run: pnpm audit --prod
 
   browser:
-    name: Chromium product flow
+    name: Browser flow (Chromium)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           run_install: false
       - name: Install Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -69,5 +77,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Run rendered product flows
+      - name: Run browser flows
         run: pnpm run test:e2e
