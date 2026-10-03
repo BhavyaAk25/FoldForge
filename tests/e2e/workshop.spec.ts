@@ -383,12 +383,12 @@ test("runs a server-verified single design, checkpoint, and exact exports", asyn
   expect(state.programRequests.map((body) => body.usedTopologyIds)).toEqual([
     [],
   ]);
-  expect(state.endpointOrder.slice(0, 4)).toEqual([
-    "health",
-    "intent",
-    "programs:1",
-    "compile:candidate-1-two-panel-fold-a",
-  ]);
+  // React development mode may run the one-time health check twice, so the
+  // forge order is asserted on the generation endpoints only.
+  expect(state.endpointOrder[0]).toBe("health");
+  expect(
+    state.endpointOrder.filter((endpoint) => endpoint !== "health").slice(0, 3),
+  ).toEqual(["intent", "programs:1", "compile:candidate-1-two-panel-fold-a"]);
   expect(state.repairRequests).toEqual([]);
   expect(state.intentPrompts.at(-1)).toBe(
     "Build an arbitrary folding display with one moving cardstock wing.",
