@@ -24,16 +24,12 @@ export const HealthApiResponseSchema = z
   .object({
     status: z.literal("ok"),
     service: z.literal("foldforge"),
+    // True when an AI provider is configured. Without one, prompts for boxes,
+    // pop-up cards, and bird figures still work through parametric templates.
     liveAiEnabled: z.boolean(),
-    liveAiBlockReason: z
-      .enum(["configuration", "disabled", "kill_switch"])
-      .nullable(),
+    aiModel: z.string().nullable(),
     buildSha: z.string().nullable(),
   })
-  .strict();
-
-export const AccessApiResponseSchema = z
-  .object({ granted: z.literal(true), required: z.boolean() })
   .strict();
 
 export const IntentApiResponseSchema = FabricationIntentV1Schema;

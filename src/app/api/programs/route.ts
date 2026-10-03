@@ -1,7 +1,7 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
+import { programStructureFingerprint } from "@/core/fabrication/program-fingerprint";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import {
@@ -9,21 +9,19 @@ import {
   modelFailureDiagnostic,
   verificationFailureDiagnostic,
 } from "@/server/api/forge-diagnostic";
-import { runAuthorizedLiveRoute } from "@/server/api/live-authorization";
+import { runModelRoute } from "@/server/api/model-route";
 import { apiError } from "@/server/api/response";
 import {
-  API_BODY_LIMIT_BYTES,
-  LIVE_OPERATION_POLICIES,
-} from "@/server/api/security-policy";
-import {
   ForgeFabricationRequestSchema,
-  ProgramProposalV1Schema,
+  type ProgramProposalV1,
 } from "@/server/fabrication-ai/contracts";
-import { OpenAIFabricationProgramModel } from "@/server/fabrication-ai/models";
-import { programStructureFingerprint } from "@/server/fabrication-ai/orchestration";
+import { isLlmConfigured } from "@/server/fabrication-ai/llm";
+import { LlmFabricationProgramModel } from "@/server/fabrication-ai/models";
+import { templateProgramProposal } from "@/server/fabrication-ai/plan-response";
+import type { FabricationIntentV1 } from "@/core/fabrication/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 240;
+export const maxDuration = 120;
 
 const invalidRequest = (): NextResponse =>
   apiError(
@@ -40,95 +38,78 @@ const invalidRequest = (): NextResponse =>
     }),
   );
 
-const invalidModelResponse = (): NextResponse =>
+const noTemplate = (): NextResponse =>
   apiError(
-    "MODEL_RESPONSE_ERROR",
-    "The model did not return a valid fabrication program.",
-    502,
+    "PROMPT_NEEDS_AI",
+    "No parametric template matches this object. Configure AI_API_KEY to design it.",
+    422,
     [],
     forgeDiagnostic({
       stage: "program",
-      kind: "contract",
-      code: "MODEL_PLAN_INVALID",
-      message: "The model plan did not satisfy the fabrication contract.",
-      modelCall: "attempted",
+      kind: "request",
+      code: "PROMPT_NEEDS_AI",
+      message:
+        "No parametric template matches this object. Configure AI_API_KEY to design it.",
+      modelCall: "not_started",
     }),
   );
 
-export const POST = async (request: NextRequest): Promise<NextResponse> => {
-  const response = await runAuthorizedLiveRoute(
-    {
-      request,
-      operation: "programs",
-      reservedInputTokens: API_BODY_LIMIT_BYTES.programs / 4,
-      reservedOutputTokens:
-        LIVE_OPERATION_POLICIES.programs.maximumOutputTokens,
-    },
-    async ({ body, safetyIdentifier }) => {
-      const parsedRequest = ForgeFabricationRequestSchema.safeParse(body);
-      if (!parsedRequest.success) return invalidRequest();
-
-      try {
-        const proposed =
-          await new OpenAIFabricationProgramModel().generateProgram(
-            parsedRequest.data.intent,
-            parsedRequest.data.candidateOrdinal,
-            parsedRequest.data.usedTopologyIds,
-            safetyIdentifier,
-          );
-        const proposal = ProgramProposalV1Schema.safeParse(proposed);
-        if (!proposal.success) return invalidModelResponse();
-        const compiled = compileFabricationProgram(
-          parsedRequest.data.intent,
-          proposal.data.program,
-        );
-        if (!compiled.ok) {
-          const diagnostic = compilationFailureDiagnostic(compiled.error);
-          return apiError(
-            diagnostic.code,
-            diagnostic.message,
-            502,
-            [],
-            diagnostic,
-          );
-        }
-        const report = verifyFabricationIr(
-          compiled.value,
-          `program-boundary-${parsedRequest.data.candidateOrdinal}`,
-        );
-        if (!report.valid) {
-          const diagnostic = verificationFailureDiagnostic({
-            stage: "compile",
-            report,
-            code: "DESIGN_INVALID",
-            modelCall: "attempted",
-          });
-          return apiError(
-            diagnostic.code,
-            diagnostic.message,
-            502,
-            [],
-            diagnostic,
-          );
-        }
-        return NextResponse.json({
-          proposal: proposal.data,
-          programStructureFingerprint: programStructureFingerprint(
-            proposal.data.program,
-          ),
-        });
-      } catch (error) {
-        const diagnostic = modelFailureDiagnostic("program", error);
-        return apiError(
-          diagnostic.code,
-          diagnostic.message,
-          502,
-          [],
-          diagnostic,
-        );
-      }
-    },
+const verifiedResponse = (
+  intent: FabricationIntentV1,
+  proposal: ProgramProposalV1,
+  candidateOrdinal: number,
+): NextResponse => {
+  const compiled = compileFabricationProgram(intent, proposal.program);
+  if (!compiled.ok) {
+    const diagnostic = compilationFailureDiagnostic(compiled.error);
+    return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
+  }
+  const report = verifyFabricationIr(
+    compiled.value,
+    `program-boundary-${candidateOrdinal}`,
   );
-  response.headers.set("Cache-Control", "no-store");
-  return response;
+  if (!report.valid) {
+    const diagnostic = verificationFailureDiagnostic({
+      stage: "compile",
+      report,
+      code: "DESIGN_INVALID",
+      modelCall: "attempted",
+    });
+    return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
+  }
+  return NextResponse.json({
+    proposal,
+    programStructureFingerprint: programStructureFingerprint(proposal.program),
+  });
 };
+
+export const POST = (request: Request): Promise<NextResponse> =>
+  runModelRoute(request, "programs", async (body) => {
+    const parsedRequest = ForgeFabricationRequestSchema.safeParse(body);
+    if (!parsedRequest.success) return invalidRequest();
+    const { intent, candidateOrdinal, usedTopologyIds } = parsedRequest.data;
+
+    if (!isLlmConfigured()) {
+      const templated = templateProgramProposal(intent, candidateOrdinal);
+      return templated
+        ? verifiedResponse(intent, templated, candidateOrdinal)
+        : noTemplate();
+    }
+
+    try {
+      const proposal = await new LlmFabricationProgramModel().generateProgram(
+        intent,
+        candidateOrdinal,
+        usedTopologyIds,
+      );
+      return verifiedResponse(intent, proposal, candidateOrdinal);
+    } catch (error) {
+      // Provider or contract failure: a matching template still yields a
+      // verified design, labelled generationSource "template".
+      const templated = templateProgramProposal(intent, candidateOrdinal);
+      if (templated)
+        return verifiedResponse(intent, templated, candidateOrdinal);
+      const diagnostic = modelFailureDiagnostic("program", error);
+      return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
+    }
+  });

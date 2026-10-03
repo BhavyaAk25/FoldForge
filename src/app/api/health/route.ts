@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { publicLiveState } from "@/server/api/public-live-state";
 import { readBuildSha } from "@/server/build-info";
+import { llmConfiguration } from "@/server/fabrication-ai/llm";
 
 export const GET = (): NextResponse => {
-  const live = publicLiveState();
+  const ai = llmConfiguration();
   return NextResponse.json(
     {
       status: "ok",
       service: "foldforge",
-      liveAiEnabled: live.enabled,
-      liveAiBlockReason: live.blockReason,
+      liveAiEnabled: ai !== null,
+      aiModel: ai?.model ?? null,
       buildSha: readBuildSha(),
     },
     { headers: { "Cache-Control": "no-store" } },

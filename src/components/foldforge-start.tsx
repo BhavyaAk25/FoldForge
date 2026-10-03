@@ -3,7 +3,6 @@ import type { RefObject } from "react";
 
 import styles from "./foldforge-app.module.css";
 
-export type AccessState = "granted" | "needed" | "unknown";
 export type SavedExampleId = "duck" | "flower";
 
 export interface ExamplePrompt {
@@ -64,35 +63,25 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
 export const DEFAULT_PROMPT = EXAMPLE_PROMPTS[0]?.prompt ?? "";
 
 interface FoldForgeStartProps {
-  readonly accessCode: string;
-  readonly accessCodeInputRef: RefObject<HTMLInputElement | null>;
-  readonly accessState: AccessState;
+  readonly aiAvailable: boolean;
   readonly busy: boolean;
   readonly healthKnown: boolean;
-  readonly liveGenerationAvailable: boolean;
-  readonly onAccessCodeChange: (value: string) => void;
   readonly onCreate: () => void;
   readonly onOpenSavedExample: (exampleId: SavedExampleId) => void;
   readonly onPromptChange: (value: string) => void;
   readonly onSelectExample: (example: ExamplePrompt) => void;
-  readonly onSubmitAccess: () => void;
   readonly prompt: string;
   readonly promptRef: RefObject<HTMLTextAreaElement | null>;
 }
 
 export function FoldForgeStart({
-  accessCode,
-  accessCodeInputRef,
-  accessState,
+  aiAvailable,
   busy,
   healthKnown,
-  liveGenerationAvailable,
-  onAccessCodeChange,
   onCreate,
   onOpenSavedExample,
   onPromptChange,
   onSelectExample,
-  onSubmitAccess,
   prompt,
   promptRef,
 }: FoldForgeStartProps) {
@@ -100,20 +89,12 @@ export function FoldForgeStart({
     <>
       <section className={styles.compose} aria-labelledby="studio-title">
         <div className={styles.intro}>
-          <p className={styles.eyebrow}>
-            {liveGenerationAvailable
-              ? "AI cut-and-fold designer"
-              : "Prepared cut-and-fold studies"}
-          </p>
-          <h1 id="studio-title">
-            {liveGenerationAvailable
-              ? "Turn an idea into a buildable paper design."
-              : "Explore checked paper-design studies."}
-          </h1>
+          <p className={styles.eyebrow}>Cut-and-fold designer</p>
+          <h1 id="studio-title">Turn an idea into a buildable paper design.</h1>
           <p>
-            {liveGenerationAvailable
-              ? "Describe something made from paper or thin cardboard. FoldForge creates one checked design, shows how it assembles, and gives you the cutting pattern."
-              : "Live AI generation is off. Open a prepared study to inspect its motion, cutting pattern, checks, and fabrication files."}
+            Describe something made from paper or thin cardboard. FoldForge
+            creates one checked design, shows how it assembles, and gives you
+            the cutting pattern.
           </p>
           <ol className={styles.processSteps} aria-label="How FoldForge works">
             <li>
@@ -152,9 +133,7 @@ export function FoldForgeStart({
             <button
               className={styles.forgeButton}
               type="button"
-              disabled={
-                !liveGenerationAvailable || busy || prompt.trim().length === 0
-              }
+              disabled={busy || prompt.trim().length === 0}
               onClick={onCreate}
             >
               {busy ? "Creating design…" : "Create design"}
@@ -167,49 +146,20 @@ export function FoldForgeStart({
               Explore a prepared vertical-lift study
             </button>
           </div>
-          {!liveGenerationAvailable && healthKnown ? (
+          {!aiAvailable && healthKnown ? (
             <p className={styles.offlineNote}>
-              Live generation is currently unavailable. You can still explore
-              saved examples.
+              Template mode: no AI key is configured, so FoldForge recognizes
+              boxes, pop-up cards, and bird figures (with sizes like &ldquo;90 x
+              60 x 40 mm&rdquo;). Add a free AI_API_KEY for other objects.
             </p>
-          ) : null}
-          {accessState === "needed" ? (
-            <form
-              className={styles.accessBar}
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSubmitAccess();
-              }}
-            >
-              <label htmlFor="access-code">Demo access code</label>
-              <input
-                ref={accessCodeInputRef}
-                id="access-code"
-                type="password"
-                autoComplete="off"
-                value={accessCode}
-                onChange={(event) =>
-                  onAccessCodeChange(event.currentTarget.value)
-                }
-              />
-              <button type="submit" disabled={accessCode.length === 0}>
-                Continue
-              </button>
-            </form>
           ) : null}
         </div>
       </section>
 
       <section className={styles.examples} aria-labelledby="examples-title">
         <div className={styles.examplesHeading}>
-          <h2 id="examples-title">
-            {liveGenerationAvailable ? "Try an example" : "Prompt ideas"}
-          </h2>
-          <p>
-            {liveGenerationAvailable
-              ? "Each prompt is ready to edit."
-              : "Load a prompt for a future live run, or open a prepared study now."}
-          </p>
+          <h2 id="examples-title">Try an example</h2>
+          <p>Each prompt is ready to edit.</p>
         </div>
         <div className={styles.exampleGrid}>
           {EXAMPLE_PROMPTS.map((example, index) => {
@@ -236,9 +186,7 @@ export function FoldForgeStart({
                       type="button"
                       onClick={() => onSelectExample(example)}
                     >
-                      {liveGenerationAvailable
-                        ? "Use this prompt"
-                        : "Load future prompt"}
+                      Use this prompt
                     </button>
                     {savedExampleId ? (
                       <button
