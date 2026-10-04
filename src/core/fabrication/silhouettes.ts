@@ -19,6 +19,9 @@ import { flatWorldPoint } from "./upright";
 
 export const PANEL_SILHOUETTES = [
   "duck",
+  "cat",
+  "rabbit",
+  "heart",
   "flower",
   "tree",
   "house",
@@ -65,6 +68,99 @@ const DUCK: readonly CanonicalPoint[] = [
   point(0.1, 0.3),
   point(0.04, 0.14),
 ];
+
+// A sitting cat seen from the front: pointed ears, round head, wide haunches.
+const CAT: readonly CanonicalPoint[] = [
+  point(0, 0),
+  point(1, 0),
+  point(0.92, 0.12),
+  point(0.86, 0.3),
+  point(0.78, 0.45),
+  point(0.7, 0.52),
+  point(0.76, 0.6),
+  point(0.78, 0.72),
+  point(0.76, 0.82),
+  point(0.8, 1),
+  point(0.64, 0.88),
+  point(0.5, 0.86),
+  point(0.36, 0.88),
+  point(0.2, 1),
+  point(0.24, 0.82),
+  point(0.22, 0.72),
+  point(0.24, 0.6),
+  point(0.3, 0.52),
+  point(0.22, 0.45),
+  point(0.14, 0.3),
+  point(0.08, 0.12),
+];
+
+// A sitting rabbit seen from the front, with two tall ears.
+const RABBIT: readonly CanonicalPoint[] = [
+  point(0, 0),
+  point(1, 0),
+  point(0.9, 0.12),
+  point(0.82, 0.3),
+  point(0.72, 0.42),
+  point(0.68, 0.5),
+  point(0.74, 0.58),
+  point(0.74, 0.66),
+  point(0.66, 0.72),
+  point(0.7, 0.86),
+  point(0.68, 1),
+  point(0.6, 0.99),
+  point(0.57, 0.86),
+  point(0.56, 0.74),
+  point(0.44, 0.74),
+  point(0.43, 0.86),
+  point(0.4, 0.99),
+  point(0.32, 1),
+  point(0.3, 0.86),
+  point(0.34, 0.72),
+  point(0.26, 0.66),
+  point(0.26, 0.58),
+  point(0.32, 0.5),
+  point(0.28, 0.42),
+  point(0.18, 0.3),
+  point(0.1, 0.12),
+];
+
+/**
+ * A heart resting point-down on a low plinth that carries the hinge, from the
+ * classic parametric heart x = 16 sin^3 a, y = 13 cos a - 5 cos 2a - 2 cos 3a
+ * - cos 4a, normalized so its top lobes touch the far edge.
+ */
+const HEART: readonly CanonicalPoint[] = (() => {
+  const plinthTop = 0.12;
+  const gap = 0.12; // radians kept either side of the tip, where it meets the plinth
+  const samples = 36;
+  const raw = Array.from({ length: samples + 1 }, (_, index) => {
+    // Counter-clockwise from just right of the tip, over the top, to its left.
+    const angle = Math.PI - gap - (index * (2 * Math.PI - 2 * gap)) / samples;
+    return {
+      x: 16 * Math.sin(angle) ** 3,
+      y:
+        13 * Math.cos(angle) -
+        5 * Math.cos(2 * angle) -
+        2 * Math.cos(3 * angle) -
+        Math.cos(4 * angle),
+    };
+  });
+  const maximumY = Math.max(...raw.map((p) => p.y));
+  const minimumY = -17;
+  const outline = raw.map(({ x, y }) =>
+    point(
+      0.5 + (x / 16) * 0.46,
+      plinthTop + ((y - minimumY) / (maximumY - minimumY)) * (1 - plinthTop),
+    ),
+  );
+  return [
+    point(0, 0),
+    point(1, 0),
+    point(1, plinthTop),
+    ...outline,
+    point(0, plinthTop),
+  ];
+})();
 
 const HOUSE: readonly CanonicalPoint[] = [
   point(0, 0),
@@ -189,6 +285,12 @@ export const canonicalSilhouette = (
   switch (silhouette) {
     case "duck":
       return DUCK;
+    case "cat":
+      return CAT;
+    case "rabbit":
+      return RABBIT;
+    case "heart":
+      return HEART;
     case "flower":
       return flowerOutline(hingeLengthMm, depthMm);
     case "tree":
@@ -264,7 +366,8 @@ const distanceToSegmentMm = (
 /**
  * The single unit-square edge of a panel that carries a fold axis, or null
  * when the panel is not a plain rectangle, carries connectors or inner cuts,
- * or touches more than one joint edge (a base, for example).
+ * or touches more than one joint edge (a base, for example). A free-standing
+ * panel with no joints at all (a flat cut-out) uses its bottom edge.
  */
 const hingeEdge = (
   program: FabricationProgramV1,
@@ -281,6 +384,7 @@ const hingeEdge = (
     (joint) =>
       joint.parentBodyId === panel.bodyId || joint.childBodyId === panel.bodyId,
   );
+  if (joints.length === 0) return "v0";
   const hinged = new Set<UnitSquareEdge>();
   vertices.forEach((start, index) => {
     const end = vertices[(index + 1) % vertices.length];
@@ -404,7 +508,10 @@ export const applyPanelSilhouettes = (
 /** Standing-figure silhouettes and the prompt words that select them. */
 export const FIGURE_SILHOUETTE_KEYWORDS: Readonly<
   Record<
-    Extract<PanelSilhouette, "duck" | "tree" | "house" | "star">,
+    Extract<
+      PanelSilhouette,
+      "duck" | "cat" | "rabbit" | "heart" | "tree" | "house" | "star"
+    >,
     readonly string[]
   >
 > = {
@@ -418,6 +525,9 @@ export const FIGURE_SILHOUETTE_KEYWORDS: Readonly<
     "chicken",
     "hen",
   ],
+  cat: ["cat", "kitten", "kitty"],
+  rabbit: ["rabbit", "bunny", "bunnies", "hare"],
+  heart: ["heart", "valentine"],
   tree: ["tree", "pine", "christmas tree", "fir"],
   house: ["house", "home", "cottage", "cabin", "hut"],
   star: ["star"],
@@ -427,12 +537,16 @@ export type FigureSilhouette = keyof typeof FIGURE_SILHOUETTE_KEYWORDS;
 
 const FIGURE_ORDER: readonly FigureSilhouette[] = [
   "duck",
+  "cat",
+  "rabbit",
+  "heart",
   "tree",
   "house",
   "star",
 ];
 
-const containsWord = (text: string, word: string): boolean =>
+/** Whole-word (optionally plural) match, so "standard" is not "stand". */
+export const containsWord = (text: string, word: string): boolean =>
   new RegExp(
     `\\b${word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}s?\\b`,
     "iu",
@@ -453,6 +567,9 @@ export const FIGURE_LANDMARKS: Readonly<
   Record<FigureSilhouette, readonly string[]>
 > = {
   duck: ["head", "beak", "tail"],
+  cat: ["ears", "head", "haunches"],
+  rabbit: ["ears", "head", "haunches"],
+  heart: ["lobes", "point"],
   tree: ["crown", "trunk"],
   house: ["roof", "walls"],
   star: ["points"],

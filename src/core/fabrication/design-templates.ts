@@ -2,9 +2,12 @@ import { FabricationDesignSpecV3Schema } from "./design-spec";
 import type { FabricationDesignSpecV3 } from "./design-spec";
 import {
   FIGURE_LANDMARKS,
+  containsWord,
   figureSilhouetteForText,
   type FigureSilhouette,
+  type PanelSilhouette,
 } from "./silhouettes";
+import { normalizeFabricationIntentFeasibility } from "./feasibility-normalization";
 import type { FabricationIntentV1 } from "./types";
 
 /**
@@ -51,6 +54,9 @@ const looksLikeEnclosure = (intent: FabricationIntentV1): boolean => {
  * hinged, tab-locked lid — the proven card-box topology, parameterized by the
  * finished width, height, and depth (in millimetres).
  */
+// Matches the template tolerance below (clearanceMm).
+const WALL_CLEARANCE_MM = 0.5;
+
 export const enclosureTemplateSpec = (
   widthMm: number,
   heightMm: number,
@@ -89,12 +95,14 @@ export const enclosureTemplateSpec = (
         height: exactMm(h),
         shapePreference: "rectangle",
       },
+      // The end walls stand two clearances lower than the front and back so
+      // the two wall pairs nest at the corners instead of colliding.
       {
         key: "left",
         label: "Left wall",
         role: "wall",
         width: exactMm(d),
-        height: exactMm(h),
+        height: exactMm(h - 2 * WALL_CLEARANCE_MM),
         shapePreference: "rectangle",
       },
       {
@@ -102,7 +110,7 @@ export const enclosureTemplateSpec = (
         label: "Right wall",
         role: "wall",
         width: exactMm(d),
-        height: exactMm(h),
+        height: exactMm(h - 2 * WALL_CLEARANCE_MM),
         shapePreference: "rectangle",
       },
       {
@@ -303,19 +311,22 @@ const looksLikePopUp = (intent: FabricationIntentV1): boolean => {
  * close mechanism. The open (home) pose spans width x height x depth so it
  * satisfies the requested-size check.
  */
+const capitalized = (text: string): string =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
 export const popUpCardTemplateSpec = (
   widthMm: number,
   heightMm: number,
   depthMm: number,
+  popUpShape: PanelSilhouette = "flower",
 ): FabricationDesignSpecV3 => {
   const w = Math.max(40, Math.round(widthMm));
   const h = Math.max(40, Math.round(heightMm));
   const d = Math.max(12, Math.round(depthMm));
   return FabricationDesignSpecV3Schema.parse({
     version: "3",
-    label: "Pop-up flower card",
-    summary:
-      "A one-sheet card with a flower panel that rises as the card opens and folds flat when it closes.",
+    label: `Pop-up ${popUpShape} card`,
+    summary: `A one-sheet card with a ${popUpShape} panel that rises as the card opens and folds flat when it closes.`,
     parts: [
       {
         key: "card",
@@ -326,15 +337,15 @@ export const popUpCardTemplateSpec = (
         shapePreference: "rectangle",
       },
       {
-        key: "flower",
-        label: "Flower",
+        key: popUpShape,
+        label: capitalized(popUpShape),
         role: "moving",
         width: exactMm(w),
-        // The flower's height is the requested pop-up depth, which keeps the
+        // The pop-up's height is the requested pop-up depth, which keeps the
         // assembled envelope equal to the requested size.
         height: exactMm(d),
         shapePreference: "rectangle",
-        silhouette: "flower",
+        silhouette: popUpShape,
       },
     ],
     relations: [
@@ -342,7 +353,7 @@ export const popUpCardTemplateSpec = (
         key: "open",
         kind: "open_close",
         partAKey: "card",
-        partBKey: "flower",
+        partBKey: popUpShape,
         angleRangeDeg: { minimum: 0, home: 90, maximum: 90 },
       },
     ],
@@ -359,10 +370,10 @@ export const popUpCardTemplateSpec = (
     },
     outputs: [
       {
-        key: "flower-rise",
+        key: `${popUpShape}-rise`,
         relationKey: "open",
-        partKey: "flower",
-        label: "Flower rises as the card opens",
+        partKey: popUpShape,
+        label: `${capitalized(popUpShape)} rises as the card opens`,
       },
     ],
     visibleLandmarks: [
@@ -373,13 +384,167 @@ export const popUpCardTemplateSpec = (
         importance: "required",
       },
       {
-        key: "flower-landmark",
-        label: "flower",
-        partKeys: ["flower"],
+        key: `${popUpShape}-landmark`,
+        label: popUpShape,
+        partKeys: [popUpShape],
         importance: "required",
       },
     ],
-    aestheticPreferences: ["a card that opens with a rising flower panel"],
+    aestheticPreferences: [
+      `a card that opens with a rising ${popUpShape} panel`,
+    ],
+    priorities: ["mechanical_simplicity", "fabrication_efficiency"],
+    tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
+  });
+};
+
+// Deeper than this, a request is a 3D object, not a flat cut-out.
+const MAXIMUM_FLAT_DEPTH_MM = 5;
+
+export const CUTOUT_KEYWORDS = [
+  "bookmark",
+  "gift tag",
+  "tag",
+  "ornament",
+  "coaster",
+  "cutout",
+  "cut-out",
+  "decoration",
+] as const;
+
+export const STAND_KEYWORDS = [
+  "stand",
+  "easel",
+  "dock",
+  "display stand",
+] as const;
+
+const mentions = (
+  intent: FabricationIntentV1,
+  keywords: readonly string[],
+): boolean => {
+  const haystack = figureText(intent);
+  return keywords.some((word) => containsWord(haystack, word));
+};
+
+/**
+ * A flat cut-out (bookmark, tag, ornament, coaster): one panel drawn as the
+ * silhouette named in the request, or a rounded tag outline otherwise.
+ */
+export const cutoutTemplateSpec = (
+  widthMm: number,
+  heightMm: number,
+  silhouette: PanelSilhouette,
+): FabricationDesignSpecV3 => {
+  const w = Math.max(20, Math.round(widthMm));
+  const h = Math.max(20, Math.round(heightMm));
+  return FabricationDesignSpecV3Schema.parse({
+    version: "3",
+    label: `${silhouette === "arch" ? "Rounded" : silhouette} cut-out`,
+    summary: `A single flat ${silhouette}-shaped piece cut from card.`,
+    parts: [
+      {
+        key: "shape",
+        label: `${silhouette} shape`,
+        role: "structural",
+        width: exactMm(w),
+        height: exactMm(h),
+        shapePreference: "rectangle",
+        silhouette,
+      },
+    ],
+    relations: [],
+    materialConstraints: {
+      materialLabel: "Cardstock",
+      thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
+    },
+    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
+    glueAllowed: false,
+    driver: null,
+    outputs: [],
+    visibleLandmarks: [
+      {
+        key: "outline",
+        label: `${silhouette} outline`,
+        partKeys: ["shape"],
+        importance: "required",
+      },
+    ],
+    aestheticPreferences: [`flat ${silhouette} silhouette`],
+    priorities: ["visual_expression", "fabrication_efficiency"],
+    tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
+  });
+};
+
+/**
+ * A fold-only desk stand for a phone, tablet, or card: a base with an upright
+ * back and a low front lip folded up from opposite edges, so the item rests
+ * in the channel against the back. Envelope: width x height x depth.
+ */
+export const standTemplateSpec = (
+  widthMm: number,
+  heightMm: number,
+  depthMm: number,
+): FabricationDesignSpecV3 => {
+  const w = Math.max(30, Math.round(widthMm));
+  const h = Math.max(30, Math.round(heightMm));
+  const d = Math.max(20, Math.round(depthMm));
+  // Tall enough to stop a device sliding off, low enough to leave the screen clear.
+  const lip = Math.min(h - 10, Math.max(8, Math.round(h * 0.2)));
+  const panel = (
+    key: string,
+    label: string,
+    role: FabricationDesignSpecV3["parts"][number]["role"],
+    height: number,
+  ) => ({
+    key,
+    label,
+    role,
+    width: exactMm(w),
+    height: exactMm(height),
+    shapePreference: "rectangle" as const,
+  });
+  const foldUp = (key: string, partBKey: string) => ({
+    key,
+    kind: "fold" as const,
+    partAKey: "base",
+    partBKey,
+    angleRangeDeg: { minimum: 90, home: 90, maximum: 90 },
+  });
+  return FabricationDesignSpecV3Schema.parse({
+    version: "3",
+    label: "Desk stand",
+    summary:
+      "A fold-only stand: an upright back and a front lip folded up from a base.",
+    parts: [
+      panel("base", "Base", "support", d),
+      panel("back", "Back rest", "structural", h),
+      panel("lip", "Front lip", "structural", lip),
+    ],
+    relations: [foldUp("base-back", "back"), foldUp("base-lip", "lip")],
+    materialConstraints: {
+      materialLabel: "Cardstock",
+      thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
+    },
+    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
+    glueAllowed: false,
+    driver: null,
+    outputs: [],
+    visibleLandmarks: [
+      {
+        key: "back-rest",
+        label: "back rest",
+        partKeys: ["back"],
+        importance: "required",
+      },
+      {
+        key: "front-lip",
+        label: "front lip",
+        partKeys: ["lip"],
+        importance: "required",
+      },
+    ],
+    aestheticPreferences: ["simple upright stand with a front lip"],
     priorities: ["mechanical_simplicity", "fabrication_efficiency"],
     tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
   });
@@ -406,12 +571,43 @@ const buildFigure: TemplateDescriptor["build"] = (w, h, d, intent) =>
   );
 
 const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
+  // A "star bookmark" is a flat cut-out, not a stand-up star.
+  {
+    // Only for genuinely flat requests: a model may call a 100 mm-deep
+    // stand-up bunny an "Easter decoration".
+    matches: (intent) =>
+      mentions(intent, CUTOUT_KEYWORDS) &&
+      (intent.requestedSize.depthMm ?? 0) <= MAXIMUM_FLAT_DEPTH_MM,
+    build: (w, h, _d, intent) =>
+      cutoutTemplateSpec(
+        w,
+        h,
+        figureSilhouetteForText(figureText(intent)) ?? "arch",
+      ),
+  },
   {
     matches: (intent) =>
       intent.behavior === "static" && looksLikeFigure(intent),
     build: buildFigure,
   },
-  { matches: looksLikePopUp, build: popUpCardTemplateSpec },
+  {
+    matches: looksLikePopUp,
+    // The rising panel takes the shape the request names (a heart, a star),
+    // a flower otherwise.
+    build: (w, h, d, intent) =>
+      popUpCardTemplateSpec(
+        w,
+        h,
+        d,
+        figureSilhouetteForText(figureText(intent)) ?? "flower",
+      ),
+  },
+  // Before enclosures, so "phone stand holder" is a stand, not a box.
+  {
+    matches: (intent) =>
+      mentions(intent, STAND_KEYWORDS) && !looksLikeFigure(intent),
+    build: (w, h, d) => standTemplateSpec(w, h, d),
+  },
   { matches: looksLikeEnclosure, build: enclosureTemplateSpec },
   { matches: looksLikeFigure, build: buildFigure },
 ];
@@ -438,4 +634,21 @@ export const templateSpecForIntent = (
   return descriptor
     ? descriptor.build(widthMm, heightMm, depthMm, intent)
     : null;
+};
+
+/**
+ * The request reduced to what a template can honour: the same object, size,
+ * and stock, the behavior the matching template actually has, and no
+ * model-authored semantic constraints. Null when no template matches.
+ */
+export const templateIntentFor = (
+  intent: FabricationIntentV1,
+): FabricationIntentV1 | null => {
+  const spec = templateSpecForIntent(intent);
+  if (!spec) return null;
+  return normalizeFabricationIntentFeasibility({
+    ...intent,
+    behavior: spec.driver ? "open_close" : "static",
+    semanticConstraints: [],
+  });
 };

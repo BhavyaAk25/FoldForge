@@ -519,6 +519,11 @@ const chooseJointAttachments = (
   readonly [SemanticEdgeAttachmentV2, SemanticEdgeAttachmentV2]
 > | null => {
   const usedEdges = new Map<string, Set<number>>();
+  // The edge each panel hangs from its parent by (tree order visits parents
+  // first). A quadrilateral with several equal edges, such as a square wall,
+  // otherwise lets a lid attach to its side; continuing straight across the
+  // panel matches how the rectangular case resolves.
+  const inboundEdge = new Map<string, number>();
   const selected = new Map<
     string,
     readonly [SemanticEdgeAttachmentV2, SemanticEdgeAttachmentV2]
@@ -547,11 +552,26 @@ const chooseJointAttachments = (
         !parentUsed.has(pair.parentEdgeIndex) &&
         !childUsed.has(pair.childEdgeIndex),
     );
+    const parentInbound = inboundEdge.get(parent.key);
+    const straight =
+      parentInbound === undefined || localEdgeLengthsMm(parent).length !== 4
+        ? []
+        : preferred.filter(
+            (pair) =>
+              pair.parentEdgeIndex === oppositeEdgeIndex(parentInbound, 4),
+          );
     const choices =
-      preferred.length > 0 ? preferred : unused.length > 0 ? unused : pairs;
+      straight.length > 0
+        ? straight
+        : preferred.length > 0
+          ? preferred
+          : unused.length > 0
+            ? unused
+            : pairs;
     const choice = choices[(layoutOrdinal + relationIndex) % choices.length]!;
     parentUsed.add(choice.parentEdgeIndex);
     childUsed.add(choice.childEdgeIndex);
+    inboundEdge.set(child.key, choice.childEdgeIndex);
     selected.set(item.relation.key, [
       { panelKey: parent.key, edgeIndex: choice.parentEdgeIndex },
       { panelKey: child.key, edgeIndex: choice.childEdgeIndex },
@@ -589,7 +609,29 @@ const chooseConnectorAttachments = (
       attachmentInwardDepthMm(slotPanel, pair.childEdgeIndex) >= 4,
   );
   if (pairs.length === 0) return null;
-  const pair = pairs[layoutOrdinal % pairs.length]!;
+  // Use only the free edges across from each panel's hinge when any exist:
+  // that is where a lid edge meets the wall it closes onto. A square lid
+  // otherwise offers its side edges too, which can never reach the slot.
+  const acrossFromHinge = (panel: SemanticPanelV2, edgeIndex: number) => {
+    const hinges = usedJointEdges.get(panel.key);
+    if (!hinges || hinges.size !== 1 || localEdgeLengthsMm(panel).length !== 4)
+      return 0;
+    const [hinge] = [...hinges];
+    return hinge !== undefined && edgeIndex === oppositeEdgeIndex(hinge, 4)
+      ? 1
+      : 0;
+  };
+  const scored = pairs.map((pair) => ({
+    pair,
+    score:
+      acrossFromHinge(tabPanel, pair.parentEdgeIndex) +
+      acrossFromHinge(slotPanel, pair.childEdgeIndex),
+  }));
+  const bestScore = Math.max(...scored.map(({ score }) => score));
+  const best = scored
+    .filter(({ score }) => score === bestScore)
+    .map(({ pair }) => pair);
+  const pair = best[layoutOrdinal % best.length]!;
   return {
     tabAttachment: {
       panelKey: tabPanel.key,

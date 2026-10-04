@@ -235,11 +235,12 @@ const installStudioMocks = async (
       state.programRequests.push(body);
       state.endpointOrder.push(`programs:${body.candidateOrdinal}`);
       await respondJson(route, {
+        intent: body.intent,
         proposal: {
           diversityClaim: `Topology ${body.candidateOrdinal} uses a distinct panel program.`,
           program: programFor(body.candidateOrdinal),
           provenance: {
-            modelId: "gpt-5.6-sol",
+            modelId: "e2e-model",
             modelResponseId: `resp-e2e-program-${body.candidateOrdinal}`,
             planHash: String(body.candidateOrdinal).repeat(64),
             expanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,
@@ -503,7 +504,7 @@ test("runs a server-verified single design, checkpoint, and exact exports", asyn
     expect(request.candidate.provenance.appliedPatchIds).toEqual([]);
     expect(request.candidate.provenance.repairCycle).toBe(0);
     expect(request.candidate.provenance).toMatchObject({
-      modelId: "gpt-5.6-sol",
+      modelId: "e2e-model",
       modelResponseId: "resp-e2e-program-1",
       modelPlanHash: "1".repeat(64),
       planExpanderVersion: FABRICATION_PLAN_EXPANDER_VERSION,

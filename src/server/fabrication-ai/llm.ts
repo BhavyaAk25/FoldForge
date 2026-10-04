@@ -16,7 +16,19 @@ import { FabricationModelContractError } from "./model-contract-error";
 
 const GEMINI_OPENAI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/";
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// Google retires specific Gemini versions for new keys (gemini-2.5-flash was
+// withdrawn this way), so the default leads with the maintained alias and
+// keeps a pinned model as a fallback.
+// Free-tier quotas are per model, so each fallback also adds capacity.
+const DEFAULT_MODELS = [
+  "gemini-flash-latest",
+  "gemini-3.5-flash",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+] as const;
+// Statuses that mean "this model, not this request": retired or unknown
+// model, rate limit, or temporary overload. The next model is tried.
+const NEXT_MODEL_STATUSES: ReadonlySet<number> = new Set([404, 429, 500, 503]);
 const REQUEST_TIMEOUT_MS = 120_000;
 const CORRECTIVE_RETRIES = 1;
 const MAXIMUM_REPORTED_ISSUES = 6;
@@ -24,7 +36,10 @@ const MAXIMUM_REPORTED_ISSUES = 6;
 export interface LlmConfiguration {
   readonly apiKey: string;
   readonly baseURL: string;
+  /** The preferred model, shown in health checks. */
   readonly model: string;
+  /** Models tried in order when one is retired, rate limited, or busy. */
+  readonly models: readonly [string, ...string[]];
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -45,10 +60,19 @@ export const llmConfiguration = (
     nonEmpty(environment.AI_API_KEY) ?? nonEmpty(environment.GEMINI_API_KEY);
   const baseURL = nonEmpty(environment.AI_BASE_URL);
   if (!apiKey && !baseURL) return null;
+  // AI_MODEL may list several comma-separated models in fallback order.
+  const configured = (environment.AI_MODEL ?? "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+  const [first, ...rest] =
+    configured.length > 0 ? configured : [...DEFAULT_MODELS];
+  const model = first ?? DEFAULT_MODELS[0];
   return {
     apiKey: apiKey ?? "not-required",
     baseURL: baseURL ?? GEMINI_OPENAI_BASE_URL,
-    model: nonEmpty(environment.AI_MODEL) ?? DEFAULT_MODEL,
+    model,
+    models: [model, ...rest],
   };
 };
 
@@ -138,6 +162,38 @@ export const parseStructuredContent = <Schema extends z.ZodType>(
     : { ok: false, issues: describeIssues(parsed.error) };
 };
 
+const statusOf = (error: unknown): number | null =>
+  typeof error === "object" &&
+  error !== null &&
+  "status" in error &&
+  typeof error.status === "number"
+    ? error.status
+    : null;
+
+const completeWithModelFallback = async (
+  client: OpenAI,
+  models: readonly [string, ...string[]],
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+): Promise<OpenAI.Chat.ChatCompletion & { readonly model: string }> => {
+  let lastError: unknown = null;
+  for (const model of models) {
+    try {
+      const completion = await client.chat.completions.create({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      });
+      return { ...completion, model };
+    } catch (error) {
+      const status = statusOf(error);
+      if (status === null || !NEXT_MODEL_STATUSES.has(status)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
+
 export const generateStructured = async <Schema extends z.ZodType>(
   request: StructuredRequest<Schema>,
   environment: Environment = process.env,
@@ -158,18 +214,17 @@ export const generateStructured = async <Schema extends z.ZodType>(
 
   let lastIssues: readonly string[] = [];
   for (let attempt = 0; attempt <= CORRECTIVE_RETRIES; attempt += 1) {
-    const completion = await client.chat.completions.create({
-      model: configuration.model,
+    const completion = await completeWithModelFallback(
+      client,
+      configuration.models,
       messages,
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-    });
+    );
     const content = completion.choices[0]?.message.content ?? "";
     const outcome = parseStructuredContent(request.schema, content);
     if (outcome.ok) {
       return {
         value: outcome.value,
-        modelId: configuration.model,
+        modelId: completion.model,
         responseId: completion.id || `${request.schemaName}-${Date.now()}`,
       };
     }

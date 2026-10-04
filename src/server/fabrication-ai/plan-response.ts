@@ -1,6 +1,9 @@
 import { canonicalSerialize } from "@/core/canonical";
 import type { FabricationDesignSpecV3 } from "@/core/fabrication/design-spec";
-import { templateSpecForIntent } from "@/core/fabrication/design-templates";
+import {
+  templateIntentFor,
+  templateSpecForIntent,
+} from "@/core/fabrication/design-templates";
 import {
   FABRICATION_SYNTHESIZER_VERSION,
   synthesizeFabricationDesign,
@@ -77,16 +80,15 @@ const proposalFor = (input: {
     },
   });
 
-/**
- * Builds a proposal from a parametric template fitted to the intent's size, or
- * returns null when no template class matches. Used both when no AI provider
- * is configured and when the model's own spec cannot be synthesized.
- */
-export const templateProgramProposal = (
+/** A verified template proposal and the intent it was verified against. */
+export interface TemplateFallback {
+  readonly proposal: ProgramProposalV1;
+  readonly intent: FabricationIntentV1;
+}
+
+const templateProposalFor = (
   intent: FabricationIntentV1,
   candidateOrdinal: number,
-  modelId: string = TEMPLATE_MODEL_ID,
-  responseId = `template-${intent.intentId}`,
 ): ProgramProposalV1 | null => {
   const templateSpec = templateSpecForIntent(intent);
   if (!templateSpec) return null;
@@ -100,17 +102,38 @@ export const templateProgramProposal = (
     synthesized,
     spec: templateSpec,
     diversityClaim: `Parametric ${templateSpec.label.toLowerCase()} template fitted to the requested size.`,
-    modelId,
-    responseId,
+    modelId: TEMPLATE_MODEL_ID,
+    responseId: `template-${intent.intentId}`,
     generationSource: "template",
   });
 };
 
 /**
- * Synthesizes the model's design spec into a verified program. When the
- * from-scratch synthesis exhausts, a matching parametric template fitted to
- * the user's dimensions is tried before failing, and the result records
- * `generationSource: "template"` so it is never mistaken for model geometry.
+ * A parametric template fitted to the requested size, or null when no template
+ * class matches. It is first verified against the intent as given. If that
+ * fails, it is verified against the same object, size, and stock with the
+ * template's own behavior and without model-authored semantic constraints
+ * (a model often invents hard rules, such as a 120-degree lid or a fold-flat
+ * stack limit, that the user never asked for). The caller must use the
+ * returned intent for every later check, and the result is always labelled
+ * `generationSource: "template"`.
+ */
+export const templateFallback = (
+  intent: FabricationIntentV1,
+  candidateOrdinal: number,
+): TemplateFallback | null => {
+  const direct = templateProposalFor(intent, candidateOrdinal);
+  if (direct) return { proposal: direct, intent };
+  const relaxed = templateIntentFor(intent);
+  if (!relaxed) return null;
+  const proposal = templateProposalFor(relaxed, candidateOrdinal);
+  return proposal ? { proposal, intent: relaxed } : null;
+};
+
+/**
+ * Synthesizes the model's design spec into a verified program, or throws a
+ * typed error describing why it could not be realized. Callers fall back to
+ * `templateFallback` themselves.
  */
 export const programProposalFromDesignSpec = (input: {
   readonly proposal: {
@@ -138,13 +161,6 @@ export const programProposalFromDesignSpec = (input: {
       generationSource: "synthesis",
     });
   }
-  const templated = templateProgramProposal(
-    input.intent,
-    input.candidateOrdinal,
-    input.modelId,
-    input.responseId,
-  );
-  if (templated) return templated;
   throw new FabricationProgramModelError(
     "invalid_plan",
     primary.error.message,

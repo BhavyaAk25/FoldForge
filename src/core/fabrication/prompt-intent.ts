@@ -3,8 +3,10 @@ import { sha256Hex } from "../sha256";
 import {
   FIGURE_SILHOUETTE_KEYWORDS,
   FIGURE_LANDMARKS,
+  containsWord,
   figureSilhouetteForText,
 } from "./silhouettes";
+import { CUTOUT_KEYWORDS, STAND_KEYWORDS } from "./design-templates";
 import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
 
 /**
@@ -14,7 +16,8 @@ import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
  * returns null so the caller can say honestly that the prompt needs AI.
  */
 
-export type PromptTemplateClass = "enclosure" | "pop_up_card" | "figure";
+export type PromptTemplateClass =
+  "cutout" | "pop_up_card" | "stand" | "enclosure" | "figure";
 
 interface ClassProfile {
   readonly keywords: readonly string[];
@@ -28,6 +31,25 @@ interface ClassProfile {
 
 // Ordered by precedence: a "pop-up card box" is a card, a "duck box" is a box.
 const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
+  cutout: {
+    keywords: CUTOUT_KEYWORDS,
+    title: "Flat cut-out",
+    behavior: "static",
+    defaultSizeMm: [50, 150, 1],
+    functionalGoal: "A single flat shaped piece cut from card.",
+    visualDescription: "A flat silhouette cut-out.",
+    landmarks: [],
+  },
+  stand: {
+    keywords: STAND_KEYWORDS,
+    title: "Desk stand",
+    behavior: "static",
+    defaultSizeMm: [80, 100, 70],
+    functionalGoal:
+      "A fold-only stand that holds a phone, tablet, or card upright.",
+    visualDescription: "A base with an upright back and a front lip.",
+    landmarks: [],
+  },
   pop_up_card: {
     keywords: [
       "pop-up",
@@ -80,11 +102,21 @@ const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
   },
 };
 
+// Same precedence as the template router: a "star bookmark" is a cut-out and
+// a "phone stand" is a stand even though "holder" also names a box.
 const CLASS_ORDER: readonly PromptTemplateClass[] = [
+  "cutout",
   "pop_up_card",
+  "stand",
   "enclosure",
   "figure",
 ];
+
+// Short, common words that need whole-word matching ("standard" is not "stand").
+const WHOLE_WORD_CLASSES: ReadonlySet<PromptTemplateClass> = new Set([
+  "cutout",
+  "stand",
+]);
 
 export const promptTemplateClass = (
   prompt: string,
@@ -94,9 +126,14 @@ export const promptTemplateClass = (
     CLASS_ORDER.find((templateClass) =>
       templateClass === "figure"
         ? figureSilhouetteForText(text) !== null
-        : PROFILES[templateClass].keywords.some((keyword) =>
-            text.includes(keyword),
-          ),
+        : // "a cat that stands up" is a figure, not a phone stand.
+          templateClass === "stand" && figureSilhouetteForText(text) !== null
+          ? false
+          : PROFILES[templateClass].keywords.some((keyword) =>
+              WHOLE_WORD_CLASSES.has(templateClass)
+                ? containsWord(text, keyword)
+                : text.includes(keyword),
+            ),
     ) ?? null
   );
 };
@@ -107,6 +144,19 @@ const profileFor = (
   prompt: string,
 ): ClassProfile => {
   const profile = PROFILES[templateClass];
+  if (templateClass === "pop_up_card") {
+    // Matches the template: the rising panel takes the named shape.
+    const shape = figureSilhouetteForText(prompt) ?? "flower";
+    return {
+      ...profile,
+      title: `Pop-up ${shape} card`,
+      landmarks: ["card", shape],
+    };
+  }
+  if (templateClass === "cutout") {
+    const shape = figureSilhouetteForText(prompt);
+    return shape ? { ...profile, title: `${shape} cut-out` } : profile;
+  }
   if (templateClass !== "figure") return profile;
   const silhouette = figureSilhouetteForText(prompt) ?? "duck";
   return {
