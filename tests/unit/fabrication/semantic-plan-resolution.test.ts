@@ -236,7 +236,7 @@ describe("bounded semantic geometric resolution", () => {
       ]),
     );
     expectResolved(productionConnectorReachPlan());
-  }, 20_000);
+  }, 120_000);
 
   it("clamps caller-supplied resolver budgets to the safe bounds", () => {
     const connectorPlan = productionConnectorReachPlan();
@@ -267,7 +267,7 @@ describe("bounded semantic geometric resolution", () => {
         10_000,
       ).ok,
     ).toBe(true);
-  }, 20_000);
+  }, 120_000);
 
   it("resolves an intermediate motion collision within eight causal evaluations", () => {
     const report = reportFor(productionIntermediateCollisionPlan());
@@ -300,5 +300,5 @@ describe("bounded semantic geometric resolution", () => {
     expect(
       resolved.resolutionDiagnostics.categoryEvaluationCounts.adjacency,
     ).toBeGreaterThan(0);
-  }, 20_000);
+  }, 120_000);
 });

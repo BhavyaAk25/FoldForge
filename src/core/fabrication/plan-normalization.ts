@@ -646,7 +646,7 @@ export const normalizeFoldOnlyPlan = (
   requestedSize?: RequestedSizeV1,
 ): FoldPlanNormalizationResult => {
   // The strategy is a semantic assembly label, not a topology discriminator.
-  // Sol may call an all-fold net articulated_tab_slot even when no connector
+  // The model may call an all-fold net articulated_tab_slot even when no connector
   // is mechanically required, so the joint graph is the authoritative gate.
   const foldJoints = inputPlan.joints.filter(isFoldJoint);
   if (

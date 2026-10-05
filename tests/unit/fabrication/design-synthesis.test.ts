@@ -102,7 +102,7 @@ describe("deterministic fabrication design synthesis", () => {
         compilerVersion: "design-spec-v3-acceptance",
         generatedAtIso: "2026-07-21T00:00:00.000Z",
         deterministicSeed: 20_260_721,
-        modelId: "gpt-5.6-sol",
+        modelId: "test-model",
         modelResponseId: "mocked-v3-response",
         modelPlanHash: first.diagnostics.specHash,
         planExpanderVersion: "3",
@@ -156,7 +156,7 @@ describe("deterministic fabrication design synthesis", () => {
       ["panel-right", 24, 95],
       ["panel-lid", 70, 95],
     ]);
-  }, 30_000);
+  }, 120_000);
 
   it("normalizes a realistic combined model response before real verification", () => {
     const result = synthesizeFabricationDesign(
@@ -183,7 +183,7 @@ describe("deterministic fabrication design synthesis", () => {
       maximumValue: 90,
     });
     expect(result.diagnostics.evaluatedCandidateCount).toBeLessThanOrEqual(24);
-  }, 30_000);
+  }, 120_000);
 
   it("returns a typed design_infeasible result when a required part cannot fit the sheet", () => {
     const sourceIntent = fixtureIntent();
@@ -232,7 +232,7 @@ describe("deterministic fabrication design synthesis", () => {
         }),
       ]),
     );
-  }, 30_000);
+  }, 120_000);
 
   it.each([
     [

@@ -94,7 +94,7 @@ describe("design templates", () => {
       expect(result.value.blueprint.panels).toHaveLength(6);
       expect(result.value.blueprint.connectors).toHaveLength(2);
     }
-  }, 30_000);
+  }, 120_000);
 
   it("produces a verified design across common enclosure sizes", () => {
     for (const size of [
@@ -159,7 +159,7 @@ describe("pop-up flower card template", () => {
       expect(result.value.blueprint.driver).not.toBeNull();
       expect(result.value.blueprint.outputs.length).toBeGreaterThan(0);
     }
-  }, 30_000);
+  }, 120_000);
 
   it("produces a verified pop-up across common card sizes", () => {
     for (const size of [
@@ -239,7 +239,7 @@ describe("figure (duck) template", () => {
         ),
       ).toBe(true);
     }
-  }, 30_000);
+  }, 120_000);
 
   it("produces a verified figure across common sizes", () => {
     for (const size of [

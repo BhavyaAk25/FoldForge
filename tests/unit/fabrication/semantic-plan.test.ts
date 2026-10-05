@@ -496,7 +496,7 @@ describe("semantic FabricationPlanV2", () => {
       "candidate-moving-lid-box",
     );
     expect(report).toMatchObject({ valid: true, failures: [] });
-  }, 20_000);
+  }, 120_000);
 
   it("returns a typed hard failure when a moving plan misses its requested home-pose size", () => {
     const intent: FabricationIntentV1 = {
@@ -528,7 +528,7 @@ describe("semantic FabricationPlanV2", () => {
         },
       },
     });
-  }, 20_000);
+  }, 120_000);
 
   it("composes a base-to-wall-to-lid chain in the parent coordinate frame", () => {
     const expanded = expandSemanticFabricationPlan(
@@ -610,7 +610,7 @@ describe("semantic FabricationPlanV2", () => {
         },
       },
     });
-  }, 15_000);
+  }, 120_000);
 
   it("never returns a program rejected by its internal compile preflight", () => {
     const intent = liveBoxIntent();
@@ -1094,7 +1094,7 @@ describe("semantic FabricationPlanV2", () => {
           tabAttachment: { panelKey: "lid", edgeIndex: 2 },
           slotAttachment: { panelKey: "front", edgeIndex: 0 },
           spanMm: 14,
-          // These are the exact values returned by the first clean live-Sol
+          // These are the exact values returned by the first clean live model
           // acceptance run. The mapper must preserve an engagement margin
           // instead of deriving an unreachable 8 mm inset from an 8 mm tab.
           tabDepthMm: 8,

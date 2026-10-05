@@ -2799,7 +2799,7 @@ const selectGeometricSearchBeam = (
 };
 
 /**
- * Sol chooses semantic panels and a proposed fold graph. Edge numbering, fold
+ * The model chooses semantic panels and a proposed fold graph. Edge numbering, fold
  * orientation, grounding, and equivalent equal-edge adjacencies are discrete
  * authoring choices that code can search inside a bounded budget. The search
  * follows the joint path implicated by the measured failure and never changes
