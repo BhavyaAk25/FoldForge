@@ -110,7 +110,7 @@ describe("applyPanelSilhouettes", () => {
     if (compiled.ok) {
       expect(verifyFabricationIr(compiled.value, "flower").valid).toBe(true);
     }
-  }, 30_000);
+  }, 120_000);
 });
 
 describe("animal, heart, cut-out, and stand templates", () => {

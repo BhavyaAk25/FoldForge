@@ -274,7 +274,7 @@ const candidate = {
     intentHash: HASH,
     programHash: HASH,
     irHash: HASH,
-    modelId: "gpt-5.6-sol",
+    modelId: "test-model",
     modelResponseId: "response-1",
     modelPlanHash: HASH,
     planExpanderVersion: "1",

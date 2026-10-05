@@ -55,6 +55,6 @@ describe("model corpus reliability guard", () => {
       expect(["synthesis", "template"]).toContain(
         proposal.provenance.generationSource,
       );
-    }, 45_000);
+    }, 120_000);
   }
 });

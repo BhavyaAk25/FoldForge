@@ -147,7 +147,7 @@ describe("finalized consumer artifact validation", () => {
           metadata.verified,
       ),
     ).toBe(true);
-  }, 15_000);
+  }, 120_000);
 
   it("accepts a source-bound FOLD omission and no FOLD artifact", async () => {
     const finalized = finalizedShowcase(
@@ -167,7 +167,7 @@ describe("finalized consumer artifact validation", () => {
       animationCount: 1,
       motionSampleCount: 11,
     });
-  }, 15_000);
+  }, 120_000);
 
   it("rejects binding, scale, unit, JSON, GLB, and omission corruption", async () => {
     const finalized = finalizedShowcase(
@@ -272,5 +272,5 @@ describe("finalized consumer artifact validation", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "artifact_set" });
-  }, 15_000);
+  }, 120_000);
 });

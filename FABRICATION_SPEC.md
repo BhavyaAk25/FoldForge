@@ -1,10 +1,10 @@
 # FoldForge fabrication compiler specification
 
-Status: **implemented with deterministic verification, one exact live acceptance path, and disclosed parametric fallbacks for three common object classes**. This document is normative. “Must” and “must not” are release requirements.
+Status: **implemented**, with deterministic verification and disclosed parametric fallbacks for common object classes. “Must” and “must not” describe rules the code enforces.
 
 ## 1. Scope
 
-FoldForge compiles a natural-language brief into a bounded flat-sheet object whose geometry, assembly, and requested motion can be deterministically checked. It targets lightweight prototype handoffs for product, operations, and fabrication teams.
+FoldForge compiles a natural-language brief into a bounded flat-sheet object whose geometry, assembly, and requested motion can be deterministically checked. It targets paper and card prototypes, gifts, and models.
 
 The compiler reasons about dimensions, connectivity, rigid transforms, collision, clearance, and kinematic reachability. It does not predict material strength, force, friction, fatigue, durability, manufacturing process capability, or safety for a real-world load.
 
@@ -12,16 +12,16 @@ The compiler reasons about dimensions, connectivity, rigid transforms, collision
 
 Every external object must include an exact schema version. Unknown or partially migrated versions fail closed.
 
-| Contract                  | Authority                                                  | Purpose                                                                                                                    |
-| ------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `FabricationIntentV1`     | User constraints interpreted by Sol and normalized by code | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns                         |
-| `FabricationDesignSpecV3` | Untrusted Sol proposal or disclosed code-owned fallback    | Topology-free semantic parts, ranges, relationships, motion intent, landmarks, priorities, and tolerances                  |
-| `FabricationPlanV1/V2`    | Internal deterministic synthesis and replay                | Bounded panel graph and mechanism choices used before the canonical program                                                |
-| `FabricationProgramV1`    | Deterministic synthesizer/expander                         | Canonical complete program with provenance, assembly order, and all fabrication geometry                                   |
-| `FabricationIRV1`         | Deterministic compiler                                     | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs              |
-| `VerificationReportV2`    | Deterministic verifier                                     | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                     |
-| `ProgramPatchV1`          | Untrusted Sol proposal validated/applied by code           | At most three typed, local operations against existing program identifiers                                                 |
-| `CandidateV2`             | Deterministic pipeline                                     | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, spec hash, and generation provenance |
+| Contract                  | Authority                                                                           | Purpose                                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `FabricationIntentV1`     | User request interpreted by the AI model (or keyword reader) and normalized by code | Requested dimensions, behavior, sheets, fabrication constraints, priorities, and explicit unknowns                         |
+| `FabricationDesignSpecV3` | Untrusted AI proposal or disclosed code-owned template                              | Topology-free semantic parts, ranges, relationships, motion intent, landmarks, priorities, and tolerances                  |
+| `FabricationPlanV1/V2`    | Internal deterministic synthesis and replay                                         | Bounded panel graph and mechanism choices used before the canonical program                                                |
+| `FabricationProgramV1`    | Deterministic synthesizer/expander                                                  | Canonical complete program with provenance, assembly order, and all fabrication geometry                                   |
+| `FabricationIRV1`         | Deterministic compiler                                                              | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs              |
+| `VerificationReportV2`    | Deterministic verifier                                                              | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                     |
+| `ProgramPatchV1`          | Untrusted AI proposal validated and applied by code                                 | At most three typed, local operations against existing program identifiers                                                 |
+| `CandidateV2`             | Deterministic pipeline                                                              | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, spec hash, and generation provenance |
 
 The canonical serializer must:
 
@@ -86,7 +86,7 @@ Refusal must name the unsupported feature and, when possible, the nearest suppor
 
 ### 3.5 Synthesis and disclosed parametric families
 
-The production model returns `FabricationDesignSpecV3`; it does not choose the body graph, grounded root, exact attachment edges, fold signs, connector coordinates, packing, or global transforms.
+The AI model returns `FabricationDesignSpecV3`; it does not choose the body graph, grounded root, exact attachment edges, fold signs, connector coordinates, packing, or global transforms.
 
 Code first attempts bounded generic synthesis. Before search, code may reconcile independently generated contracts by:
 
@@ -98,11 +98,17 @@ Code first attempts bounded generic synthesis. Before search, code may reconcile
 
 Explicit user numeric constraints and every structural, packing, collision, kinematic, and source-equivalence rule remain hard.
 
-When generic synthesis exhausts, code may instantiate one of these documented parametric families at the user's requested dimensions:
+When generic synthesis exhausts, or no AI provider is configured, code may instantiate one of these documented parametric families at the user's requested dimensions:
 
 - a folded enclosure with four walls and a hinged tab-slot lid;
-- a static faceted bird figure with body, head, and beak landmarks; or
-- a pop-up card with one driven rising panel.
+- a desk stand with an upright back and a front lip;
+- a flat cut-out (bookmark, tag, ornament) drawn as a named silhouette;
+- a stand-up figure: two matching silhouette sides (duck, cat, rabbit, heart, tree, house, star) folded up from a base; or
+- a pop-up card with one driven rising panel shaped as the named silhouette (flower by default).
+
+A template is first verified against the intent as given; if that fails, against the same size and stock with the template's own behavior and without model-invented semantic constraints. The response returns the intent it verified, and every later check and export uses that intent.
+
+A part may request a silhouette. After synthesis, the rectangular panel is redrawn inside its bounds with its hinge edge intact, and fold-only designs that hang below their base are mirrored upright; either change is kept only if the complete verifier still passes.
 
 Both generic and template paths must compile and pass the same complete verifier. Provenance must record `generationSource: "synthesis"` or `"template"`. No prepared image, saved export, or unchecked geometry may be returned as a generated result.
 
@@ -211,12 +217,11 @@ The target stages are Describe, Forge, and Export. The product must:
 - expose `USER`, `AI`, and `CODE` provenance;
 - preserve keyboard operation, visible focus, screen-reader names/status, and reduced motion;
 - render without horizontal overflow at 390, 768, 1280, and 1440 px; and
-- state when live Sol is unavailable. Offline fixtures must be labelled and cannot impersonate arbitrary prompt interpretation.
+- state when no AI provider is configured. Template and saved-example results must be labelled and cannot impersonate arbitrary prompt interpretation.
 
-Decorative sound is outside the pivot scope.
+## 10. Security and privacy
 
-## 10. Security, privacy, and release
-
-The exact server and privacy limits are normative in [PRIVACY.md](./PRIVACY.md). The exact test and judge thresholds are normative in [EVALS.md](./EVALS.md) and [JUDGE_RUBRIC.md](./JUDGE_RUBRIC.md).
-
-A release must not claim conformance until the generalized source, sealed offline/live/adversarial suites, exports, browser experience, security checks, and independent review all pass.
+- The AI key is server-only (`AI_API_KEY` in `.env.local` or the host's secret store) and never reaches the browser.
+- Every mutating route requires a same-origin request, enforces a route-specific body cap, and applies a per-client rate limit; CPU-bound compile and export routes also bound concurrency.
+- Model output is untrusted: it is schema-validated, normalized, compiled, and fully verified before anything is shown or exported.
+- User prompts are sent to the configured AI provider and are not logged by FoldForge.

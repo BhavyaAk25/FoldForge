@@ -20,7 +20,7 @@ const provenanceInput = {
   compilerVersion: "foldforge-core-1",
   generatedAtIso: "2026-07-14T12:00:00.000Z",
   deterministicSeed: 2_026_071_4,
-  modelId: "gpt-5.6-sol",
+  modelId: "test-model",
   modelResponseId: "response-candidate-fixture",
   modelPlanHash: "a".repeat(64),
   planExpanderVersion: "1",
