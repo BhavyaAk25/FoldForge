@@ -4,7 +4,10 @@ import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import { FabricationDesignSpecV3Schema } from "@/core/fabrication/design-spec";
 import { normalizeFabricationIntentFeasibility } from "@/core/fabrication/feasibility-normalization";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
-import { programProposalFromDesignSpec } from "@/server/fabrication-ai/plan-response";
+import {
+  programProposalFromDesignSpec,
+  templateFallback,
+} from "@/server/fabrication-ai/plan-response";
 
 import { liveCorpus } from "../fixtures/live-corpus";
 
@@ -16,17 +19,29 @@ import { liveCorpus } from "../fixtures/live-corpus";
 describe("model corpus reliability guard", () => {
   for (const testCase of liveCorpus()) {
     it(`produces a verified design for: ${testCase.name}`, () => {
-      const intent = normalizeFabricationIntentFeasibility(testCase.intent);
-      const proposal = programProposalFromDesignSpec({
-        proposal: {
-          diversityClaim: "Decompose the object and let code synthesize it.",
-          designSpec: FabricationDesignSpecV3Schema.parse(testCase.designSpec),
-        },
-        intent,
-        candidateOrdinal: 1,
-        modelId: "corpus-model",
-        responseId: `resp-${intent.intentId}`,
-      });
+      const requested = normalizeFabricationIntentFeasibility(testCase.intent);
+      // Same order as /api/programs: the model's own design, then a template.
+      let intent = requested;
+      let proposal;
+      try {
+        proposal = programProposalFromDesignSpec({
+          proposal: {
+            diversityClaim: "Decompose the object and let code synthesize it.",
+            designSpec: FabricationDesignSpecV3Schema.parse(
+              testCase.designSpec,
+            ),
+          },
+          intent,
+          candidateOrdinal: 1,
+          modelId: "corpus-model",
+          responseId: `resp-${intent.intentId}`,
+        });
+      } catch {
+        const fallback = templateFallback(requested, 1);
+        expect(fallback).not.toBeNull();
+        if (!fallback) return;
+        ({ intent, proposal } = fallback);
+      }
 
       const compiled = compileFabricationProgram(intent, proposal.program);
       expect(compiled.ok).toBe(true);

@@ -34,7 +34,13 @@ describe("llmConfiguration", () => {
     expect(llmConfiguration({ GEMINI_API_KEY: "k" })).toEqual({
       apiKey: "k",
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
+      models: [
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash-lite",
+      ],
     });
   });
 
@@ -48,7 +54,14 @@ describe("llmConfiguration", () => {
       apiKey: "not-required",
       baseURL: "http://localhost:11434/v1",
       model: "qwen2.5",
+      models: ["qwen2.5"],
     });
+  });
+
+  it("reads a comma-separated model fallback list", () => {
+    expect(
+      llmConfiguration({ AI_API_KEY: "k", AI_MODEL: " a , b ,," })?.models,
+    ).toEqual(["a", "b"]);
   });
 });
 
@@ -98,5 +111,37 @@ describe("generateStructured", () => {
         environment,
       ),
     ).rejects.toBeInstanceOf(LlmStructuredOutputError);
+  });
+
+  it("moves to the next model when one is retired, busy, or rate limited", async () => {
+    const unavailable = (status: number) =>
+      Object.assign(new Error(`status ${status}`), { status });
+    create
+      .mockRejectedValueOnce(unavailable(404))
+      .mockRejectedValueOnce(unavailable(429))
+      .mockResolvedValueOnce(reply('{"name":"x","count":1}'));
+    const result = await generateStructured(
+      { schema: Schema, schemaName: "S", instructions: "i", input: "u" },
+      { AI_API_KEY: "k", AI_MODEL: "retired,limited,working" },
+    );
+    expect(result.modelId).toBe("working");
+    expect(create.mock.calls.map((call) => call[0].model)).toEqual([
+      "retired",
+      "limited",
+      "working",
+    ]);
+  });
+
+  it("does not hide authentication failures behind fallbacks", async () => {
+    create.mockRejectedValueOnce(
+      Object.assign(new Error("bad key"), { status: 401 }),
+    );
+    await expect(
+      generateStructured(
+        { schema: Schema, schemaName: "S", instructions: "i", input: "u" },
+        { AI_API_KEY: "k", AI_MODEL: "a,b" },
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,8 +5,9 @@ import {
   FabricationProgramModelError,
   TEMPLATE_MODEL_ID,
   programProposalFromDesignSpec,
-  templateProgramProposal,
+  templateFallback,
 } from "@/server/fabrication-ai/plan-response";
+import { FabricationIntentV1Schema } from "@/core/fabrication/schemas";
 
 import {
   fixtureHomepageCardBoxDesignSpec,
@@ -36,29 +37,29 @@ describe("programProposalFromDesignSpec", () => {
     expect(proposal.diversityClaim).toBe("Model-authored card box.");
   }, 60_000);
 
-  it("falls back to a labelled template when the model spec cannot be built", () => {
+  it("throws a typed error when the model spec cannot be built", () => {
     const intent = intentFromPromptKeywords("a box 120 x 80 x 40 mm")!;
     const spec = fixtureStaticPanelDesignSpec();
-    const proposal = programProposalFromDesignSpec({
-      ...modelInput,
-      proposal: {
-        diversityClaim: "Oversized panel.",
-        designSpec: {
-          ...spec,
-          parts: spec.parts.map((part) => ({
-            ...part,
-            width: { minimumMm: 900, preferredMm: 900, maximumMm: 900 },
-          })),
+    expect(() =>
+      programProposalFromDesignSpec({
+        ...modelInput,
+        proposal: {
+          diversityClaim: "Oversized panel.",
+          designSpec: {
+            ...spec,
+            parts: spec.parts.map((part) => ({
+              ...part,
+              width: { minimumMm: 900, preferredMm: 900, maximumMm: 900 },
+            })),
+          },
         },
-      },
-      intent,
-      candidateOrdinal: 1,
-    });
-    expect(proposal.provenance.generationSource).toBe("template");
-    expect(proposal.provenance.modelId).toBe("test-model");
+        intent,
+        candidateOrdinal: 1,
+      }),
+    ).toThrow(FabricationProgramModelError);
   }, 60_000);
 
-  it("throws a typed error when neither the spec nor a template works", () => {
+  it("throws for an unbuildable spec on a request with no template", () => {
     const sourceIntent = fixtureIntent();
     const spec = fixtureStaticPanelDesignSpec();
     expect(() =>
@@ -85,19 +86,112 @@ describe("programProposalFromDesignSpec", () => {
   });
 });
 
-describe("templateProgramProposal", () => {
+describe("templateFallback", () => {
   it("records that no model was used", () => {
-    const proposal = templateProgramProposal(
+    const fallback = templateFallback(
       intentFromPromptKeywords("a faceted duck 120 x 90 x 30 mm")!,
       1,
     );
-    expect(proposal?.provenance).toMatchObject({
+    expect(fallback?.proposal.provenance).toMatchObject({
       modelId: TEMPLATE_MODEL_ID,
       generationSource: "template",
     });
   });
 
   it("returns null without a matching template", () => {
-    expect(templateProgramProposal(fixtureIntent(), 1)).toBeNull();
+    expect(templateFallback(fixtureIntent(), 1)).toBeNull();
   });
+
+  it("builds the captured Gemini ring-box request directly", () => {
+    // Captured Gemini intent for "a small gift box for a ring" (50 x 50 x 40,
+    // with model-invented fold-flat and lid-range constraints).
+    const modelIntent = FabricationIntentV1Schema.parse(RING_BOX_MODEL_INTENT);
+    const fallback = templateFallback(modelIntent, 1);
+    expect(fallback?.intent).toBe(modelIntent);
+  }, 60_000);
+
+  it("relaxes behavior the template cannot have, keeping size and stock", () => {
+    // A model sometimes calls a fixed phone stand "open_close".
+    const stand = intentFromPromptKeywords("a phone stand 80 x 100 x 70 mm")!;
+    const modelIntent = { ...stand, behavior: "open_close" as const };
+    const fallback = templateFallback(modelIntent, 1);
+    expect(fallback).not.toBeNull();
+    expect(fallback?.intent.behavior).toBe("static");
+    expect(fallback?.intent.requestedSize).toEqual(stand.requestedSize);
+    expect(fallback?.intent.stockOptions).toEqual(stand.stockOptions);
+    expect(fallback?.proposal.provenance.generationSource).toBe("template");
+  }, 60_000);
 });
+
+const RING_BOX_MODEL_INTENT = {
+  version: "1",
+  intentId: "ring_gift_box",
+  sourcePrompt: "a small gift box for a ring",
+  title: "Small Ring Gift Box",
+  objectLabel: "ring_gift_box",
+  functionalGoal:
+    "A compact, elegant gift box with an integrated lid and a secure closure to hold and present a ring.",
+  visualDescription:
+    "A small cubic or rectangular cardstock box with a hinged lid. The interior may contain a platform or slot to hold a ring upright.",
+  behavior: "open_close",
+  requestedSize: {
+    widthMm: 50,
+    heightMm: 50,
+    depthMm: 40,
+  },
+  stockOptions: [
+    {
+      sheetId: "sheet-cardstock",
+      widthMm: 300,
+      heightMm: 300,
+      printableMarginMm: 10,
+      material: {
+        materialId: "cardstock-0.3",
+        label: "0.3mm Cardstock",
+        thicknessMm: 0.3,
+        grainDirection: "none",
+      },
+    },
+  ],
+  fabricationBudget: {
+    maximumSheets: 1,
+    maximumPanels: 24,
+    maximumJointAndConnectorCount: 24,
+    cutsAllowed: true,
+    glueAllowed: true,
+  },
+  semanticConstraints: [
+    {
+      constraintId: "constraint-box-form",
+      hard: true,
+      source: "user",
+      kind: "recognizable_form",
+      label: "Ring Gift Box",
+      semanticPartIds: ["part-base", "part-lid"],
+      requiredLandmarks: ["base", "lid"],
+      evaluation: "landmark_geometry",
+    },
+    {
+      constraintId: "constraint-fold-flat",
+      hard: true,
+      source: "user",
+      kind: "fold_flat",
+      bodyIds: ["body-box"],
+      maximumStackThicknessMm: 7.2,
+    },
+    {
+      constraintId: "constraint-lid-rotation",
+      hard: true,
+      source: "user",
+      kind: "motion",
+      outputId: "output-lid",
+      minimumValue: 0,
+      maximumValue: 120,
+      unit: "deg",
+    },
+  ],
+  priorities: ["compactness", "visual_expression", "mechanical_simplicity"],
+  scopeStatus: "supported",
+  clarificationQuestion: null,
+  unsupportedReason: null,
+};

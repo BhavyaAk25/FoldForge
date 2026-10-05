@@ -52,6 +52,27 @@ const boxIntent = (
 });
 
 describe("design templates", () => {
+  it("verifies boxes with square or equal sides", () => {
+    // Square walls, bases, or lids used to let the lid lock attach to a side
+    // edge and every wall claim the full depth, so these sizes always failed.
+    for (const size of [
+      { widthMm: 50, heightMm: 50, depthMm: 40 },
+      { widthMm: 70, heightMm: 50, depthMm: 70 },
+      { widthMm: 80, heightMm: 80, depthMm: 80 },
+    ]) {
+      const intent = normalizeFabricationIntentFeasibility(
+        boxIntent("ring box", size),
+      );
+      const result = synthesizeFabricationDesign(
+        intent,
+        enclosureTemplateSpec(size.widthMm, size.heightMm, size.depthMm),
+        1,
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.report.valid).toBe(true);
+    }
+  }, 120_000);
+
   it("detects an enclosure request and declines a template-less one", () => {
     expect(templateSpecForIntent(boxIntent("playing card box"))).not.toBeNull();
     expect(templateSpecForIntent(boxIntent("card tray"))).not.toBeNull();

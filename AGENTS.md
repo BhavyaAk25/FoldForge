@@ -8,8 +8,8 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## How a prompt becomes a design
 
-1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, pop-up cards, and stand-up figures (birds, trees, houses, stars) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
-2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, a parametric template from `design-templates.ts` is fitted to the requested size. Template output always records `generationSource: "template"`. Parts may request a `silhouette` (duck, flower, tree, house, star, arch): after synthesis, `silhouettes.ts` redraws that rectangular panel inside its bounds, keeping the hinge edge, and `upright.ts` mirrors fold-only designs that hang below their base. Both are kept only if the full verifier still passes.
+1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, desk stands, pop-up cards, flat cut-outs (bookmarks, tags, ornaments), and stand-up figures (birds, cats, rabbits, hearts, trees, houses, stars) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
+2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, `templateFallback` fits a parametric template from `design-templates.ts` to the requested size, first against the intent as given and otherwise against the same size and stock without model-invented constraints; the route returns the intent it verified, and the client uses that one. Template output always records `generationSource: "template"`. Parts may request a `silhouette` (duck, cat, rabbit, heart, flower, tree, house, star, arch): after synthesis, `silhouettes.ts` redraws that rectangular panel inside its bounds, keeping the hinge edge, and `upright.ts` mirrors fold-only designs that hang below their base. Both are kept only if the full verifier still passes.
 3. **Compile and verify** (`/api/compile`). Pure, deterministic, and repeated on the server before anything is shown.
 4. **Repair** (`/api/repair`, needs AI): a bounded typed patch, re-verified from scratch.
 5. **Build notes** (`/api/finalize`, needs AI): a narrative for an already verified candidate.
@@ -17,7 +17,7 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## AI provider
 
-`src/server/fabrication-ai/llm.ts` is the only place that talks to a model. It uses the OpenAI-compatible Chat Completions API in JSON mode, validates every reply with Zod, and retries once with the validation issues. Configure it with `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` (see `.env.example`). The default is Google Gemini's free tier. Groq, OpenRouter, Ollama, and OpenAI also work.
+`src/server/fabrication-ai/llm.ts` is the only place that talks to a model. It uses the OpenAI-compatible Chat Completions API in JSON mode, validates every reply with Zod, and retries once with the validation issues. Configure it with `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` (see `.env.example`). The default is Google Gemini's free tier; `AI_MODEL` takes a comma-separated list, and a model that is retired (404), rate limited (429), or busy (5xx) falls through to the next, since free quotas are per model. Groq, OpenRouter, Ollama, and OpenAI also work.
 
 ## Code layout
 

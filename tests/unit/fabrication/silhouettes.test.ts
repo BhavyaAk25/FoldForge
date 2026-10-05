@@ -112,3 +112,40 @@ describe("applyPanelSilhouettes", () => {
     }
   }, 30_000);
 });
+
+describe("animal, heart, cut-out, and stand templates", () => {
+  it.each([
+    ["a sitting cat 80 x 100 x 30 mm", "Stand-up cat", 2],
+    ["a bunny 70 x 120 x 30 mm", "Stand-up rabbit", 2],
+    ["a heart 100 x 90 x 30 mm", "Stand-up heart", 2],
+    ["a bookmark shaped like a star", "star cut-out", 1],
+    ["a heart gift tag 60 x 80 mm", "heart cut-out", 1],
+    ["a phone stand for my desk", "Desk stand", 0],
+  ])("%s -> verified %s", (prompt, label, shapedPanels) => {
+    const intent = intentFromPromptKeywords(prompt)!;
+    const result = synthesizeFabricationDesign(
+      intent,
+      templateSpecForIntent(intent)!,
+      1,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.report.valid).toBe(true);
+    expect(result.value.candidateLabel).toContain(label.split(" ")[0]!);
+    expect(
+      result.value.blueprint.panels.filter(
+        (panel) => panel.contour.vertices.length !== 4,
+      ),
+    ).toHaveLength(shapedPanels);
+  });
+
+  it("matches stand and cut-out keywords as whole words only", () => {
+    expect(figureSilhouetteForText("a kitten")).toBe("cat");
+    expect(
+      intentFromPromptKeywords("a box for a standard deck of cards")?.title,
+    ).toBe("Folded box");
+    expect(intentFromPromptKeywords("a cat that stands up")?.title).toBe(
+      "Stand-up cat",
+    );
+  });
+});

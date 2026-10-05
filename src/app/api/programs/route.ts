@@ -17,7 +17,7 @@ import {
 } from "@/server/fabrication-ai/contracts";
 import { isLlmConfigured } from "@/server/fabrication-ai/llm";
 import { LlmFabricationProgramModel } from "@/server/fabrication-ai/models";
-import { templateProgramProposal } from "@/server/fabrication-ai/plan-response";
+import { templateFallback } from "@/server/fabrication-ai/plan-response";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +77,10 @@ const verifiedResponse = (
     });
     return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
   }
+  // The intent the program was verified against; the client compiles and
+  // exports against this one (it differs only after a relaxed template fallback).
   return NextResponse.json({
+    intent,
     proposal,
     programStructureFingerprint: programStructureFingerprint(proposal.program),
   });
@@ -90,9 +93,13 @@ export const POST = (request: Request): Promise<NextResponse> =>
     const { intent, candidateOrdinal, usedTopologyIds } = parsedRequest.data;
 
     if (!isLlmConfigured()) {
-      const templated = templateProgramProposal(intent, candidateOrdinal);
+      const templated = templateFallback(intent, candidateOrdinal);
       return templated
-        ? verifiedResponse(intent, templated, candidateOrdinal)
+        ? verifiedResponse(
+            templated.intent,
+            templated.proposal,
+            candidateOrdinal,
+          )
         : noTemplate();
     }
 
@@ -106,9 +113,14 @@ export const POST = (request: Request): Promise<NextResponse> =>
     } catch (error) {
       // Provider or contract failure: a matching template still yields a
       // verified design, labelled generationSource "template".
-      const templated = templateProgramProposal(intent, candidateOrdinal);
-      if (templated)
-        return verifiedResponse(intent, templated, candidateOrdinal);
+      const templated = templateFallback(intent, candidateOrdinal);
+      if (templated) {
+        return verifiedResponse(
+          templated.intent,
+          templated.proposal,
+          candidateOrdinal,
+        );
+      }
       const diagnostic = modelFailureDiagnostic("program", error);
       return apiError(diagnostic.code, diagnostic.message, 502, [], diagnostic);
     }

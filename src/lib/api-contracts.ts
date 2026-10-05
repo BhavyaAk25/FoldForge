@@ -36,6 +36,8 @@ export const IntentApiResponseSchema = FabricationIntentV1Schema;
 
 export const ProgramsApiResponseSchema = z
   .object({
+    // The intent the program was verified against.
+    intent: FabricationIntentV1Schema,
     proposal: ProgramProposalV1Schema,
     programStructureFingerprint: z.string().regex(/^[0-9a-f]{64}$/u),
   })

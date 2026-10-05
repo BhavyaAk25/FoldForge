@@ -368,11 +368,14 @@ export function FoldForgeApp() {
         { stage: "program" },
       );
 
+      // A template fallback may verify against a relaxed intent; every later
+      // check and the export must use exactly that one.
+      const verifiedIntent = generated.intent;
       const candidateId = candidateIdFor(ordinal, generated.proposal.program);
       const currentProgram = generated.proposal.program;
       const evaluation = await postJson(
         "/api/compile",
-        { intent: nextIntent, program: currentProgram, candidateId },
+        { intent: verifiedIntent, program: currentProgram, candidateId },
         CompileApiResponseSchema,
         { stage: "compile" },
       );
@@ -395,7 +398,7 @@ export function FoldForgeApp() {
       }
       const candidate = buildCandidate(
         candidateId,
-        nextIntent,
+        verifiedIntent,
         currentProgram,
         ordinal,
         generatedAtIso,
@@ -441,7 +444,7 @@ export function FoldForgeApp() {
           }),
         );
       }
-      setIntent(nextIntent);
+      setIntent(verifiedIntent);
       setCandidates([checkedDesign]);
       setSelectedId(checkedDesign.candidateId);
       setGenerationSource(

@@ -440,8 +440,35 @@ const roleDefinedShellVariant = (
         : { widthMm: heightMm, heightMm: widthMm },
     );
   }
+  // With a square footprint every wall ties between the two spans, so each
+  // would claim the full depth and the nested pair would collide. Break the
+  // tie by wall width: the wider opposing pair owns the depth (alphabetical
+  // order picks a pair when all walls are equal).
+  const squareFootprint = Math.abs(widthMm - heightMm) <= 1e-6;
+  const wallWidths = wallParts.map((part) => preferred.get(part.key)!.widthMm);
+  const widestWallMm = Math.max(...wallWidths);
+  const depthOwners = new Set(
+    wallWidths.every((width) => Math.abs(width - widestWallMm) <= 1e-6)
+      ? wallParts
+          .map((part) => part.key)
+          .toSorted()
+          .slice(0, 2)
+      : wallParts
+          .filter(
+            (part) =>
+              Math.abs(preferred.get(part.key)!.widthMm - widestWallMm) <= 1e-6,
+          )
+          .map((part) => part.key),
+  );
   for (const part of wallParts) {
     const current = preferred.get(part.key)!;
+    if (squareFootprint) {
+      variant.set(part.key, {
+        widthMm,
+        heightMm: depthOwners.has(part.key) ? depthMm : depthPanelMm,
+      });
+      continue;
+    }
     const widthSpan =
       Math.abs(current.widthMm - widthMm) <=
       Math.abs(current.widthMm - heightMm)
