@@ -233,13 +233,16 @@ export const figureTemplateSpec = (
   heightMm: number,
   depthMm: number,
   silhouette: PanelSilhouette = "duck",
+  // What the user asked for, when it differs from the outline used (a robot
+  // drawn with the neutral arch outline is still labelled a robot).
+  objectName: string = silhouette,
 ): FabricationDesignSpecV3 => {
   // A side profile runs along the longer footprint axis: a rat requested as
   // 60 wide by 130 deep is 130 long, standing on a 60-deep base.
   const w = Math.max(30, Math.round(Math.max(widthMm, depthMm)));
   const h = Math.max(30, Math.round(heightMm));
   const d = Math.max(12, Math.round(Math.min(widthMm, depthMm)));
-  const name = silhouette;
+  const name = objectName.trim().toLowerCase().slice(0, 80) || silhouette;
   const side = (key: string, label: string) => ({
     key,
     label,
@@ -259,7 +262,7 @@ export const figureTemplateSpec = (
   return FabricationDesignSpecV3Schema.parse({
     version: "3",
     label: `Stand-up ${name}`,
-    summary: `A fold-only stand-up ${name}: two ${name}-shaped sides folded upright from a shared base.`,
+    summary: `A fold-only stand-up ${name}: two sides with the ${silhouette} outline folded upright from a shared base.`,
     parts: [
       {
         key: "base",
@@ -287,7 +290,7 @@ export const figureTemplateSpec = (
       partKeys: ["body", "back"],
       importance: "required",
     })),
-    aestheticPreferences: [`recognizable ${name} silhouette, fold-only`],
+    aestheticPreferences: [`${silhouette} silhouette, fold-only`],
     priorities: ["visual_expression", "mechanical_simplicity"],
     tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
   });
@@ -582,6 +585,7 @@ const specFromHint = (
   widthMm: number,
   heightMm: number,
   depthMm: number,
+  objectName: string,
 ): FabricationDesignSpecV3 => {
   switch (hint.archetype) {
     case "enclosure":
@@ -591,11 +595,13 @@ const specFromHint = (
     case "cutout":
       return cutoutTemplateSpec(widthMm, heightMm, hint.silhouette ?? "arch");
     case "figure":
+      // Without a fitting outline the neutral arch is used, never an animal.
       return figureTemplateSpec(
         widthMm,
         heightMm,
         depthMm,
-        hint.silhouette ?? "animal",
+        hint.silhouette ?? "arch",
+        objectName,
       );
     case "popup_card":
       return popUpCardTemplateSpec(
@@ -690,7 +696,9 @@ export const templateSpecForIntent = (
     candidate.matches(intent),
   );
   if (descriptor) return descriptor.build(widthMm, heightMm, depthMm, intent);
-  return hint ? specFromHint(hint, widthMm, heightMm, depthMm) : null;
+  return hint
+    ? specFromHint(hint, widthMm, heightMm, depthMm, intent.objectLabel)
+    : null;
 };
 
 /**

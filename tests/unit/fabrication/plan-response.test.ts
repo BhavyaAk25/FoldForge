@@ -103,8 +103,8 @@ describe("templateFallback", () => {
   });
 
   it.each([
-    ["figure", "animal", 30, "Stand-up animal"],
-    ["figure", null, 30, "Stand-up animal"],
+    ["figure", "animal", 30, "Stand-up platypus"],
+    ["figure", null, 30, "Stand-up platypus"],
     ["enclosure", null, 40, "Folded enclosure"],
     ["stand", null, 70, "Desk stand"],
     ["cutout", "star", 1, "star cut-out"],
