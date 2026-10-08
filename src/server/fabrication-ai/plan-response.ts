@@ -3,6 +3,7 @@ import type { FabricationDesignSpecV3 } from "@/core/fabrication/design-spec";
 import {
   templateIntentFor,
   templateSpecForIntent,
+  type TemplateHint,
 } from "@/core/fabrication/design-templates";
 import {
   FABRICATION_SYNTHESIZER_VERSION,
@@ -89,8 +90,9 @@ export interface TemplateFallback {
 const templateProposalFor = (
   intent: FabricationIntentV1,
   candidateOrdinal: number,
+  hint: TemplateHint | null,
 ): ProgramProposalV1 | null => {
-  const templateSpec = templateSpecForIntent(intent);
+  const templateSpec = templateSpecForIntent(intent, hint);
   if (!templateSpec) return null;
   const synthesized = synthesizeFabricationDesign(
     intent,
@@ -109,8 +111,8 @@ const templateProposalFor = (
 };
 
 /**
- * A parametric template fitted to the requested size, or null when no template
- * class matches. It is first verified against the intent as given. If that
+ * A parametric template fitted to the requested size, or null when neither a
+ * keyword rule nor the model's `hint` names a template family. It is first verified against the intent as given. If that
  * fails, it is verified against the same object, size, and stock with the
  * template's own behavior and without model-authored semantic constraints
  * (a model often invents hard rules, such as a 120-degree lid or a fold-flat
@@ -121,12 +123,13 @@ const templateProposalFor = (
 export const templateFallback = (
   intent: FabricationIntentV1,
   candidateOrdinal: number,
+  hint: TemplateHint | null = null,
 ): TemplateFallback | null => {
-  const direct = templateProposalFor(intent, candidateOrdinal);
+  const direct = templateProposalFor(intent, candidateOrdinal, hint);
   if (direct) return { proposal: direct, intent };
-  const relaxed = templateIntentFor(intent);
+  const relaxed = templateIntentFor(intent, hint);
   if (!relaxed) return null;
-  const proposal = templateProposalFor(relaxed, candidateOrdinal);
+  const proposal = templateProposalFor(relaxed, candidateOrdinal, hint);
   return proposal ? { proposal, intent: relaxed } : null;
 };
 

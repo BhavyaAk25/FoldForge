@@ -4,7 +4,6 @@ import {
   FIGURE_LANDMARKS,
   containsWord,
   figureSilhouetteForText,
-  type FigureSilhouette,
   type PanelSilhouette,
 } from "./silhouettes";
 import { normalizeFabricationIntentFeasibility } from "./feasibility-normalization";
@@ -224,16 +223,23 @@ const looksLikeFigure = (intent: FabricationIntentV1): boolean =>
  * the long edges of a base, so the figure reads from either side. The
  * assembled envelope is width x height x depth, matching the requested size.
  */
+const figureLandmarks = (silhouette: PanelSilhouette): readonly string[] =>
+  silhouette === "flower" || silhouette === "arch"
+    ? [silhouette]
+    : FIGURE_LANDMARKS[silhouette];
+
 export const figureTemplateSpec = (
   widthMm: number,
   heightMm: number,
   depthMm: number,
-  silhouette: FigureSilhouette = "duck",
+  silhouette: PanelSilhouette = "duck",
 ): FabricationDesignSpecV3 => {
-  const w = Math.max(30, Math.round(widthMm));
+  // A side profile runs along the longer footprint axis: a rat requested as
+  // 60 wide by 130 deep is 130 long, standing on a 60-deep base.
+  const w = Math.max(30, Math.round(Math.max(widthMm, depthMm)));
   const h = Math.max(30, Math.round(heightMm));
-  const d = Math.max(12, Math.round(depthMm));
-  const name = silhouette === "duck" ? "duck" : silhouette;
+  const d = Math.max(12, Math.round(Math.min(widthMm, depthMm)));
+  const name = silhouette;
   const side = (key: string, label: string) => ({
     key,
     label,
@@ -275,7 +281,7 @@ export const figureTemplateSpec = (
     glueAllowed: false,
     driver: null,
     outputs: [],
-    visibleLandmarks: FIGURE_LANDMARKS[silhouette].map((landmark) => ({
+    visibleLandmarks: figureLandmarks(silhouette).map((landmark) => ({
       key: landmark,
       label: landmark,
       partKeys: ["body", "back"],
@@ -550,6 +556,57 @@ export const standTemplateSpec = (
   });
 };
 
+/** The ready-made design families a request can fall back to. */
+export const TEMPLATE_ARCHETYPES = [
+  "enclosure",
+  "stand",
+  "cutout",
+  "figure",
+  "popup_card",
+] as const;
+
+export type TemplateArchetype = (typeof TEMPLATE_ARCHETYPES)[number];
+
+/**
+ * The model's own choice of the closest family and outline. Used when no
+ * keyword rule matches, so an object nobody listed ("a rat") still lands on a
+ * sensible, verifiable design instead of an error.
+ */
+export interface TemplateHint {
+  readonly archetype: TemplateArchetype;
+  readonly silhouette: PanelSilhouette | null;
+}
+
+const specFromHint = (
+  hint: TemplateHint,
+  widthMm: number,
+  heightMm: number,
+  depthMm: number,
+): FabricationDesignSpecV3 => {
+  switch (hint.archetype) {
+    case "enclosure":
+      return enclosureTemplateSpec(widthMm, heightMm, depthMm);
+    case "stand":
+      return standTemplateSpec(widthMm, heightMm, depthMm);
+    case "cutout":
+      return cutoutTemplateSpec(widthMm, heightMm, hint.silhouette ?? "arch");
+    case "figure":
+      return figureTemplateSpec(
+        widthMm,
+        heightMm,
+        depthMm,
+        hint.silhouette ?? "animal",
+      );
+    case "popup_card":
+      return popUpCardTemplateSpec(
+        widthMm,
+        heightMm,
+        depthMm,
+        hint.silhouette ?? "flower",
+      );
+  }
+};
+
 interface TemplateDescriptor {
   /** Whether this template class serves the request. */
   readonly matches: (intent: FabricationIntentV1) => boolean;
@@ -618,6 +675,7 @@ const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
  */
 export const templateSpecForIntent = (
   intent: FabricationIntentV1,
+  hint: TemplateHint | null = null,
 ): FabricationDesignSpecV3 | null => {
   const { widthMm, heightMm, depthMm } = intent.requestedSize;
   const hasEnvelope =
@@ -631,9 +689,8 @@ export const templateSpecForIntent = (
   const descriptor = TEMPLATE_DESCRIPTORS.find((candidate) =>
     candidate.matches(intent),
   );
-  return descriptor
-    ? descriptor.build(widthMm, heightMm, depthMm, intent)
-    : null;
+  if (descriptor) return descriptor.build(widthMm, heightMm, depthMm, intent);
+  return hint ? specFromHint(hint, widthMm, heightMm, depthMm) : null;
 };
 
 /**
@@ -643,8 +700,9 @@ export const templateSpecForIntent = (
  */
 export const templateIntentFor = (
   intent: FabricationIntentV1,
+  hint: TemplateHint | null = null,
 ): FabricationIntentV1 | null => {
-  const spec = templateSpecForIntent(intent);
+  const spec = templateSpecForIntent(intent, hint);
   if (!spec) return null;
   return normalizeFabricationIntentFeasibility({
     ...intent,

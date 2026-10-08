@@ -8,3 +8,4 @@ overrides:
   postcss: 8.5.28
   "@xmldom/xmldom": 0.8.13
   sharp: 0.35.5
+  source-map-js: 1.2.2

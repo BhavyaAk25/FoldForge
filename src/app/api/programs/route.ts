@@ -16,8 +16,12 @@ import {
   type ProgramProposalV1,
 } from "@/server/fabrication-ai/contracts";
 import { isLlmConfigured } from "@/server/fabrication-ai/llm";
-import { LlmFabricationProgramModel } from "@/server/fabrication-ai/models";
-import { templateFallback } from "@/server/fabrication-ai/plan-response";
+import { LlmFabricationDesignModel } from "@/server/fabrication-ai/models";
+import {
+  programProposalFromDesignSpec,
+  templateFallback,
+} from "@/server/fabrication-ai/plan-response";
+import type { TemplateHint } from "@/core/fabrication/design-templates";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 
 export const dynamic = "force-dynamic";
@@ -103,17 +107,25 @@ export const POST = (request: Request): Promise<NextResponse> =>
         : noTemplate();
     }
 
+    // Order: the model's own design, then the family the model picked as its
+    // fallback (or a keyword match), labelled generationSource "template".
+    let hint: TemplateHint | null = null;
     try {
-      const proposal = await new LlmFabricationProgramModel().generateProgram(
+      const design = await new LlmFabricationDesignModel().proposeDesign(
         intent,
-        candidateOrdinal,
         usedTopologyIds,
       );
+      hint = design.value.fallback ?? null;
+      const proposal = programProposalFromDesignSpec({
+        proposal: design.value,
+        intent,
+        candidateOrdinal,
+        modelId: design.modelId,
+        responseId: design.responseId,
+      });
       return verifiedResponse(intent, proposal, candidateOrdinal);
     } catch (error) {
-      // Provider or contract failure: a matching template still yields a
-      // verified design, labelled generationSource "template".
-      const templated = templateFallback(intent, candidateOrdinal);
+      const templated = templateFallback(intent, candidateOrdinal, hint);
       if (templated) {
         return verifiedResponse(
           templated.intent,
