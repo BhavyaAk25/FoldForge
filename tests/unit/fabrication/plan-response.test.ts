@@ -98,9 +98,39 @@ describe("templateFallback", () => {
     });
   });
 
-  it("returns null without a matching template", () => {
+  it("returns null without a matching template or model hint", () => {
     expect(templateFallback(fixtureIntent(), 1)).toBeNull();
   });
+
+  it.each([
+    ["figure", "animal", 30, "Stand-up animal"],
+    ["figure", null, 30, "Stand-up animal"],
+    ["enclosure", null, 40, "Folded enclosure"],
+    ["stand", null, 70, "Desk stand"],
+    ["cutout", "star", 1, "star cut-out"],
+    ["popup_card", "heart", 30, "Pop-up heart card"],
+  ] as const)(
+    "builds the model's %s/%s choice for an object no keyword knows",
+    (archetype, silhouette, depthMm, label) => {
+      // "a platypus" matches no keyword rule; the model's hint still yields a
+      // verified, labelled template instead of an error.
+      const intent = {
+        ...intentFromPromptKeywords("a duck 120 x 90 x 30 mm")!,
+        sourcePrompt: "a platypus",
+        title: "Platypus",
+        objectLabel: "platypus",
+        functionalGoal: "A platypus.",
+        visualDescription: "A platypus.",
+        requestedSize: { widthMm: 120, heightMm: 90, depthMm },
+        semanticConstraints: [],
+      };
+      expect(templateFallback(intent, 1)).toBeNull();
+      const fallback = templateFallback(intent, 1, { archetype, silhouette });
+      expect(fallback?.proposal.program.candidateLabel).toBe(label);
+      expect(fallback?.proposal.provenance.generationSource).toBe("template");
+    },
+    120_000,
+  );
 
   it("builds the captured Gemini ring-box request directly", () => {
     // Captured Gemini intent for "a small gift box for a ring" (50 x 50 x 40,

@@ -21,6 +21,8 @@ export const PANEL_SILHOUETTES = [
   "duck",
   "cat",
   "rabbit",
+  "mouse",
+  "animal",
   "heart",
   "flower",
   "tree",
@@ -122,6 +124,53 @@ const RABBIT: readonly CanonicalPoint[] = [
   point(0.28, 0.42),
   point(0.18, 0.3),
   point(0.1, 0.12),
+];
+
+// A mouse or rat in side view: pointed nose toward -s, round ear, raised tail.
+const MOUSE: readonly CanonicalPoint[] = [
+  point(0, 0),
+  point(1, 0),
+  point(0.98, 0.22),
+  point(1, 0.55),
+  point(0.95, 0.56),
+  point(0.93, 0.25),
+  point(0.86, 0.3),
+  point(0.72, 0.62),
+  point(0.55, 0.8),
+  point(0.42, 0.82),
+  point(0.36, 0.92),
+  point(0.3, 1),
+  point(0.22, 0.96),
+  point(0.2, 0.84),
+  point(0.12, 0.7),
+  point(0, 0.4),
+  point(0.06, 0.3),
+  point(0.1, 0.16),
+  point(0.05, 0.06),
+];
+
+// A generic four-legged animal lying down, head raised: the outline for
+// animals without a dedicated shape (dog, horse, giraffe, ...).
+const ANIMAL: readonly CanonicalPoint[] = [
+  point(0, 0),
+  point(1, 0),
+  point(0.98, 0.25),
+  point(1, 0.4),
+  point(0.92, 0.4),
+  point(0.85, 0.45),
+  point(0.55, 0.5),
+  point(0.38, 0.55),
+  point(0.32, 0.75),
+  point(0.3, 0.9),
+  point(0.24, 1),
+  point(0.2, 0.9),
+  point(0.12, 0.88),
+  point(0, 0.74),
+  point(0.02, 0.66),
+  point(0.14, 0.64),
+  point(0.2, 0.5),
+  point(0.16, 0.3),
+  point(0.06, 0.12),
 ];
 
 /**
@@ -289,6 +338,10 @@ export const canonicalSilhouette = (
       return CAT;
     case "rabbit":
       return RABBIT;
+    case "mouse":
+      return MOUSE;
+    case "animal":
+      return ANIMAL;
     case "heart":
       return HEART;
     case "flower":
@@ -507,13 +560,7 @@ export const applyPanelSilhouettes = (
 
 /** Standing-figure silhouettes and the prompt words that select them. */
 export const FIGURE_SILHOUETTE_KEYWORDS: Readonly<
-  Record<
-    Extract<
-      PanelSilhouette,
-      "duck" | "cat" | "rabbit" | "heart" | "tree" | "house" | "star"
-    >,
-    readonly string[]
-  >
+  Record<Exclude<PanelSilhouette, "flower" | "arch">, readonly string[]>
 > = {
   duck: [
     "duck",
@@ -527,6 +574,28 @@ export const FIGURE_SILHOUETTE_KEYWORDS: Readonly<
   ],
   cat: ["cat", "kitten", "kitty"],
   rabbit: ["rabbit", "bunny", "bunnies", "hare"],
+  mouse: ["mouse", "mice", "rat", "hamster", "gerbil", "rodent"],
+  animal: [
+    "dog",
+    "puppy",
+    "horse",
+    "pony",
+    "cow",
+    "pig",
+    "fox",
+    "deer",
+    "lion",
+    "tiger",
+    "wolf",
+    "sheep",
+    "goat",
+    "giraffe",
+    "elephant",
+    "zebra",
+    "donkey",
+    "bear",
+    "animal",
+  ],
   heart: ["heart", "valentine"],
   tree: ["tree", "pine", "christmas tree", "fir"],
   house: ["house", "home", "cottage", "cabin", "hut"],
@@ -539,10 +608,13 @@ const FIGURE_ORDER: readonly FigureSilhouette[] = [
   "duck",
   "cat",
   "rabbit",
+  "mouse",
   "heart",
   "tree",
   "house",
   "star",
+  // Generic last: a named shape always wins over "animal".
+  "animal",
 ];
 
 /** Whole-word (optionally plural) match, so "standard" is not "stand". */
@@ -569,6 +641,8 @@ export const FIGURE_LANDMARKS: Readonly<
   duck: ["head", "beak", "tail"],
   cat: ["ears", "head", "haunches"],
   rabbit: ["ears", "head", "haunches"],
+  mouse: ["ears", "nose", "tail"],
+  animal: ["head", "body", "tail"],
   heart: ["lobes", "point"],
   tree: ["crown", "trunk"],
   house: ["roof", "walls"],

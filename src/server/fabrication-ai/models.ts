@@ -18,11 +18,10 @@ import type {
 import {
   FabricationDesignSpecProposalV3Schema,
   FabricationNarrativeV1Schema,
+  type FabricationDesignSpecProposalV3,
   type FabricationNarrativeV1,
-  type ProgramProposalV1,
 } from "./contracts";
-import { generateStructured } from "./llm";
-import { programProposalFromDesignSpec } from "./plan-response";
+import { generateStructured, type StructuredResult } from "./llm";
 import {
   FABRICATION_INTENT_PROMPT,
   FABRICATION_NARRATIVE_PROMPT,
@@ -34,12 +33,11 @@ export interface FabricationIntentModel {
   compileIntent(prompt: string): Promise<FabricationIntentV1>;
 }
 
-export interface FabricationProgramModel {
-  generateProgram(
+export interface FabricationDesignModel {
+  proposeDesign(
     intent: FabricationIntentV1,
-    candidateOrdinal: number,
     usedTopologyIds: readonly string[],
-  ): Promise<ProgramProposalV1>;
+  ): Promise<StructuredResult<FabricationDesignSpecProposalV3>>;
 }
 
 export interface FabricationRepairModel {
@@ -365,26 +363,22 @@ export class LlmFabricationIntentModel implements FabricationIntentModel {
   }
 }
 
-export class LlmFabricationProgramModel implements FabricationProgramModel {
-  async generateProgram(
+/**
+ * Asks the model for a design spec plus its fallback choice. Building and
+ * verifying it is the caller's job (see /api/programs).
+ */
+export class LlmFabricationDesignModel implements FabricationDesignModel {
+  proposeDesign(
     intent: FabricationIntentV1,
-    candidateOrdinal: number,
     usedTopologyIds: readonly string[],
-  ): Promise<ProgramProposalV1> {
-    const result = await generateStructured({
+  ): Promise<StructuredResult<FabricationDesignSpecProposalV3>> {
+    return generateStructured({
       schema: FabricationDesignSpecProposalV3Schema,
       schemaName: "FabricationDesignSpecProposalV3",
       instructions: FABRICATION_PROGRAM_PROMPT,
       input: canonicalSerialize(
         fabricationPlanningInput(intent, usedTopologyIds),
       ),
-    });
-    return programProposalFromDesignSpec({
-      proposal: result.value,
-      intent,
-      candidateOrdinal,
-      modelId: result.modelId,
-      responseId: result.responseId,
     });
   }
 }
