@@ -38,12 +38,33 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 mm, no collision, at least 0.5 mm moving clearance, angle error at most 2°, travel error at most 1 mm, and no branch jump or dead driver state. FoldForge models geometry and kinematics only, not material strength or fatigue.
 
+## Guardrails (enforced)
+
+`pnpm check:budgets` runs in CI and fails the build when the home page JavaScript, source lines, test lines, test-to-source ratio, dependency counts, or template design time exceed `scripts/budgets.ts`. Raise a budget only in its own commit that says what grew and why; lower it after every cleanup.
+
+- **Tests:** one test per behaviour change, preferably a new row in an existing table test. A bug fix gets one regression test. Tests for deleted code are deleted with it. No snapshot dumps or copied model output as fixtures.
+- **One pipeline:** new capability reuses the canonical schemas, serializer, verifier, and exporters. A replacement deletes what it supersedes in the same PR; no parallel paths kept "just in case".
+- **Server does the heavy work:** compiling, verifying, and synthesizing run on the server; the browser renders results and never repeats those checks.
+- **Dependencies:** none added without removing one or raising the budget explicitly.
+- **Always shippable:** merge only with CI green, then confirm the live site on real prompts.
+
+## Roadmap (in order)
+
+1. Make it light: the browser stops re-compiling and re-verifying designs; the server returns the finished candidate. Lower the JavaScript budget to the new size.
+2. Crease-pattern core in `src/core/origami`: one sheet, mountain and valley creases, folds that may form loops.
+3. Fold-rule checks: Maekawa and Kawasaki at every vertex, plus layer-ordering checks.
+4. Folding simulator: computes the collapse, drives the 3D animation, rejects patterns that jam.
+5. Classic bases (bird, frog, waterbomb, fish) with their models (crane, lily, frog, flapping bird); the AI picks base, model, and proportions.
+6. Outputs: printable crease pattern, folding animation, step-by-step instructions, existing exports.
+7. Anything outside the library keeps using the current papercraft engine.
+
 ## Commands
 
 - `pnpm dev`: run the app at http://localhost:3000
 - `pnpm test`: unit and integration tests (vitest)
 - `pnpm test:e2e`: browser flows (Playwright)
-- `pnpm check`: lint, types, formatting, tests, export validation, and production build (what CI runs)
+- `pnpm check`: lint, types, formatting, tests, export validation, production build, and budgets (what CI runs)
+- `pnpm check:budgets`: size and speed limits (after `pnpm build`)
 
 ## Git
 
