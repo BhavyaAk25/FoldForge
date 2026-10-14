@@ -52,6 +52,8 @@ jobs:
         run: pnpm run validate:consumers
       - name: Production build
         run: pnpm run build
+      - name: Size and speed budgets
+        run: pnpm run check:budgets
       - name: Audit production dependencies
         run: pnpm audit --prod
 
