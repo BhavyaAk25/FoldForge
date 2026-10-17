@@ -4,19 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import type { FabricationPreviewMode } from "@/components/fabrication-preview";
-import { FoldForgeResults } from "@/components/foldforge-results";
+import dynamic from "next/dynamic";
 import {
   DEFAULT_PROMPT,
-  DUCK_CREASE_PATTERN_PROMPT,
   FoldForgeStart,
   type ExamplePrompt,
-  type SavedExampleId,
 } from "@/components/foldforge-start";
-import { buildFabricationCandidate } from "@/core/fabrication/candidate";
-import {
-  createFacetedDuckGiftBoxShowcase,
-  createPullTabPopUpFlowerShowcase,
-} from "@/core/fabrication/examples";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type {
   CandidateV2,
@@ -30,12 +23,13 @@ import {
   HealthApiResponseSchema,
   IntentApiResponseSchema,
   ProgramsApiResponseSchema,
+  SavedExampleApiResponseSchema,
   StudioCheckpointSchema,
   type FinalizeApiResponse,
+  type FoldExport,
   type HealthApiResponse,
-  type ProgramsApiResponse,
-  type RepairEvidence,
 } from "@/lib/api-contracts";
+import type { SavedExampleId } from "@/lib/saved-examples";
 import {
   downloadCandidateExport,
   FoldForgeApiError,
@@ -53,16 +47,19 @@ import {
 
 import styles from "./foldforge-app.module.css";
 
-type StudioPhase = "idle" | "intent" | "programs" | "repair" | "ready";
+// The results panel carries the 3D engine, so it loads only once a design
+// exists; the start screen stays light.
+const loadResultsPanel = () => import("./foldforge-results");
+const FoldForgeResults = dynamic(
+  () => loadResultsPanel().then((module) => module.FoldForgeResults),
+  { ssr: false },
+);
+
+type StudioPhase = "idle" | "intent" | "programs" | "ready";
 type ExperienceMode = "live" | "saved";
 
-const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v6";
+const CHECKPOINT_KEY = "foldforge.studio.checkpoint.v7";
 const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
-const COMPILER_VERSION = "foldforge-fabrication-v1";
-const BASE_SEED = 20_260_714;
-
-const SAVED_EXAMPLE_GENERATED_AT = "2026-07-14T00:00:00.000Z";
-
 const formatFailure = (error: unknown): string => {
   const diagnostic =
     error instanceof FoldForgeDiagnosticError
@@ -99,54 +96,6 @@ const selectedCandidate = (candidate: CandidateV2): CandidateV2 =>
     },
   });
 
-const buildCandidate = (
-  candidateId: string,
-  intent: FabricationIntentV1,
-  program: FabricationProgramV1,
-  ordinal: number,
-  generatedAtIso: string,
-  appliedPatchIds: readonly string[],
-  repairCycle: number,
-  generationProvenance: ProgramsApiResponse["proposal"]["provenance"] | null,
-): CandidateV2 | null => {
-  const built = buildFabricationCandidate({
-    candidateId,
-    intent,
-    program,
-    rank: null,
-    selectionStatus: "eligible",
-    provenance: {
-      compilerVersion: COMPILER_VERSION,
-      generatedAtIso,
-      deterministicSeed: BASE_SEED + ordinal,
-      modelId: generationProvenance?.modelId ?? null,
-      modelResponseId: generationProvenance?.modelResponseId ?? null,
-      modelPlanHash: generationProvenance?.planHash ?? null,
-      planExpanderVersion: generationProvenance?.expanderVersion ?? null,
-      parentCandidateId: null,
-      appliedPatchIds,
-      repairCycle,
-    },
-  });
-  return built.ok ? built.value : null;
-};
-
-const rankedCandidates = (
-  candidates: readonly CandidateV2[],
-): readonly CandidateV2[] =>
-  [...candidates]
-    .sort(
-      (left, right) =>
-        (right.score.totalScore ?? 0) - (left.score.totalScore ?? 0),
-    )
-    .map((candidate, index) =>
-      CandidateV2Schema.parse({
-        ...candidate,
-        rank: index + 1,
-        selectionStatus: index === 0 ? "recommended" : "eligible",
-      }),
-    );
-
 const fallbackLimitations = (candidate: CandidateV2): readonly string[] => [
   `Use ${candidate.program.sheets.map((sheet) => sheet.material.label).join(", ")}.`,
   `This design uses no more than ${candidate.intent.fabricationBudget.maximumPanels} pieces and ${candidate.intent.fabricationBudget.maximumJointAndConnectorCount} joins.`,
@@ -167,9 +116,9 @@ export function FoldForgeApp() {
   >(null);
   const [savedLimitation, setSavedLimitation] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
-  const [repairEvidence, setRepairEvidence] = useState<
-    Record<string, readonly RepairEvidence[]>
-  >({});
+  const [foldExports, setFoldExports] = useState<Record<string, FoldExport>>(
+    {},
+  );
   const [narrative, setNarrative] = useState<
     FinalizeApiResponse["narrative"] | null
   >(null);
@@ -185,15 +134,14 @@ export function FoldForgeApp() {
   );
   const [finalizing, setFinalizing] = useState(false);
   const [checkpointReady, setCheckpointReady] = useState(false);
+  const [resultsFocusRequest, setResultsFocusRequest] = useState(0);
   const promptRef = useRef<HTMLTextAreaElement>(null);
-  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
-  const shouldFocusResultsRef = useRef(false);
   const forgeInFlightRef = useRef(false);
   const latestPromptRef = useRef(prompt);
   const activeForgeBindingRef = useRef<ForgeResultBinding | null>(null);
   const resultBindingRef = useRef<ForgeResultBinding | null>(null);
 
-  const busy = phase === "intent" || phase === "programs" || phase === "repair";
+  const busy = phase === "intent" || phase === "programs";
   const aiAvailable = health?.liveAiEnabled === true;
   const baseSelected = useMemo(
     () =>
@@ -211,9 +159,9 @@ export function FoldForgeApp() {
     () => (baseSelected ? selectedCandidate(baseSelected) : null),
     [baseSelected],
   );
-  const selectedRepairs = baseSelected
-    ? (repairEvidence[baseSelected.candidateId] ?? [])
-    : [];
+  const selectedFoldExport = baseSelected
+    ? (foldExports[baseSelected.candidateId] ?? null)
+    : null;
 
   useEffect(() => {
     void getJson("/api/health", HealthApiResponseSchema)
@@ -253,7 +201,7 @@ export function FoldForgeApp() {
         setIntent(restored.intent);
         setCandidates(restored.candidates);
         setSelectedId(restored.selectedId);
-        setRepairEvidence(restored.repairEvidence);
+        setFoldExports(restored.foldExports);
         setNarrative(restored.narrative);
       }
       if (restored && restored.candidates.length > 0) {
@@ -268,14 +216,14 @@ export function FoldForgeApp() {
   useEffect(() => {
     if (!checkpointReady || experienceMode === "saved") return;
     const checkpoint = StudioCheckpointSchema.parse({
-      version: 4,
+      version: 5,
       savedAt: new Date().toISOString(),
       prompt,
       resultBinding,
       intent,
       candidates,
       selectedId,
-      repairEvidence,
+      foldExports,
       narrative,
     });
     try {
@@ -288,30 +236,20 @@ export function FoldForgeApp() {
     checkpointReady,
     experienceMode,
     intent,
+    foldExports,
     narrative,
     prompt,
-    repairEvidence,
     resultBinding,
     selectedId,
   ]);
-
-  useEffect(() => {
-    if (
-      phase !== "ready" ||
-      candidates.length === 0 ||
-      !shouldFocusResultsRef.current
-    ) {
-      return;
-    }
-    shouldFocusResultsRef.current = false;
-    resultsHeadingRef.current?.focus();
-  }, [candidates, phase]);
 
   const forge = async () => {
     if (busy || forgeInFlightRef.current || prompt.trim().length === 0) {
       return;
     }
     forgeInFlightRef.current = true;
+    // Fetch the 3D results panel while the server designs.
+    void loadResultsPanel();
     const requestedPrompt = prompt.trim();
     const forgeAttemptId = newForgeAttemptId();
     const forgeBinding: ForgeResultBinding = {
@@ -328,13 +266,12 @@ export function FoldForgeApp() {
     setIntent(null);
     setCandidates([]);
     setSelectedId("");
-    setRepairEvidence({});
+    setFoldExports({});
     setNarrative(null);
     setResultBinding(null);
     resultBindingRef.current = null;
     setPhase("intent");
     setStatusMessage("Understanding your request…");
-    const generatedAtIso = new Date().toISOString();
 
     try {
       const nextIntent = await postJson(
@@ -353,7 +290,6 @@ export function FoldForgeApp() {
         return;
       }
 
-      const evidenceByCandidate: Record<string, RepairEvidence[]> = {};
       const ordinal = 1;
       setPhase("programs");
       setStatusMessage("Creating your design…");
@@ -373,15 +309,21 @@ export function FoldForgeApp() {
       const verifiedIntent = generated.intent;
       const candidateId = candidateIdFor(ordinal, generated.proposal.program);
       const currentProgram = generated.proposal.program;
+      // The server compiles, verifies, and scores the design once and
+      // returns the finished candidate; the browser only renders it.
+      const { modelId, modelResponseId, planHash, expanderVersion } =
+        generated.proposal.provenance;
       const evaluation = await postJson(
         "/api/compile",
-        { intent: verifiedIntent, program: currentProgram, candidateId },
+        {
+          intent: verifiedIntent,
+          program: currentProgram,
+          candidateId,
+          generation: { modelId, modelResponseId, planHash, expanderVersion },
+        },
         CompileApiResponseSchema,
         { stage: "compile" },
       );
-      const appliedPatchIds: string[] = [];
-      const repairCycle = 0;
-
       if (evaluation.status !== "passed") {
         throw new FoldForgeDiagnosticError(
           forgeDiagnostic({
@@ -389,46 +331,14 @@ export function FoldForgeApp() {
             kind: "contract",
             code: "SERVER_VERIFICATION_DRIFT",
             message:
-              "The server-selected program did not reproduce its verified result. No repair was attempted.",
+              "The server-selected program did not reproduce its verified result.",
             modelCall: "not_applicable",
             failureIds: evaluation.diagnostic.failureIds,
             failedAtStage: evaluation.diagnostic.failedAtStage,
           }),
         );
       }
-      const candidate = buildCandidate(
-        candidateId,
-        verifiedIntent,
-        currentProgram,
-        ordinal,
-        generatedAtIso,
-        appliedPatchIds,
-        repairCycle,
-        generated.proposal.provenance,
-      );
-      if (!candidate) {
-        throw new FoldForgeDiagnosticError(
-          forgeDiagnostic({
-            stage: "compile",
-            kind: "compilation",
-            code: "CANDIDATE_BUILD_FAILED",
-            message:
-              "The verified program could not be assembled into a source-equivalent candidate.",
-          }),
-        );
-      }
-      const ranked = rankedCandidates([candidate]);
-      const checkedDesign = ranked[0];
-      if (!checkedDesign) {
-        throw new FoldForgeDiagnosticError(
-          forgeDiagnostic({
-            stage: "compile",
-            kind: "compilation",
-            code: "CANDIDATE_SELECTION_FAILED",
-            message: "The verified candidate could not be selected safely.",
-          }),
-        );
-      }
+      const checkedDesign = evaluation.candidate;
       if (
         !sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding) ||
         !forgeResultMatchesPrompt(forgeBinding, latestPromptRef.current)
@@ -450,11 +360,11 @@ export function FoldForgeApp() {
       setGenerationSource(
         generated.proposal.provenance.generationSource ?? null,
       );
-      setRepairEvidence(evidenceByCandidate);
+      setFoldExports({ [checkedDesign.candidateId]: evaluation.foldExport });
       setNarrative(null);
       setResultBinding(forgeBinding);
       resultBindingRef.current = forgeBinding;
-      shouldFocusResultsRef.current = true;
+      setResultsFocusRequest((request) => request + 1);
       setPhase("ready");
       setStatusMessage("Your checked design is ready.");
     } catch (forgeError) {
@@ -484,7 +394,7 @@ export function FoldForgeApp() {
     setCandidates([]);
     setGenerationSource(null);
     setSelectedId("");
-    setRepairEvidence({});
+    setFoldExports({});
     setNarrative(null);
     setResultBinding(null);
     resultBindingRef.current = null;
@@ -496,58 +406,40 @@ export function FoldForgeApp() {
     promptRef.current?.focus();
   };
 
-  const openSavedExample = (exampleId: SavedExampleId) => {
-    const showcase =
-      exampleId === "duck"
-        ? createFacetedDuckGiftBoxShowcase()
-        : createPullTabPopUpFlowerShowcase();
-    const isDuck = exampleId === "duck";
-    const program: FabricationProgramV1 = {
-      ...showcase.program,
-      candidateLabel: isDuck
-        ? "Static duck crease pattern"
-        : "Vertical-lift flower study",
-      designSummary: isDuck
-        ? "A prepared static crease-pattern study with a faceted duck silhouette. The verified file contains cut and score geometry only; no lid motion or open-and-close animation is modeled."
-        : "A prepared motion study: a directly driven vertical tab moves a rigid flower crown 30 mm along its guide.",
-    };
-    const candidate = buildCandidate(
-      `saved-example-${exampleId}`,
-      showcase.intent,
-      program,
-      1,
-      SAVED_EXAMPLE_GENERATED_AT,
-      [],
-      0,
-      null,
-    );
-    if (!candidate) {
-      setError("The saved example could not be opened safely.");
+  const openSavedExample = async (exampleId: SavedExampleId) => {
+    setError("");
+    void loadResultsPanel();
+    let example;
+    try {
+      example = await getJson(
+        `/api/examples/${exampleId}`,
+        SavedExampleApiResponseSchema,
+      );
+    } catch (exampleError) {
+      setError(formatFailure(exampleError));
       return;
     }
-
-    const ranked = rankedCandidates([candidate]);
-    const savedPrompt = isDuck ? DUCK_CREASE_PATTERN_PROMPT : showcase.prompt;
+    const isDuck = exampleId === "duck";
+    const { candidate } = example;
     const savedBinding: ForgeResultBinding = {
       attemptId: newForgeAttemptId(),
-      promptHash: forgePromptHash(savedPrompt),
+      promptHash: forgePromptHash(example.prompt),
     };
-    setPrompt(savedPrompt);
-    latestPromptRef.current = savedPrompt;
-    setIntent(showcase.intent);
-    setCandidates(ranked);
-    setSelectedId(ranked[0]?.candidateId ?? "");
-    setRepairEvidence({});
+    setPrompt(example.prompt);
+    latestPromptRef.current = example.prompt;
+    setIntent(candidate.intent);
+    setCandidates([candidate]);
+    setSelectedId(candidate.candidateId);
+    setFoldExports({ [candidate.candidateId]: example.foldExport });
     setNarrative(null);
     setResultBinding(savedBinding);
     resultBindingRef.current = savedBinding;
     setExperienceMode("saved");
     setGenerationSource(null);
-    setSavedLimitation(showcase.limitation);
+    setSavedLimitation(example.limitation);
     setPreviewMode("assembled");
     setMotionPosition(isDuck ? 0 : 0.65);
-    setError("");
-    shouldFocusResultsRef.current = true;
+    setResultsFocusRequest((request) => request + 1);
     setPhase("ready");
     setStatusMessage(
       `Saved ${isDuck ? "static duck crease-pattern" : "vertical-lift flower"} example opened.`,
@@ -659,7 +551,7 @@ export function FoldForgeApp() {
           healthKnown={health !== null}
           aiAvailable={aiAvailable}
           onCreate={() => void forge()}
-          onOpenSavedExample={openSavedExample}
+          onOpenSavedExample={(exampleId) => void openSavedExample(exampleId)}
           onPromptChange={(nextPrompt) => {
             latestPromptRef.current = nextPrompt;
             setPrompt(nextPrompt);
@@ -667,7 +559,7 @@ export function FoldForgeApp() {
               setIntent(null);
               setCandidates([]);
               setSelectedId("");
-              setRepairEvidence({});
+              setFoldExports({});
               setNarrative(null);
               setResultBinding(null);
               resultBindingRef.current = null;
@@ -716,8 +608,8 @@ export function FoldForgeApp() {
             onPreviewModeChange={setPreviewMode}
             onRotationChange={setRotationDeg}
             previewMode={previewMode}
-            repairs={selectedRepairs}
-            resultsHeadingRef={resultsHeadingRef}
+            foldExport={selectedFoldExport}
+            focusRequest={resultsFocusRequest}
             rotationDeg={rotationDeg}
             selected={baseSelected}
           />

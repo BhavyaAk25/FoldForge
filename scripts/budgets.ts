@@ -7,12 +7,15 @@
  * number here was measured from the codebase when it was set.
  */
 export const BUDGETS = {
-  /** Gzipped JavaScript the home page downloads (measured 519 KB). */
-  homePageJsGzipKb: 530,
-  /** Lines of TypeScript under src/ (measured 30,870). */
-  sourceLines: 31_500,
-  /** Lines of TypeScript under tests/ (measured 21,034). */
-  testLines: 21_500,
+  /**
+   * Gzipped JavaScript the home page downloads (measured 251 KB after the
+   * server started building candidates and the 3D panel loaded lazily).
+   */
+  homePageJsGzipKb: 265,
+  /** Lines of TypeScript under src/ (measured 29,477 after removing repair). */
+  sourceLines: 30_000,
+  /** Lines of TypeScript under tests/ (measured 19,869 after removing repair). */
+  testLines: 20_300,
   /** Test lines per source line (measured 0.68): tests may not outgrow code. */
   testToSourceRatio: 0.75,
   /** Runtime dependencies in package.json (measured 10). */

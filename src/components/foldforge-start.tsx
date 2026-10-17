@@ -1,9 +1,12 @@
 import Image from "next/image";
 import type { RefObject } from "react";
 
-import styles from "./foldforge-app.module.css";
+import {
+  DUCK_CREASE_PATTERN_PROMPT,
+  type SavedExampleId,
+} from "@/lib/saved-examples";
 
-export type SavedExampleId = "duck" | "flower";
+import styles from "./foldforge-app.module.css";
 
 export interface ExamplePrompt {
   readonly description: string;
@@ -16,9 +19,6 @@ export interface ExamplePrompt {
   readonly savedExampleId?: SavedExampleId;
   readonly title: string;
 }
-
-export const DUCK_CREASE_PATTERN_PROMPT =
-  "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.";
 
 const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
   {

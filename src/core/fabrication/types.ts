@@ -690,60 +690,6 @@ export interface VerificationReportV2 {
   readonly exportEquivalence: readonly ExportEquivalenceCheckV2[];
 }
 
-interface ProgramPatchOperationBaseV1 {
-  readonly operationId: string;
-  readonly path: string;
-  readonly failureIds: readonly string[];
-  readonly reason: string;
-  readonly expectedEffect: string;
-}
-
-export interface SetNumberPatchOperationV1 extends ProgramPatchOperationBaseV1 {
-  readonly operation: "set_number";
-  readonly value: number;
-  readonly expectedCurrentValue: number | null;
-  readonly unit: FabricationUnit | null;
-}
-
-export interface SetIntegerPatchOperationV1 extends ProgramPatchOperationBaseV1 {
-  readonly operation: "set_integer";
-  readonly value: number;
-  readonly expectedCurrentValue: number | null;
-  readonly unit: "count";
-}
-
-export interface SetBooleanPatchOperationV1 extends ProgramPatchOperationBaseV1 {
-  readonly operation: "set_boolean";
-  readonly value: boolean;
-  readonly expectedCurrentValue: boolean | null;
-  readonly unit: null;
-}
-
-export interface SetEnumPatchOperationV1 extends ProgramPatchOperationBaseV1 {
-  readonly operation: "set_enum";
-  readonly value: string;
-  readonly expectedCurrentValue: string | null;
-  readonly unit: null;
-}
-
-export type ProgramPatchOperationV1 =
-  | SetNumberPatchOperationV1
-  | SetIntegerPatchOperationV1
-  | SetBooleanPatchOperationV1
-  | SetEnumPatchOperationV1;
-
-export interface ProgramPatchV1 {
-  readonly version: "1";
-  readonly patchId: string;
-  readonly programId: string;
-  readonly baseProgramHash: string;
-  readonly repairCycle: number;
-  readonly diagnosis: string;
-  readonly operations: readonly ProgramPatchOperationV1[];
-  readonly authoredBy: "ai" | "code" | "user";
-  readonly changesIntent: false;
-}
-
 export interface ScoreComponentV2 {
   readonly componentId: string;
   readonly label: string;

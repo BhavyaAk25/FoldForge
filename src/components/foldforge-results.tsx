@@ -1,12 +1,11 @@
-import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   FabricationPreview,
   type FabricationPreviewMode,
 } from "@/components/fabrication-preview";
-import { inspectFabricationFoldCompatibility } from "@/core/fabrication/export";
 import type { CandidateV2, ExportFormat } from "@/core/fabrication/types";
-import type { FinalizeApiResponse, RepairEvidence } from "@/lib/api-contracts";
+import type { FinalizeApiResponse, FoldExport } from "@/lib/api-contracts";
 
 import styles from "./foldforge-app.module.css";
 
@@ -71,8 +70,13 @@ interface FoldForgeResultsProps {
   readonly onPreviewModeChange: (mode: FabricationPreviewMode) => void;
   readonly onRotationChange: (rotationDeg: number) => void;
   readonly previewMode: FabricationPreviewMode;
-  readonly repairs: readonly RepairEvidence[];
-  readonly resultsHeadingRef: RefObject<HTMLHeadingElement | null>;
+  /** Whether FOLD export is lossless for this design, decided by the server. */
+  readonly foldExport: FoldExport | null;
+  /**
+   * Increments each time a new design should take keyboard focus. The panel
+   * focuses its own heading, so focus works even though it loads lazily.
+   */
+  readonly focusRequest: number;
   readonly rotationDeg: number;
   readonly selected: CandidateV2;
 }
@@ -96,20 +100,19 @@ export function FoldForgeResults({
   onPreviewModeChange,
   onRotationChange,
   previewMode,
-  repairs,
-  resultsHeadingRef,
+  foldExport,
+  focusRequest,
   rotationDeg,
   selected,
 }: FoldForgeResultsProps) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (focusRequest > 0) headingRef.current?.focus();
+  }, [focusRequest]);
   const hasMotion = selected.ir.driver !== null;
   const isPreparedVerticalLift =
     experienceMode === "saved" &&
     selected.intent.intentId === "intent-showcase-popup-flower";
-  const foldCompatibility = inspectFabricationFoldCompatibility({
-    ir: selected.ir,
-    sourceCandidateId: selected.candidateId,
-    sourceIrHash: selected.verification.irHash,
-  });
 
   return (
     <section className={styles.results} aria-labelledby="results-title">
@@ -123,7 +126,7 @@ export function FoldForgeResults({
                 ? "Design passed our checks · Generated from your prompt"
                 : "Design passed our checks"}
         </p>
-        <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1}>
+        <h2 id="results-title" ref={headingRef} tabIndex={-1}>
           {experienceMode === "saved"
             ? `Explore the ${selected.label.toLowerCase()}.`
             : "Inspect your design."}
@@ -255,29 +258,6 @@ export function FoldForgeResults({
             <p>{selected.program.designSummary}</p>
           </section>
 
-          {repairs.length > 0 ? (
-            <details className={styles.evidenceCard} open>
-              <summary>What FoldForge fixed</summary>
-              {repairs.map((entry) => (
-                <div key={`${entry.patch.patchId}-${entry.cycle}`}>
-                  <strong>
-                    Cycle {entry.cycle}: {entry.beforeFailureId}
-                  </strong>
-                  <p>{entry.beforeFailureMessage}</p>
-                  <p>
-                    Patch: {entry.patch.diagnosis} (
-                    {entry.result.replace("_", " ")})
-                  </p>
-                  <ul>
-                    {entry.patch.operations.map((operation) => (
-                      <li key={operation.operationId}>{operation.path}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </details>
-          ) : null}
-
           <details className={styles.evidenceCard}>
             <summary>
               Technical checks · {selected.verification.checks.length} passed
@@ -307,7 +287,7 @@ export function FoldForgeResults({
                 <span>
                   {experienceMode === "saved"
                     ? "Not called for this prepared example."
-                    : `${selected.provenance.modelId ?? "The configured model"} proposed the compact design plan${repairs.length > 0 ? " and bounded repair" : ""}.`}
+                    : `${selected.provenance.modelId ?? "The configured model"} proposed the compact design plan.`}
                 </span>
               </li>
               <li>
@@ -365,10 +345,10 @@ export function FoldForgeResults({
           <div className={styles.exportButtons}>
             {EXPORT_OPTIONS.map((option) => {
               const foldUnavailable =
-                option.format === "fold" &&
-                foldCompatibility.status === "omitted";
+                option.format === "fold" && foldExport?.available !== true;
               const description = foldUnavailable
-                ? foldCompatibility.reason.message
+                ? (foldExport?.reason ??
+                  "Create the design again to check FOLD export.")
                 : option.format === "glb" && !hasMotion
                   ? "Open in a 3D viewer. This static model has no animation clip."
                   : option.description;

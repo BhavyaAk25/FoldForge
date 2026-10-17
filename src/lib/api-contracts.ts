@@ -1,13 +1,8 @@
 import { z } from "zod";
 
 import {
-  CandidateScoreV2Schema,
   CandidateV2Schema,
-  FabricationIRV1Schema,
   FabricationIntentV1Schema,
-  FabricationProgramV1Schema,
-  ProgramPatchV1Schema,
-  VerificationReportV2Schema,
 } from "@/core/fabrication/schemas";
 import {
   FabricationNarrativeV1Schema,
@@ -43,97 +38,53 @@ export const ProgramsApiResponseSchema = z
   })
   .strict();
 
-const CompiledCandidateFields = {
-  candidateId: z.string(),
-  ir: FabricationIRV1Schema,
-  report: VerificationReportV2Schema,
-  score: CandidateScoreV2Schema,
-};
+export const FoldExportSchema = z
+  .object({ available: z.boolean(), reason: z.string().nullable() })
+  .strict();
 
+/** /api/compile: the finished candidate, or why the program failed. */
 export const CompileApiResponseSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("passed"),
-      ...CompiledCandidateFields,
+      candidate: CandidateV2Schema,
+      foldExport: FoldExportSchema,
       diagnostic: z.null(),
     })
     .strict(),
   z
     .object({
-      status: z.literal("invalid"),
-      ...CompiledCandidateFields,
-      diagnostic: ForgeDiagnosticV1Schema,
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("compile_error"),
+      status: z.enum(["invalid", "compile_error"]),
       candidateId: z.string(),
-      ir: z.null(),
-      report: z.null(),
-      score: z.null(),
       diagnostic: ForgeDiagnosticV1Schema,
     })
     .strict(),
 ]);
 
-const RepairResponseFields = {
-  candidateId: z.string(),
-  patch: ProgramPatchV1Schema.nullable(),
-  program: FabricationProgramV1Schema,
-  ir: FabricationIRV1Schema.nullable(),
-  report: VerificationReportV2Schema.nullable(),
-  score: CandidateScoreV2Schema.nullable(),
-};
-
-export const RepairApiResponseSchema = z.discriminatedUnion("status", [
-  z
-    .object({
-      status: z.literal("passed"),
-      ...RepairResponseFields,
-      diagnostic: z.null(),
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("still_invalid"),
-      ...RepairResponseFields,
-      diagnostic: ForgeDiagnosticV1Schema,
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("infeasible"),
-      ...RepairResponseFields,
-      diagnostic: ForgeDiagnosticV1Schema,
-    })
-    .strict(),
-]);
+/** /api/examples/[id]: a prepared, verified example. */
+export const SavedExampleApiResponseSchema = z
+  .object({
+    prompt: z.string(),
+    limitation: z.string().nullable(),
+    candidate: CandidateV2Schema,
+    foldExport: FoldExportSchema,
+  })
+  .strict();
 
 export const FinalizeApiResponseSchema = z
   .object({ narrative: FabricationNarrativeV1Schema })
   .strict();
 
-export const RepairEvidenceSchema = z
-  .object({
-    cycle: z.number().int().min(1).max(5),
-    beforeFailureId: z.string(),
-    beforeFailureMessage: z.string(),
-    patch: ProgramPatchV1Schema,
-    result: z.enum(["passed", "still_invalid"]),
-  })
-  .strict();
-
 export const StudioCheckpointSchema = z
   .object({
-    version: z.literal(4),
+    version: z.literal(5),
     savedAt: z.string().datetime(),
     prompt: z.string().max(4_000),
     resultBinding: ForgeResultBindingSchema.nullable(),
     intent: FabricationIntentV1Schema.nullable(),
     candidates: z.array(CandidateV2Schema).max(3),
     selectedId: z.string(),
-    repairEvidence: z.record(z.string(), z.array(RepairEvidenceSchema)),
+    foldExports: z.record(z.string(), FoldExportSchema),
     narrative: FabricationNarrativeV1Schema.nullable(),
   })
   .strict()
@@ -161,4 +112,4 @@ export const StudioCheckpointSchema = z
 export type HealthApiResponse = z.infer<typeof HealthApiResponseSchema>;
 export type ProgramsApiResponse = z.infer<typeof ProgramsApiResponseSchema>;
 export type FinalizeApiResponse = z.infer<typeof FinalizeApiResponseSchema>;
-export type RepairEvidence = z.infer<typeof RepairEvidenceSchema>;
+export type FoldExport = z.infer<typeof FoldExportSchema>;

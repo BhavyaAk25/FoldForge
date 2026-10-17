@@ -10,10 +10,9 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, desk stands, pop-up cards, flat cut-outs (bookmarks, tags, ornaments), and stand-up figures (birds, cats, rabbits, hearts, trees, houses, stars) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
 2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, `templateFallback` fits a parametric template from `design-templates.ts` to the requested size, first against the intent as given and otherwise against the same size and stock without model-invented constraints; the route returns the intent it verified, and the client uses that one. Template output always records `generationSource: "template"`. Parts may request a `silhouette` (duck, cat, rabbit, heart, flower, tree, house, star, arch): after synthesis, `silhouettes.ts` redraws that rectangular panel inside its bounds, keeping the hinge edge, and `upright.ts` mirrors fold-only designs that hang below their base. Both are kept only if the full verifier still passes.
-3. **Compile and verify** (`/api/compile`). Pure, deterministic, and repeated on the server before anything is shown.
-4. **Repair** (`/api/repair`, needs AI): a bounded typed patch, re-verified from scratch.
-5. **Build notes** (`/api/finalize`, needs AI): a narrative for an already verified candidate.
-6. **Export** (`/api/export/[format]`): the exact selected candidate.
+3. **Compile and verify** (`/api/compile`). The server compiles, verifies, scores, and hashes the program and returns the finished `CandidateV2` plus FOLD availability; the browser only renders it. Saved examples come ready-made from `/api/examples/[id]`.
+4. **Build notes** (`/api/finalize`, needs AI): a narrative for an already verified candidate.
+5. **Export** (`/api/export/[format]`): the exact selected candidate.
 
 ## AI provider
 
@@ -21,10 +20,11 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## Code layout
 
-- `src/core`: units, schemas, canonical serialization, compiler, geometry, kinematics, verification, scoring, repair, templates, and exporters. Pure TypeScript: no React, no browser APIs, no network.
+- `src/core`: units, schemas, canonical serialization, compiler, geometry, kinematics, verification, scoring, templates, and exporters. Pure TypeScript: no React, no browser APIs, no network.
 - `src/server/fabrication-ai`: prompts, the LLM client, model classes, and conversion from model output to programs.
 - `src/server/api` and `src/app/api`: route guards (same-origin check, per-client rate limit, body caps) and thin route handlers.
-- `src/components`, `src/lib`: the UI and its typed API client. The UI never invents a result or edits geometry.
+- `src/server/candidates.ts`: builds finished candidates (live and saved examples) on the server.
+- `src/components`, `src/lib`: the UI and its typed API client. The UI never invents a result or edits geometry; the 3D results panel loads lazily so the start screen stays light.
 
 ## Rules that matter
 
@@ -50,13 +50,12 @@ Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 m
 
 ## Roadmap (in order)
 
-1. Make it light: the browser stops re-compiling and re-verifying designs; the server returns the finished candidate. Lower the JavaScript budget to the new size.
-2. Crease-pattern core in `src/core/origami`: one sheet, mountain and valley creases, folds that may form loops.
-3. Fold-rule checks: Maekawa and Kawasaki at every vertex, plus layer-ordering checks.
-4. Folding simulator: computes the collapse, drives the 3D animation, rejects patterns that jam.
-5. Classic bases (bird, frog, waterbomb, fish) with their models (crane, lily, frog, flapping bird); the AI picks base, model, and proportions.
-6. Outputs: printable crease pattern, folding animation, step-by-step instructions, existing exports.
-7. Anything outside the library keeps using the current papercraft engine.
+1. Crease-pattern core in `src/core/origami`: one sheet, mountain and valley creases, folds that may form loops.
+2. Fold-rule checks: Maekawa and Kawasaki at every vertex, plus layer-ordering checks.
+3. Folding simulator: computes the collapse, drives the 3D animation, rejects patterns that jam.
+4. Classic bases (bird, frog, waterbomb, fish) with their models (crane, lily, frog, flapping bird); the AI picks base, model, and proportions.
+5. Outputs: printable crease pattern, folding animation, step-by-step instructions, existing exports.
+6. Anything outside the library keeps using the current papercraft engine.
 
 ## Commands
 

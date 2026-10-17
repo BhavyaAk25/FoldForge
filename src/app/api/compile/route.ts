@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
-import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 import {
   compilationFailureDiagnostic,
@@ -10,6 +9,7 @@ import {
 import { apiError, parseRouteJsonBody } from "@/server/api/response";
 import { API_BODY_LIMIT_BYTES } from "@/server/api/security-policy";
 import { safeSecurityError } from "@/server/api/security-response";
+import { buildCandidate } from "@/server/candidates";
 import { runBoundedDeterministicRequest } from "@/server/deterministic-route-guard";
 import { CompileFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
 import { guardMutationRequest } from "@/server/request-guard";
@@ -21,6 +21,10 @@ const noStore = (response: NextResponse): NextResponse => {
   return response;
 };
 
+/**
+ * Compiles, verifies, scores, and hashes a program into the finished
+ * candidate the UI renders and exports. The browser never repeats this work.
+ */
 export const POST = async (request: Request): Promise<NextResponse> => {
   const mutation = guardMutationRequest(request);
   if (!mutation.ok) {
@@ -49,33 +53,38 @@ export const POST = async (request: Request): Promise<NextResponse> => {
       );
     }
 
-    const { candidateId, intent, program } = parsed.data;
-    const compiled = compileFabricationProgram(intent, program);
-    if (!compiled.ok) {
+    const { candidateId, intent, program, generation } = parsed.data;
+    const built = buildCandidate({
+      candidateId,
+      intent,
+      program,
+      generation,
+      generatedAtIso: new Date().toISOString(),
+    });
+    if (built.ok) {
       return noStore(
         NextResponse.json({
-          status: "compile_error",
-          candidateId,
-          ir: null,
-          report: null,
-          score: null,
-          diagnostic: compilationFailureDiagnostic(compiled.error),
+          status: "passed",
+          candidate: built.value.candidate,
+          foldExport: built.value.foldExport,
+          diagnostic: null,
         }),
       );
     }
 
-    const report = verifyFabricationIr(compiled.value, candidateId);
-    const score = scoreFabricationCandidate(compiled.value, report, intent);
+    // Explain the failure with the same compiler and verifier diagnostics.
+    const compiled = compileFabricationProgram(intent, program);
+    const diagnostic = compiled.ok
+      ? verificationFailureDiagnostic({
+          stage: "compile",
+          report: verifyFabricationIr(compiled.value, candidateId),
+        })
+      : compilationFailureDiagnostic(compiled.error);
     return noStore(
       NextResponse.json({
-        status: report.valid ? "passed" : "invalid",
+        status: compiled.ok ? "invalid" : "compile_error",
         candidateId,
-        ir: compiled.value,
-        report,
-        score,
-        diagnostic: report.valid
-          ? null
-          : verificationFailureDiagnostic({ stage: "compile", report }),
+        diagnostic,
       }),
     );
   });
