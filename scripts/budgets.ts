@@ -12,8 +12,12 @@ export const BUDGETS = {
    * server started building candidates and the 3D panel loaded lazily).
    */
   homePageJsGzipKb: 265,
-  /** Lines of TypeScript under src/ (measured 29,477 after removing repair). */
-  sourceLines: 30_000,
+  /**
+   * Lines of TypeScript under src/ (measured 32,634 after adding the origami
+   * engine: crease patterns, fold-rule checks, simulator, fold sequences,
+   * animation, exports, the model library, and its page panel).
+   */
+  sourceLines: 33_500,
   /** Lines of TypeScript under tests/ (measured 19,869 after removing repair). */
   testLines: 20_300,
   /** Test lines per source line (measured 0.68): tests may not outgrow code. */

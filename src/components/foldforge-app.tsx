@@ -11,6 +11,7 @@ import {
   type ExamplePrompt,
 } from "@/components/foldforge-start";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
+import { matchOrigamiModel } from "@/core/origami/catalog";
 import type {
   CandidateV2,
   ExportFormat,
@@ -39,6 +40,10 @@ import {
 } from "@/lib/client-api";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import {
+  OrigamiPayloadSchema,
+  type OrigamiPayloadResponse,
+} from "@/lib/origami-contract";
+import {
   forgePromptHash,
   forgeResultMatchesPrompt,
   sameForgeResultBinding,
@@ -52,6 +57,12 @@ import styles from "./foldforge-app.module.css";
 const loadResultsPanel = () => import("./foldforge-results");
 const FoldForgeResults = dynamic(
   () => loadResultsPanel().then((module) => module.FoldForgeResults),
+  { ssr: false },
+);
+
+const loadOrigamiPanel = () => import("./origami-results");
+const OrigamiResults = dynamic(
+  () => loadOrigamiPanel().then((module) => module.OrigamiResults),
   { ssr: false },
 );
 
@@ -135,6 +146,7 @@ export function FoldForgeApp() {
   const [finalizing, setFinalizing] = useState(false);
   const [checkpointReady, setCheckpointReady] = useState(false);
   const [resultsFocusRequest, setResultsFocusRequest] = useState(0);
+  const [origami, setOrigami] = useState<OrigamiPayloadResponse | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const forgeInFlightRef = useRef(false);
   const latestPromptRef = useRef(prompt);
@@ -270,10 +282,31 @@ export function FoldForgeApp() {
     setNarrative(null);
     setResultBinding(null);
     resultBindingRef.current = null;
+    setOrigami(null);
     setPhase("intent");
     setStatusMessage("Understanding your request…");
 
     try {
+      // A prompt that names a library model (a crane, a paper plane) gets the
+      // real origami sequence; everything else goes to the papercraft engine.
+      const origamiId = matchOrigamiModel(requestedPrompt);
+      if (origamiId) {
+        void loadOrigamiPanel();
+        const payload = await getJson(
+          `/api/origami/${origamiId}`,
+          OrigamiPayloadSchema,
+        );
+        if (
+          !sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)
+        ) {
+          return;
+        }
+        setOrigami(payload);
+        setPhase("ready");
+        setStatusMessage(`${payload.name}: folding sequence ready.`);
+        return;
+      }
+
       const nextIntent = await postJson(
         "/api/intent",
         { prompt: requestedPrompt },
@@ -388,6 +421,7 @@ export function FoldForgeApp() {
   };
 
   const applyExamplePrompt = (example: ExamplePrompt) => {
+    setOrigami(null);
     setPrompt(example.prompt);
     latestPromptRef.current = example.prompt;
     setIntent(null);
@@ -421,6 +455,7 @@ export function FoldForgeApp() {
     }
     const isDuck = exampleId === "duck";
     const { candidate } = example;
+    setOrigami(null);
     const savedBinding: ForgeResultBinding = {
       attemptId: newForgeAttemptId(),
       promptHash: forgePromptHash(example.prompt),
@@ -555,6 +590,10 @@ export function FoldForgeApp() {
           onPromptChange={(nextPrompt) => {
             latestPromptRef.current = nextPrompt;
             setPrompt(nextPrompt);
+            if (origami) {
+              setOrigami(null);
+              setPhase("idle");
+            }
             if (candidates.length > 0) {
               setIntent(null);
               setCandidates([]);
@@ -587,6 +626,8 @@ export function FoldForgeApp() {
             </button>
           </div>
         ) : null}
+
+        {origami ? <OrigamiResults payload={origami} /> : null}
 
         {candidates.length > 0 && baseSelected ? (
           <FoldForgeResults
