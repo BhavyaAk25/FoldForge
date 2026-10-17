@@ -97,6 +97,7 @@ describe("origami prompts the AI chooses for", () => {
     ["fold a dove", true],
     ["an origami box", false],
     ["make a rat", false],
+    ["make a folding display", false],
   ])("%j asks for origami: %s", (prompt, expected) => {
     expect(asksForOrigami(prompt)).toBe(expected);
   });

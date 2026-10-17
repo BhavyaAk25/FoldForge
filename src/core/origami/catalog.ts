@@ -83,16 +83,15 @@ export const matchOrigamiModel = (prompt: string): OrigamiModelId | null => {
   return best?.id ?? null;
 };
 
-const ORIGAMI_WORDS = ["origami", "fold", "folded", "folding"];
-
 /**
  * Whether a prompt asks for origami without naming a library model, such as
- * "an origami swan": worth asking the AI for the closest model. Prompts that
- * name a papercraft object never qualify.
+ * "an origami swan" or "Fold a dove": worth asking the AI for the closest
+ * model. "Folding" alone is not enough ("a folding display" is papercraft),
+ * and prompts naming a papercraft object never qualify.
  */
 export const asksForOrigami = (prompt: string): boolean =>
   !PAPERCRAFT_WORDS.some((word) => mentions(prompt, word)) &&
-  ORIGAMI_WORDS.some((word) => mentions(prompt, word));
+  (mentions(prompt, "origami") || /^\s*fold\b/iu.test(prompt));
 
 /** Default and allowed paper sizes, in millimetres. */
 export const PAPER_MM = { default: 150, minimum: 50, maximum: 400 } as const;
