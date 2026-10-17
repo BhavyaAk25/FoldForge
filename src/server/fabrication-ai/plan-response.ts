@@ -5,11 +5,11 @@ import {
   templateSpecForIntent,
   type TemplateHint,
 } from "@/core/fabrication/design-templates";
+import { synthesizeFabricationDesign } from "@/core/fabrication/design-synthesis";
 import {
+  FABRICATION_PLAN_EXPANDER_VERSION,
   FABRICATION_SYNTHESIZER_VERSION,
-  synthesizeFabricationDesign,
-} from "@/core/fabrication/design-synthesis";
-import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
+} from "@/core/fabrication/versions";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 import { sha256Hex } from "@/core/sha256";
 

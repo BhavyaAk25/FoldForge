@@ -8,7 +8,6 @@ import {
   FabricationIntentV1Schema,
   FabricationIRV1Schema,
   FabricationProgramV1Schema,
-  ProgramPatchV1Schema,
   VerificationReportV2Schema,
 } from "@/core/fabrication/schemas";
 import type {
@@ -18,7 +17,6 @@ import type {
   FabricationIntentV1,
   FabricationProgramV1,
   FoldJointV1,
-  ProgramPatchV1,
   VerificationReportV2,
 } from "@/core/fabrication/types";
 
@@ -218,30 +216,6 @@ const report = {
   exportEquivalence: [],
 } satisfies VerificationReportV2;
 
-const patch = {
-  version: "1",
-  patchId: "patch-1",
-  programId: program.programId,
-  baseProgramHash: HASH,
-  repairCycle: 1,
-  diagnosis: "The panel is too narrow for the requested landmark spacing.",
-  operations: [
-    {
-      operationId: "patch-op-1",
-      operation: "set_number",
-      path: "/blueprint/panels/panel-1/widthMm",
-      value: 110,
-      expectedCurrentValue: 100,
-      unit: "mm",
-      failureIds: ["geometry.panel_width#panel-1"],
-      reason: "Increase landmark spacing.",
-      expectedEffect: "The width check should pass after recompilation.",
-    },
-  ],
-  authoredBy: "ai",
-  changesIntent: false,
-} satisfies ProgramPatchV1;
-
 const candidate = {
   version: "2",
   candidateId: report.candidateId,
@@ -359,12 +333,11 @@ const expectStrictRequiredObjects = (schemaNode: unknown): void => {
 };
 
 describe("fabrication contract schemas", () => {
-  it("accepts all six canonical versioned contracts", () => {
+  it("accepts all five canonical versioned contracts", () => {
     expect(FabricationIntentV1Schema.parse(intent)).toEqual(intent);
     expect(FabricationProgramV1Schema.parse(program)).toEqual(program);
     expect(FabricationIRV1Schema.parse(ir)).toEqual(ir);
     expect(VerificationReportV2Schema.parse(report)).toEqual(report);
-    expect(ProgramPatchV1Schema.parse(patch)).toEqual(patch);
     expect(CandidateV2Schema.parse(candidate)).toEqual(candidate);
   });
 
@@ -374,7 +347,6 @@ describe("fabrication contract schemas", () => {
       FabricationProgramV1Schema,
       FabricationIRV1Schema,
       VerificationReportV2Schema,
-      ProgramPatchV1Schema,
       CandidateV2Schema,
     ] as const;
 
@@ -462,7 +434,7 @@ describe("fabrication contract schemas", () => {
     }
   });
 
-  it("enforces output, repair-cycle, and patch-operation limits", () => {
+  it("enforces output limits", () => {
     const tooManyOutputs = {
       ...ir,
       outputs: Array.from(
@@ -480,25 +452,6 @@ describe("fabrication contract schemas", () => {
       ),
     };
     expect(FabricationIRV1Schema.safeParse(tooManyOutputs).success).toBe(false);
-
-    expect(
-      ProgramPatchV1Schema.safeParse({
-        ...patch,
-        repairCycle: FABRICATION_LIMITS.maximumRepairCycles + 1,
-      }).success,
-    ).toBe(false);
-    expect(
-      ProgramPatchV1Schema.safeParse({
-        ...patch,
-        operations: Array.from(
-          { length: FABRICATION_LIMITS.maximumPatchOperationsPerCycle + 1 },
-          (_, index) => ({
-            ...patch.operations[0],
-            operationId: `patch-op-${index}`,
-          }),
-        ),
-      }).success,
-    ).toBe(false);
   });
 
   it("does not allow hard failures to be labelled valid", () => {

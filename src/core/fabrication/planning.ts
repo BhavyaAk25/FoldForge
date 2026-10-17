@@ -28,7 +28,7 @@ import type {
   SheetV1,
 } from "./types";
 
-export const FABRICATION_PLAN_EXPANDER_VERSION = "5";
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "./versions";
 
 export type FabricationPlanExpansionError =
   | FabricationContractValidationError

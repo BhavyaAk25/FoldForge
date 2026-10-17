@@ -1,32 +1,26 @@
 import { canonicalSerialize } from "@/core/canonical";
-import { fabricationProgramHash } from "@/core/fabrication/compiler";
 import { normalizeFabricationIntentFeasibility } from "@/core/fabrication/feasibility-normalization";
 import { normalizeFabricationIntentBudget } from "@/core/fabrication/intent-budget";
-import {
-  FabricationIntentV1Schema,
-  ProgramPatchV1Schema,
-} from "@/core/fabrication/schemas";
+import { FabricationIntentV1Schema } from "@/core/fabrication/schemas";
 import type {
   CandidateV2,
   FabricationIntentV1,
-  FabricationProgramV1,
   GeometryRefKind,
-  ProgramPatchV1,
-  VerificationReportV2,
 } from "@/core/fabrication/types";
 
 import {
-  FabricationDesignSpecProposalV3Schema,
   FabricationNarrativeV1Schema,
-  type FabricationDesignSpecProposalV3,
   type FabricationNarrativeV1,
 } from "./contracts";
+import {
+  FabricationDesignSpecProposalV3Schema,
+  type FabricationDesignSpecProposalV3,
+} from "./design-proposal";
 import { generateStructured, type StructuredResult } from "./llm";
 import {
   FABRICATION_INTENT_PROMPT,
   FABRICATION_NARRATIVE_PROMPT,
   FABRICATION_PROGRAM_PROMPT,
-  FABRICATION_REPAIR_PROMPT,
 } from "./prompts";
 
 export interface FabricationIntentModel {
@@ -38,14 +32,6 @@ export interface FabricationDesignModel {
     intent: FabricationIntentV1,
     usedTopologyIds: readonly string[],
   ): Promise<StructuredResult<FabricationDesignSpecProposalV3>>;
-}
-
-export interface FabricationRepairModel {
-  diagnoseRepair(
-    program: FabricationProgramV1,
-    report: VerificationReportV2,
-    repairCycle: number,
-  ): Promise<ProgramPatchV1>;
 }
 
 export interface FabricationNarrativeModel {
@@ -379,48 +365,6 @@ export class LlmFabricationDesignModel implements FabricationDesignModel {
       input: canonicalSerialize(
         fabricationPlanningInput(intent, usedTopologyIds),
       ),
-    });
-  }
-}
-
-export class LlmFabricationRepairModel implements FabricationRepairModel {
-  async diagnoseRepair(
-    program: FabricationProgramV1,
-    report: VerificationReportV2,
-    repairCycle: number,
-  ): Promise<ProgramPatchV1> {
-    const baseProgramHash = fabricationProgramHash(program);
-    const { value: proposedPatch } = await generateStructured({
-      schema: ProgramPatchV1Schema,
-      schemaName: "ProgramPatchV1",
-      instructions: FABRICATION_REPAIR_PROMPT,
-      input: canonicalSerialize({
-        program,
-        report,
-        patchContext: {
-          programId: program.programId,
-          baseProgramHash,
-          repairCycle,
-        },
-      }),
-    });
-    return ProgramPatchV1Schema.parse({
-      ...proposedPatch,
-      // These fields describe the current server transaction, not an AI
-      // design decision. Binding them here prevents a fabricated or stale
-      // echo from rejecting an otherwise grounded repair.
-      programId: program.programId,
-      baseProgramHash,
-      repairCycle,
-      authoredBy: "ai",
-      changesIntent: false,
-      operations: proposedPatch.operations.map((operation) => ({
-        ...operation,
-        // The patch is applied immediately to the same hashed program. Path,
-        // failure grounding, value type, unit, no-op, and final schema checks
-        // remain deterministic; an echoed current value is not authoritative.
-        expectedCurrentValue: null,
-      })),
     });
   }
 }

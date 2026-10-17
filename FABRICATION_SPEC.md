@@ -20,7 +20,6 @@ Every external object must include an exact schema version. Unknown or partially
 | `FabricationProgramV1`    | Deterministic synthesizer/expander                                                  | Canonical complete program with provenance, assembly order, and all fabrication geometry                                   |
 | `FabricationIRV1`         | Deterministic compiler                                                              | Canonical panel geometry, graph, transforms, motion functions, layer semantics, provenance, and export inputs              |
 | `VerificationReportV2`    | Deterministic verifier                                                              | Ordered hard failures, measurements, witnesses, semantic results, export equivalence, and soft metrics                     |
-| `ProgramPatchV1`          | Untrusted AI proposal validated and applied by code                                 | At most three typed, local operations against existing program identifiers                                                 |
 | `CandidateV2`             | Deterministic pipeline                                                              | Intent/program/IR/report/score bundle with canonical hashes, model response metadata, spec hash, and generation provenance |
 
 The canonical serializer must:
@@ -128,7 +127,7 @@ Compilation must not make a network call, depend on UI state, or mutate the inpu
 
 ## 5. Verification
 
-Verification is deterministic, fail-fast by phase, and independent of model explanations. A report may retain every failure within the current phase for repair evidence, but no later phase may turn an earlier hard failure into a pass.
+Verification is deterministic, fail-fast by phase, and independent of model explanations. A report may retain every failure within the current phase as evidence, but no later phase may turn an earlier hard failure into a pass.
 
 ### 5.1 Required order
 
@@ -177,21 +176,9 @@ When feasible, at least two visible candidates must be topology-distinct: a diff
 
 Ranking is deterministic and versioned. It may combine fabrication efficiency, mechanical simplicity, geometric margin, semantic fit, and visual-expression proxies only after hard validity. The UI must expose the score components and cannot rank a failed candidate.
 
-## 7. Repair
+## 7. Failures
 
-Repair is bounded to five cycles. Each `ProgramPatchV1` contains at most three typed operations. Allowed operation families may adjust existing allowlisted values within their declared ranges. A patch cannot mutate intent, invent identifiers, or bypass full recompilation and verification.
-
-Code must reject a patch that:
-
-- contains an unknown field or operation;
-- references an unknown or unrelated ID;
-- changes the normalized user intent or drops a hard constraint;
-- exceeds a parameter range, cardinality, or operation count;
-- repeats an already attempted canonical program/IR;
-- edits derived coordinates or export bytes directly; or
-- claims success without a new verification report.
-
-After an accepted patch, code recompiles and reruns phases 1–11. Reaching five cycles, repeating canonical state, or exhausting allowed operations returns explicit infeasibility with the best grounded failure evidence; it never returns the least-invalid artifact as valid.
+When the model's own design cannot be realized, the documented template families (section 3.5) apply. There is no model-authored patch loop. A design that fails any hard check is never shown, recommended, or exported, and the failure is reported with the verifier's evidence.
 
 ## 8. Export pack
 

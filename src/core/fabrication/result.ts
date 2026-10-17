@@ -8,7 +8,6 @@ export type FabricationContractName =
   | "FabricationProgramV1"
   | "FabricationIRV1"
   | "VerificationReportV2"
-  | "ProgramPatchV1"
   | "CandidateV2";
 
 export interface FabricationContractIssue {

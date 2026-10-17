@@ -4,13 +4,11 @@ import {
   CandidateV2Schema,
   FabricationIntentV1Schema,
   FabricationProgramV1Schema,
-  ProgramPatchV1Schema,
 } from "@/core/fabrication/schemas";
-import { FabricationDesignSpecV3Schema } from "@/core/fabrication/design-spec";
-import { TEMPLATE_ARCHETYPES } from "@/core/fabrication/design-templates";
-import { PANEL_SILHOUETTES } from "@/core/fabrication/silhouettes";
-import { FABRICATION_SYNTHESIZER_VERSION } from "@/core/fabrication/design-synthesis";
-import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
+import {
+  FABRICATION_PLAN_EXPANDER_VERSION,
+  FABRICATION_SYNTHESIZER_VERSION,
+} from "@/core/fabrication/versions";
 
 export const PROMPT_MAXIMUM_CHARACTERS = 4_000;
 
@@ -33,15 +31,16 @@ export const CompileFabricationRequestSchema = z
     intent: FabricationIntentV1Schema,
     program: FabricationProgramV1Schema,
     candidateId: z.string().min(1).max(96),
-  })
-  .strict();
-
-export const RepairFabricationRequestSchema = z
-  .object({
-    intent: FabricationIntentV1Schema,
-    program: FabricationProgramV1Schema,
-    candidateId: z.string().min(1).max(96),
-    repairCycle: z.number().int().min(1).max(5),
+    // Model provenance from /api/programs, recorded on the candidate.
+    generation: z
+      .object({
+        modelId: z.string().min(1).max(120),
+        modelResponseId: z.string().min(1).max(200),
+        planHash: z.string().regex(/^[a-f0-9]{64}$/u),
+        expanderVersion: z.string().min(1).max(20),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
@@ -83,22 +82,6 @@ export const ProgramProposalV1Schema = z
   })
   .strict();
 
-export const FabricationDesignSpecProposalV3Schema = z
-  .object({
-    diversityClaim: z.string().min(1).max(500),
-    designSpec: FabricationDesignSpecV3Schema,
-    // The model's pick of the closest ready-made family and outline, used
-    // only if its own design cannot be built.
-    fallback: z
-      .object({
-        archetype: z.enum(TEMPLATE_ARCHETYPES),
-        silhouette: z.enum(PANEL_SILHOUETTES).nullable(),
-      })
-      .strict()
-      .nullish(),
-  })
-  .strict();
-
 export const FabricationNarrativeV1Schema = z
   .object({
     summary: z.string().min(1).max(600),
@@ -120,11 +103,6 @@ export const FabricationNarrativeV1Schema = z
   .strict();
 
 export type ProgramProposalV1 = z.infer<typeof ProgramProposalV1Schema>;
-export type FabricationDesignSpecProposalV3 = z.infer<
-  typeof FabricationDesignSpecProposalV3Schema
->;
 export type FabricationNarrativeV1 = z.infer<
   typeof FabricationNarrativeV1Schema
 >;
-
-export { ProgramPatchV1Schema };

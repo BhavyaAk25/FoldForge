@@ -38,8 +38,6 @@ import type {
 } from "./types";
 import { verifyFabricationIr } from "./verification";
 
-export const FABRICATION_SYNTHESIZER_VERSION = "3.1.0" as const;
-
 export const FABRICATION_SYNTHESIS_LIMITS = {
   maximumGraphCandidates: 12,
   maximumRootCandidates: 6,

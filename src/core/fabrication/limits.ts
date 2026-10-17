@@ -10,7 +10,6 @@ export const FABRICATION_LIMITS = {
   maximumOutputCount: 6,
   maximumCandidateCount: 3,
   maximumRepairCycles: 5,
-  maximumPatchOperationsPerCycle: 3,
   requiredMotionSampleCount: 201,
   minimumPanelAreaMm2: 25,
   minimumFeatureMm: 1,

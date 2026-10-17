@@ -3,20 +3,20 @@ import { readFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import {
-  compileFabricationProgram,
-  fabricationProgramHash,
-} from "@/core/fabrication/compiler";
-import { scoreFabricationCandidate } from "@/core/fabrication/scoring";
-import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/planning";
+import { FABRICATION_PLAN_EXPANDER_VERSION } from "@/core/fabrication/versions";
 import type {
   CandidateV2,
   ExportFormat,
   FabricationIntentV1,
   FabricationProgramV1,
 } from "@/core/fabrication/types";
-import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
+import { SAVED_EXAMPLE_IDS } from "@/lib/saved-examples";
+import {
+  buildCandidate,
+  savedExample,
+  type GenerationProvenance,
+} from "@/server/candidates";
 
 import { fixtureIntent, fixtureProgram } from "../fixtures/fabrication";
 
@@ -36,10 +36,7 @@ interface CompileRequestBody {
   readonly candidateId: string;
   readonly intent: FabricationIntentV1;
   readonly program: FabricationProgramV1;
-}
-
-interface RepairRequestBody extends CompileRequestBody {
-  readonly repairCycle: number;
+  readonly generation: GenerationProvenance | null;
 }
 
 interface ExportRequest {
@@ -53,7 +50,6 @@ interface StudioMockState {
   readonly exportRequests: ExportRequest[];
   readonly intentPrompts: string[];
   readonly programRequests: ProgramRequestBody[];
-  readonly repairRequests: RepairRequestBody[];
   readonly unexpectedPaths: string[];
 }
 
@@ -121,44 +117,21 @@ const programFor = (ordinal: number): FabricationProgramV1 => {
   };
 };
 
-const repairedProgram = (
-  program: FabricationProgramV1,
-): FabricationProgramV1 => ({
-  ...program,
-  blueprint: {
-    ...program.blueprint,
-    panels: program.blueprint.panels.map((panel) =>
-      panel.panelId === "panel-wing" ? { ...panel, widthMm: 30 } : panel,
-    ),
-  },
-});
-
-const evaluateProgram = (body: CompileRequestBody) => {
-  const compiled = compileFabricationProgram(body.intent, body.program);
-  if (!compiled.ok) throw new Error("The E2E program fixture did not compile.");
-  const report = verifyFabricationIr(compiled.value, body.candidateId);
-  const score = scoreFabricationCandidate(compiled.value, report, body.intent);
-  return {
-    status: report.valid ? ("passed" as const) : ("invalid" as const),
+// Answer like the real /api/compile, with the same server code.
+const compileResponse = (body: CompileRequestBody) => {
+  const built = buildCandidate({
     candidateId: body.candidateId,
-    ir: compiled.value,
-    report,
-    score,
-    diagnostic: report.valid
-      ? null
-      : forgeDiagnostic({
-          stage: "compile",
-          kind: "verification",
-          code: "DESIGN_INVALID",
-          message:
-            report.failures[0]?.message ??
-            "The generated design did not pass deterministic verification.",
-          failureIds: report.failures
-            .filter((failure) => failure.severity === "hard")
-            .slice(0, 24)
-            .map((failure) => failure.failureId),
-          failedAtStage: report.failedAtStage,
-        }),
+    intent: body.intent,
+    program: body.program,
+    generation: body.generation,
+    generatedAtIso: "2026-10-17T00:00:00.000Z",
+  });
+  if (!built.ok) throw new Error("The E2E program fixture did not verify.");
+  return {
+    status: "passed" as const,
+    candidate: built.value.candidate,
+    foldExport: built.value.foldExport,
+    diagnostic: null,
   };
 };
 
@@ -172,7 +145,6 @@ const installStudioMocks = async (
     exportRequests: [],
     intentPrompts: [],
     programRequests: [],
-    repairRequests: [],
     unexpectedPaths: [],
   };
   const liveAiEnabled = options.liveAiEnabled ?? true;
@@ -255,53 +227,15 @@ const installStudioMocks = async (
       const body = request.postDataJSON() as CompileRequestBody;
       state.compileRequests.push(body);
       state.endpointOrder.push(`compile:${body.candidateId}`);
-      await respondJson(route, evaluateProgram(body));
+      await respondJson(route, compileResponse(body));
       return;
     }
 
-    if (pathname === "/api/repair") {
-      const body = request.postDataJSON() as RepairRequestBody;
-      state.repairRequests.push(body);
-      state.endpointOrder.push(
-        `repair:${body.candidateId}:${body.repairCycle}`,
-      );
-      const program = repairedProgram(body.program);
-      const evaluation = evaluateProgram({ ...body, program });
-      if (evaluation.status !== "passed") {
-        throw new Error("The E2E repair fixture remained invalid.");
-      }
-      await respondJson(route, {
-        status: "passed",
-        candidateId: body.candidateId,
-        patch: {
-          version: "1",
-          patchId: `patch-wing-width-${body.repairCycle}`,
-          programId: body.program.programId,
-          baseProgramHash: fabricationProgramHash(body.program),
-          repairCycle: body.repairCycle,
-          diagnosis: "The wing edge is below the minimum feature size.",
-          operations: [
-            {
-              operationId: "set-wing-width",
-              path: "/blueprint/panels/panel-wing/widthMm",
-              failureIds: ["geometry.minimum_feature#panel-wing"],
-              reason: "Restore a cuttable wing width.",
-              expectedEffect: "Clear the minimum-feature hard failure.",
-              operation: "set_number",
-              value: 30,
-              expectedCurrentValue: 0.5,
-              unit: "mm",
-            },
-          ],
-          authoredBy: "ai",
-          changesIntent: false,
-        },
-        program,
-        ir: evaluation.ir,
-        report: evaluation.report,
-        score: evaluation.score,
-        diagnostic: null,
-      });
+    if (pathname.startsWith("/api/examples/")) {
+      const id = pathname.slice("/api/examples/".length);
+      const example = SAVED_EXAMPLE_IDS.find((known) => known === id);
+      state.endpointOrder.push(`example:${id}`);
+      await respondJson(route, example ? savedExample(example) : null);
       return;
     }
 
@@ -390,7 +324,6 @@ test("runs a server-verified single design, checkpoint, and exact exports", asyn
   expect(
     state.endpointOrder.filter((endpoint) => endpoint !== "health").slice(0, 3),
   ).toEqual(["intent", "programs:1", "compile:candidate-1-two-panel-fold-a"]);
-  expect(state.repairRequests).toEqual([]);
   expect(state.intentPrompts.at(-1)).toBe(
     "Build an arbitrary folding display with one moving cardstock wing.",
   );
@@ -514,12 +447,12 @@ test("runs a server-verified single design, checkpoint, and exact exports", asyn
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v7"),
       ),
     )
     .not.toBeNull();
   const checkpoint = await page.evaluate(() =>
-    window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
+    window.localStorage.getItem("foldforge.studio.checkpoint.v7"),
   );
   expect(checkpoint).not.toContain("e2e-secret");
 
@@ -711,7 +644,7 @@ test("never shows or exports prompt A after prompt B fails", async ({
   await expect
     .poll(async () => {
       const raw = await page.evaluate(() =>
-        window.localStorage.getItem("foldforge.studio.checkpoint.v6"),
+        window.localStorage.getItem("foldforge.studio.checkpoint.v7"),
       );
       if (!raw) return null;
       const checkpoint = JSON.parse(raw) as {
