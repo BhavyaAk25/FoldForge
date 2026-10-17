@@ -25,7 +25,8 @@ import type { TemplateHint } from "@/core/fabrication/design-templates";
 import type { FabricationIntentV1 } from "@/core/fabrication/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Vercel's limit; AI calls stop at 50 s so the route can still answer.
+export const maxDuration = 60;
 
 const invalidRequest = (): NextResponse =>
   apiError(

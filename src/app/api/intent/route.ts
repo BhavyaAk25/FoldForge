@@ -10,7 +10,8 @@ import { isLlmConfigured } from "@/server/fabrication-ai/llm";
 import { LlmFabricationIntentModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Vercel's limit; AI calls stop at 50 s so the route can still answer.
+export const maxDuration = 60;
 
 const invalidRequest = (): NextResponse =>
   apiError(

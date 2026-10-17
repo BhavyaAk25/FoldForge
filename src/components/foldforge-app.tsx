@@ -309,13 +309,21 @@ export function FoldForgeApp() {
       let aiReason: string | null = null;
       if (!origamiId && aiAvailable && asksForOrigami(requestedPrompt)) {
         setStatusMessage("Choosing an origami model…");
-        // A failed or empty choice falls through to the papercraft engine.
+        // "None" falls through to the papercraft engine. A failed call stops
+        // here: the papercraft path would wait on the same busy AI.
         const choice = await postJson(
           "/api/origami/choose",
           { prompt: requestedPrompt },
           OrigamiChoiceResponseSchema,
         ).catch(() => null);
-        if (choice?.modelId && isOrigamiModelId(choice.modelId)) {
+        if (!choice) {
+          setPhase("idle");
+          setError(
+            "The free AI is busy right now. Try again in a minute, or name a model directly: crane, flapping bird, paper plane, cup, or a bird, square, waterbomb, fish, or frog base.",
+          );
+          return;
+        }
+        if (choice.modelId && isOrigamiModelId(choice.modelId)) {
           origamiId = choice.modelId;
           paperMm = choice.paperSizeMm ?? paperMm;
           aiReason = choice.reason;

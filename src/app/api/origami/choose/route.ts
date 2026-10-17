@@ -8,7 +8,7 @@ import { isLlmConfigured } from "@/server/fabrication-ai/llm";
 import { chooseOrigamiModel } from "@/server/fabrication-ai/origami-choice";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 /** The AI picks the closest library model for an origami prompt that names none. */
 export const POST = (request: Request): Promise<NextResponse> =>

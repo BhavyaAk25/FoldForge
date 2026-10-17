@@ -7,7 +7,8 @@ import { FinalizeFabricationRequestSchema } from "@/server/fabrication-ai/contra
 import { LlmFabricationNarrativeModel } from "@/server/fabrication-ai/models";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Vercel's limit; AI calls stop at 50 s so the route can still answer.
+export const maxDuration = 60;
 
 export const POST = (request: Request): Promise<NextResponse> =>
   runModelRoute(request, "finalize", async (body) => {
