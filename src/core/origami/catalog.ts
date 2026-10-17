@@ -35,6 +35,7 @@ export const ORIGAMI_CATALOG = [
     keywords: ["waterbomb base", "water bomb base", "waterbomb"],
   },
   { id: "fish-base", name: "Fish base", keywords: ["fish base"] },
+  { id: "frog-base", name: "Frog base", keywords: ["frog base"] },
 ] as const;
 
 export type OrigamiModelId = (typeof ORIGAMI_CATALOG)[number]["id"];
@@ -80,4 +81,29 @@ export const matchOrigamiModel = (prompt: string): OrigamiModelId | null => {
     }
   }
   return best?.id ?? null;
+};
+
+const ORIGAMI_WORDS = ["origami", "fold", "folded", "folding"];
+
+/**
+ * Whether a prompt asks for origami without naming a library model, such as
+ * "an origami swan": worth asking the AI for the closest model. Prompts that
+ * name a papercraft object never qualify.
+ */
+export const asksForOrigami = (prompt: string): boolean =>
+  !PAPERCRAFT_WORDS.some((word) => mentions(prompt, word)) &&
+  ORIGAMI_WORDS.some((word) => mentions(prompt, word));
+
+/** Default and allowed paper sizes, in millimetres. */
+export const PAPER_MM = { default: 150, minimum: 50, maximum: 400 } as const;
+
+/** The paper size a prompt gives ("a 20 cm square", "6 inch paper"), or null. */
+export const paperSizeFromPrompt = (prompt: string): number | null => {
+  const match = /(\d+(?:\.\d+)?)\s*(mm|cm|in(?:ch(?:es)?)?|")(?![a-z])/iu.exec(
+    prompt,
+  );
+  if (!match) return null;
+  const unit = match[2]!.toLowerCase();
+  const mm = Number(match[1]) * (unit === "mm" ? 1 : unit === "cm" ? 10 : 25.4);
+  return Math.round(Math.min(PAPER_MM.maximum, Math.max(PAPER_MM.minimum, mm)));
 };

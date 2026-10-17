@@ -6,7 +6,8 @@ import { guardMutationRequest } from "@/server/request-guard";
 import { apiError, parseRouteJsonBody } from "./response";
 import { API_BODY_LIMIT_BYTES, MODEL_ROUTE_LIMITS } from "./security-policy";
 
-export type ModelOperation = "intent" | "programs" | "repair" | "finalize";
+export type ModelOperation =
+  "intent" | "programs" | "repair" | "finalize" | "origami";
 
 const noStore = (response: NextResponse): NextResponse => {
   response.headers.set("Cache-Control", "no-store");

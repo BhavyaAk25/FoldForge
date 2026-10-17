@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { GET as exportGet } from "@/app/api/origami/[id]/[format]/route";
 import { GET as modelGet } from "@/app/api/origami/[id]/route";
+import { POST as choosePost } from "@/app/api/origami/choose/route";
 import { animateSequence } from "@/core/origami/animate";
-import { ORIGAMI_CATALOG, matchOrigamiModel } from "@/core/origami/catalog";
+import {
+  ORIGAMI_CATALOG,
+  asksForOrigami,
+  matchOrigamiModel,
+  paperSizeFromPrompt,
+} from "@/core/origami/catalog";
 import {
   buildCreasePattern,
   type CreaseSegment,
@@ -14,6 +20,7 @@ import { poseAt, stepCount } from "@/core/origami/pose";
 import { deriveSequence, type FoldStep } from "@/core/origami/sequence";
 import { simulateFolding } from "@/core/origami/simulate";
 import { OrigamiPayloadSchema } from "@/lib/origami-contract";
+import { OrigamiChoiceSchema } from "@/server/fabrication-ai/origami-choice";
 
 const p = (x: number, y: number) => ({ x, y });
 const s = (
@@ -76,10 +83,69 @@ describe("matchOrigamiModel", () => {
     ["two cups", "cup"],
     ["boxes shaped like cranes", null],
     ["make a duck", null],
+    ["fold me a frog base", "frog-base"],
     ["a crane-shaped box", null],
     ["a birthday card with a paper plane", null],
   ])("%j -> %s", (prompt, expected) => {
     expect(matchOrigamiModel(prompt)).toBe(expected);
+  });
+});
+
+describe("origami prompts the AI chooses for", () => {
+  it.each([
+    ["an origami swan", true],
+    ["fold a dove", true],
+    ["an origami box", false],
+    ["make a rat", false],
+  ])("%j asks for origami: %s", (prompt, expected) => {
+    expect(asksForOrigami(prompt)).toBe(expected);
+  });
+
+  it.each([
+    ["a crane from a 20 cm square", 200],
+    ["6 inch paper", 152],
+    ["a 1 mm crane", 50],
+    ["a crane", null],
+  ])("%j gives a %s mm sheet", (prompt, expected) => {
+    expect(paperSizeFromPrompt(prompt)).toBe(expected);
+  });
+
+  it("returns no choice when no AI provider is configured", async () => {
+    vi.stubEnv("AI_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const response = await choosePost(
+      new Request("http://localhost:3000/api/origami/choose", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:3000",
+        },
+        body: JSON.stringify({ prompt: "an origami swan" }),
+      }),
+    );
+    vi.unstubAllEnvs();
+    expect(await response.json()).toEqual({
+      modelId: null,
+      paperSizeMm: null,
+      reason: null,
+    });
+  });
+
+  it("only lets the AI name a library model", () => {
+    expect(
+      OrigamiChoiceSchema.safeParse({
+        modelId: "dragon",
+        paperSizeMm: 150,
+        reason: "x",
+      }).success,
+    ).toBe(false);
+    expect(
+      OrigamiChoiceSchema.safeParse({
+        modelId: "crane",
+        paperSizeMm: 150,
+        reason: "A swan is closest to the crane.",
+      }).success,
+    ).toBe(true);
   });
 });
 
@@ -150,31 +216,16 @@ describe("deriveSequence", () => {
     instruction: "Reverse-fold the tip.",
     line: { from: p(0.35, -0.05), to: p(0.15, 0.35) },
     toward: p(0, 0),
-    top: p(0.1, 0.2),
   });
 
-  it.each([["inside-reverse"], ["outside-reverse"]] as const)(
-    "an %s fold stays flat-foldable",
-    (kind) => {
-      const derived = deriveSequence({
-        anchor: p(0.8, 0.2),
-        steps: [halfFold, tip(kind)],
-      });
-      expect(derived.ok).toBe(true);
-    },
-  );
-
-  it("gives inside and outside reverse folds opposite new creases", () => {
-    const sense = (kind: "inside-reverse" | "outside-reverse") => {
-      const derived = deriveSequence({
-        anchor: p(0.8, 0.2),
-        steps: [halfFold, tip(kind)],
-      });
-      return derived.ok ? derived.value[1]!.added.map((c) => c.assignment) : [];
-    };
-    expect(sense("inside-reverse")).toEqual(
-      sense("outside-reverse").map((a) => (a === "M" ? "V" : "M")),
-    );
+  it("tucks a reverse-folded tip inside, with the spine's new creases as valleys", () => {
+    const derived = deriveSequence({
+      anchor: p(0.8, 0.2),
+      steps: [halfFold, tip("inside-reverse")],
+    });
+    expect(
+      derived.ok ? derived.value[1]!.added.map((c) => c.assignment) : null,
+    ).toEqual(["V", "V"]);
   });
 
   it.each([
@@ -221,6 +272,19 @@ describe("deriveSequence", () => {
         ],
       },
       "not_flat_foldable",
+    ],
+    [
+      "an outside reverse fold that would push paper through paper",
+      { anchor: p(0.8, 0.2), steps: [halfFold, tip("outside-reverse")] },
+      "layers_cross",
+    ],
+    [
+      "a fold line off the paper",
+      {
+        anchor: p(0.8, 0.2),
+        steps: [{ ...halfFold, line: { from: p(2, 2), to: p(3, 3) } }],
+      },
+      "fold_misses",
     ],
   ] as const)("reports %s", (_, sequence, kind) => {
     const derived = deriveSequence(

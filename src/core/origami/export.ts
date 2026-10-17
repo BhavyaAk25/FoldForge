@@ -163,6 +163,7 @@ export const instructionsSvg = (
   steps: readonly InstructionStep[],
   finished: FoldKeyframe,
   viewDeg: number,
+  paperMm: number,
 ): string => {
   const cell = 60;
   const columns = 3;
@@ -215,7 +216,7 @@ export const instructionsSvg = (
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">`,
     `<rect width="${width}" height="${height}" fill="#fff"/>`,
-    `<text x="2" y="9" font-family="sans-serif" font-size="6" font-weight="bold">${xml(title)}: folding instructions</text>`,
+    `<text x="2" y="9" font-family="sans-serif" font-size="6" font-weight="bold">${xml(title)}: folding instructions (${paperMm} mm square)</text>`,
     body,
     "</svg>",
   ].join("\n");

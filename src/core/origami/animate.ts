@@ -1,6 +1,8 @@
 import type { CreasePatternV1, Point2 } from "./crease-pattern";
-import { applyIsometry, type Isometry } from "./fold-rules";
+import type { Isometry } from "./fold-rules";
+import { solveLayerOrder } from "./layers";
 import {
+  assignmentsIn,
   faceAt,
   faceCentroid,
   foldedTransforms,
@@ -68,6 +70,111 @@ const containing = (
     faceAt(cp, faceCentroid(finalPattern, face)),
   );
 
+/** A simulated collapse is shown only if it ends this close to rigid paper. */
+const RIGID_ENOUGH = 0.01;
+const COLLAPSE_FRAMES = 16;
+
+type Matrix = readonly number[]; // 3x4, row-major: rotation then translation
+
+const multiply = (m: Matrix, n: Matrix): number[] => {
+  const out: number[] = [];
+  for (let r = 0; r < 3; r += 1) {
+    for (let c = 0; c < 4; c += 1) {
+      let sum = c === 3 ? m[r * 4 + 3]! : 0;
+      for (let k = 0; k < 3; k += 1) sum += m[r * 4 + k]! * n[k * 4 + c]!;
+      out.push(sum);
+    }
+  }
+  return out;
+};
+
+/** Rotation by `angle` about the in-plane line through p and q (Rodrigues). */
+const rotationAbout = (p: Point2, q: Point2, angle: number): number[] => {
+  const length = Math.hypot(q.x - p.x, q.y - p.y);
+  const [ux, uy] = [(q.x - p.x) / length, (q.y - p.y) / length];
+  const [c, s] = [Math.cos(angle), Math.sin(angle)];
+  const r = [
+    c + ux * ux * (1 - c),
+    ux * uy * (1 - c),
+    uy * s,
+    ux * uy * (1 - c),
+    c + uy * uy * (1 - c),
+    -ux * s,
+    -uy * s,
+    ux * s,
+    c,
+  ];
+  // Fix p: translation = p - R p.
+  const t = [
+    p.x - (r[0]! * p.x + r[1]! * p.y),
+    p.y - (r[3]! * p.x + r[4]! * p.y),
+    -(r[6]! * p.x + r[7]! * p.y),
+  ];
+  return [
+    r[0]!,
+    r[1]!,
+    r[2]!,
+    t[0]!,
+    r[3]!,
+    r[4]!,
+    r[5]!,
+    t[1]!,
+    r[6]!,
+    r[7]!,
+    r[8]!,
+    t[2]!,
+  ];
+};
+
+/**
+ * Collapse by turning faces about their creases along a spanning tree from
+ * the anchor's face, all at the same rate. It ends exactly in the verified
+ * flat state; frames in between are an illustration, not a simulation.
+ */
+const treePositions = (
+  base: CreasePatternV1,
+  root: number,
+  progress: number,
+): number[][] => {
+  const transforms: (number[] | null)[] = base.faces.map(() => null);
+  transforms[root] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+  const edgeFaces = new Map<string, number[]>();
+  base.faces.forEach((face, f) =>
+    face.forEach((v, i) => {
+      const w = face[(i + 1) % face.length]!;
+      const key = v < w ? `${v}-${w}` : `${w}-${v}`;
+      edgeFaces.set(key, [...(edgeFaces.get(key) ?? []), f]);
+    }),
+  );
+  const queue = [root];
+  while (queue.length > 0) {
+    const face = queue.shift()!;
+    for (const edge of base.edges) {
+      const pair =
+        edgeFaces.get(
+          edge.a < edge.b ? `${edge.a}-${edge.b}` : `${edge.b}-${edge.a}`,
+        ) ?? [];
+      if (pair.length !== 2 || !pair.includes(face)) continue;
+      const child = pair[0] === face ? pair[1]! : pair[0]!;
+      if (transforms[child]) continue;
+      const [p, q] = [base.vertices[edge.a]!, base.vertices[edge.b]!];
+      let local = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+      if (edge.assignment === "M" || edge.assignment === "V") {
+        // Valleys lift the child toward the viewer (+z), mountains lower it.
+        const centre = faceCentroid(base, child);
+        const probe = rotationAbout(p, q, 0.1);
+        const lifts =
+          probe[8]! * centre.x + probe[9]! * centre.y + probe[11]! > 0;
+        const sign = (edge.assignment === "V") === lifts ? 1 : -1;
+        local = rotationAbout(p, q, sign * Math.PI * progress);
+      }
+      transforms[child] = multiply(transforms[face]!, local);
+      queue.push(child);
+    }
+  }
+  return transforms.map((t) => t ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
+};
+
 const collapseFrames = (
   base: CreasePatternV1,
   finalPattern: CreasePatternV1,
@@ -75,13 +182,32 @@ const collapseFrames = (
 ): {
   readonly frames: number[][];
   readonly heights: number[];
-  readonly strain: number;
+  readonly strain: number | null;
 } => {
   const anchorFace = faceAt(base, anchor);
   const simulation = simulateFolding(base, {
-    frames: 16,
+    frames: COLLAPSE_FRAMES,
     pinned: base.faces[anchorFace] ?? [],
   });
+  if (simulation.finalStrain > RIGID_ENOUGH) {
+    const owner = containing(finalPattern, base);
+    const frames = Array.from({ length: COLLAPSE_FRAMES + 1 }, (_, i) => {
+      const transforms = treePositions(base, anchorFace, i / COLLAPSE_FRAMES);
+      return finalPattern.faces.flatMap((corners, face) =>
+        corners.flatMap((v) => {
+          const m = transforms[owner[face]!]!;
+          const { x, y } = finalPattern.vertices[v]!;
+          return [
+            m[0]! * x + m[1]! * y + m[3]!,
+            m[4]! * x + m[5]! * y + m[7]!,
+            m[8]! * x + m[9]! * y + m[11]!,
+          ].map(round);
+        }),
+      );
+    });
+    // Flat at the end: no heights to order by, so the solver decides alone.
+    return { frames, heights: finalPattern.faces.map(() => 0), strain: null };
+  }
   const owner = containing(finalPattern, base);
   // A face moves rigidly with the first three corners of the base face it lies in.
   const place = (
@@ -126,52 +252,6 @@ const collapseFrames = (
     (_, face) => place(last, owner[face]!, faceCentroid(finalPattern, face))[2],
   );
   return { frames, heights, strain: simulation.finalStrain };
-};
-
-/** Whether two convex polygons overlap with positive area (separating-axis test). */
-const overlaps = (p: readonly Point2[], q: readonly Point2[]): boolean => {
-  for (const polygon of [p, q]) {
-    for (let i = 0; i < polygon.length; i += 1) {
-      const a = polygon[i]!;
-      const b = polygon[(i + 1) % polygon.length]!;
-      const axis = { x: a.y - b.y, y: b.x - a.x };
-      const project = (points: readonly Point2[]) =>
-        points.map((v) => v.x * axis.x + v.y * axis.y);
-      const [pp, qq] = [project(p), project(q)];
-      const scale = Math.hypot(axis.x, axis.y);
-      if (
-        Math.min(Math.max(...pp), Math.max(...qq)) -
-          Math.max(Math.min(...pp), Math.min(...qq)) <
-        1e-6 * scale
-      )
-        return false;
-    }
-  }
-  return true;
-};
-
-/** Compact stacking levels from a back-to-front order of the faces. */
-const levelsFor = (
-  pattern: CreasePatternV1,
-  transforms: readonly Isometry[],
-  order: readonly number[],
-): number[] => {
-  const outlines = pattern.faces.map((face, f) =>
-    face.map((v) => applyIsometry(transforms[f]!, pattern.vertices[v]!)),
-  );
-  const sorted = order
-    .map((rank, face) => ({ rank, face }))
-    .sort((a, b) => a.rank - b.rank);
-  const levels = new Array<number>(order.length).fill(0);
-  sorted.forEach(({ face }, i) => {
-    let level = 0;
-    for (const below of sorted.slice(0, i)) {
-      if (overlaps(outlines[face]!, outlines[below.face]!))
-        level = Math.max(level, levels[below.face]! + 1);
-    }
-    levels[face] = level;
-  });
-  return levels;
 };
 
 /** Turning a flap over puts it on top (or underneath), in reverse order. */
@@ -233,6 +313,7 @@ export const animateSequence = (
       layers: order,
     },
   ];
+  const states: (CreasePatternV1 | null)[] = [hasBase ? first.pattern : null];
   const moves: FoldMove[] = [];
   for (const { step, pattern } of steps.slice(hasBase ? 1 : 0)) {
     if (step.kind === "creases")
@@ -252,13 +333,26 @@ export const animateSequence = (
       transforms: after,
       layers: restack(before.layers, moving, swing, reverse),
     });
+    states.push(pattern);
   }
+  // Each state's stacking comes from the layer-order solver (derivation
+  // already proved one exists); the fold-history order only breaks ties so
+  // consecutive states look alike.
+  const stacked = keyframes.map((k, i) => {
+    const solved = solveLayerOrder(
+      finalPattern,
+      k.transforms,
+      assignmentsIn(finalPattern, states[i] ?? null),
+      k.layers,
+    );
+    if (!solved) throw new Error("A derived state has no layer order.");
+    return { transforms: k.transforms, layers: solved.levels };
+  });
   return {
     faces: finalPattern.faces,
     collapse: collapse?.frames ?? null,
     collapseStrain: collapse?.strain ?? null,
-    // Keyframes carry a stacking order while folding; the output carries compact levels.
-    keyframes: keyframes.map((k) => ({
+    keyframes: stacked.map((k) => ({
       transforms: k.transforms.map((t) => ({
         a: round(t.a),
         b: round(t.b),
@@ -267,7 +361,7 @@ export const animateSequence = (
         tx: round(t.tx),
         ty: round(t.ty),
       })),
-      layers: levelsFor(finalPattern, k.transforms, k.layers),
+      layers: k.layers,
     })),
     moves,
   };

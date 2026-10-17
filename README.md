@@ -6,7 +6,7 @@ Describe something made of paper or thin card, such as "a gift box 120 x 80 x 40
 
 ## Real origami
 
-Ask for a library model, such as "fold a paper crane", and FoldForge answers with real origami from one uncut square: the crane, the flapping bird, a dart paper plane, a paper cup, and the bird, square, waterbomb, and fish bases. Each model is written as the folds a person makes; code derives the crease pattern from those folds and checks every intermediate state (Maekawa and Kawasaki at every vertex, and one consistent flat-folded place for every face). The page plays the folding in 3D, step by step, next to diagrams and the crease pattern. Downloads: printable instructions (SVG), the crease pattern (SVG, red dash-dot mountain, blue dashed valley), and a FOLD file for Origami Simulator.
+Ask for a library model, such as "fold a paper crane", and FoldForge answers with real origami from one uncut square: the crane, the flapping bird, a dart paper plane, a paper cup, and the bird, square, waterbomb, fish, and frog bases. A prompt that asks for origami without naming one, such as "an origami swan from a 20 cm square", lets the AI pick the closest library model and the paper size; the page labels that choice as the AI's. Each model is written as the folds a person makes; code derives the crease pattern from those folds and checks every intermediate state: Maekawa and Kawasaki at every vertex, one consistent flat-folded place for every face, and a layer order in which no paper passes through paper. The page plays the folding in 3D, step by step, next to diagrams and the crease pattern. Downloads: printable instructions (SVG), the crease pattern (SVG, red dash-dot mountain, blue dashed valley), and a FOLD file for Origami Simulator.
 
 Anything outside the library goes to the cut-and-fold engine below.
 
@@ -60,7 +60,7 @@ Code layout and engineering rules are in [AGENTS.md](./AGENTS.md); the fabricati
 
 ## Limits
 
-Origami checks prove each state folds flat locally and globally, but not that layers never pass through each other (deciding that is NP-hard in general); the bases are also collapsed in a bar-and-hinge simulator. The cut-and-fold engine handles flat sheets with panels, cuts, folds, tabs, slots, hinges, and sliders, with up to 24 panels and one manual motion. It does not model smooth curved surfaces, material strength, fatigue, or electronics. It verifies geometry and kinematics, not how well a real card stock holds up.
+Origami layer orders come from a bounded search, since deciding one is NP-hard in general; every library state has one. Bases collapse in a bar-and-hinge simulator; the frog base, which the simulator cannot settle, is shown turning face by face. The cut-and-fold engine handles flat sheets with panels, cuts, folds, tabs, slots, hinges, and sliders, with up to 24 panels and one manual motion. It does not model smooth curved surfaces, material strength, fatigue, or electronics. It verifies geometry and kinematics, not how well a real card stock holds up.
 
 ## License
 

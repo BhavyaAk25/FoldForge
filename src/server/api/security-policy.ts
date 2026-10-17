@@ -1,5 +1,6 @@
 export const API_BODY_LIMIT_BYTES = {
   intent: 32 * 1024,
+  origami: 8 * 1024,
   programs: 32 * 1024,
   compile: 32 * 1024,
   repair: 64 * 1024,
