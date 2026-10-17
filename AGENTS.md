@@ -8,6 +8,7 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## How a prompt becomes a design
 
+0. **Origami library** (`/api/origami/[id]`). If the prompt names a library model (`matchOrigamiModel` in `src/core/origami/catalog.ts`: crane, flapping bird, paper plane, cup, bird/square/waterbomb/fish base), the browser fetches that model and stops; no AI call. The server derives the crease pattern from the model's fold sequence, checks every step, builds the animation keyframes, and caches the result. Downloads come from `/api/origami/[id]/[format]` (`svg`, `fold`, `instructions`). Every other prompt continues below.
 1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, desk stands, pop-up cards, flat cut-outs (bookmarks, tags, ornaments), and stand-up figures (birds, cats, rabbits, hearts, trees, houses, stars) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
 2. **Program** (`/api/programs`). The model proposes a `FabricationDesignSpecV3`; `synthesizeFabricationDesign` turns it into a verified program. If synthesis fails or no AI is configured, `templateFallback` fits a parametric template from `design-templates.ts` to the requested size, first against the intent as given and otherwise against the same size and stock without model-invented constraints; the route returns the intent it verified, and the client uses that one. Template output always records `generationSource: "template"`. Parts may request a `silhouette` (duck, cat, rabbit, heart, flower, tree, house, star, arch): after synthesis, `silhouettes.ts` redraws that rectangular panel inside its bounds, keeping the hinge edge, and `upright.ts` mirrors fold-only designs that hang below their base. Both are kept only if the full verifier still passes.
 3. **Compile and verify** (`/api/compile`). The server compiles, verifies, scores, and hashes the program and returns the finished `CandidateV2` plus FOLD availability; the browser only renders it. Saved examples come ready-made from `/api/examples/[id]`.
@@ -20,6 +21,7 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## Code layout
 
+- `src/core/origami`: one-sheet origami. `crease-pattern.ts` (planar crease graph), `fold-rules.ts` (Maekawa, Kawasaki, flat-folded face placement), `simulate.ts` (bar-and-hinge simulator for bases that collapse at once), `sequence.ts` (models written as folds; derives creases and checks each step), `animate.ts` and `pose.ts` (keyframes and 3D poses), `export.ts` (crease-pattern SVG, FOLD, instruction sheet), `models.ts` and `catalog.ts` (the library).
 - `src/core`: units, schemas, canonical serialization, compiler, geometry, kinematics, verification, scoring, templates, and exporters. Pure TypeScript: no React, no browser APIs, no network.
 - `src/server/fabrication-ai`: prompts, the LLM client, model classes, and conversion from model output to programs.
 - `src/server/api` and `src/app/api`: route guards (same-origin check, per-client rate limit, body caps) and thin route handlers.
@@ -48,14 +50,15 @@ Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 m
 - **Dependencies:** none added without removing one or raising the budget explicitly.
 - **Always shippable:** merge only with CI green, then confirm the live site on real prompts.
 
-## Roadmap (in order)
+## Roadmap
 
-1. Crease-pattern core in `src/core/origami`: one sheet, mountain and valley creases, folds that may form loops.
-2. Fold-rule checks: Maekawa and Kawasaki at every vertex, plus layer-ordering checks.
-3. Folding simulator: computes the collapse, drives the 3D animation, rejects patterns that jam.
-4. Classic bases (bird, frog, waterbomb, fish) with their models (crane, lily, frog, flapping bird); the AI picks base, model, and proportions.
-5. Outputs: printable crease pattern, folding animation, step-by-step instructions, existing exports.
-6. Anything outside the library keeps using the current papercraft engine.
+Done: the light page (the server returns finished candidates); the crease-pattern core; fold-rule checks; the folding simulator for bases and rigid step animation for folds; the bird, square, waterbomb, and fish bases with the crane, flapping bird, paper plane, and cup; printable crease patterns, instructions, FOLD, and the 3D folding animation. Prompts outside the library use the papercraft engine.
+
+Next, in order:
+
+1. Frog base (squash and petal folds) with the frog and the lily.
+2. A non-crossing layer-order check for each state, so self-intersection is proved rather than assumed.
+3. Let the AI choose a library model and its proportions for prompts that do not name one.
 
 ## Commands
 
