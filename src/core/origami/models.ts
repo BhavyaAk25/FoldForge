@@ -82,6 +82,39 @@ const BIRD_BASE: readonly CreaseSegment[] = [
   crease(p(1, 0), p(0, 1), "V"),
 ];
 
+/** Quarter turn about the sheet centre. */
+const turn = (q: Point2, times: number): Point2 =>
+  times === 0 ? q : turn(p(1 - q.y, q.x), times - 1);
+
+/**
+ * Square base with all four flaps squashed and petal-folded. Each squash
+ * leaves a point S = (sqrt(2)/4, 1/2 - sqrt(2)/4) beside every edge midpoint,
+ * where 22.5-degree creases from the corner, the centre, and the midpoint
+ * meet. The centre has 16 creases, so one diagonal half is a mountain to
+ * keep Maekawa's 9 against 7; the layer solver confirms a stacking exists.
+ */
+const FROG_S = Math.SQRT2 / 4;
+const FROG_BASE: readonly CreaseSegment[] = [
+  ...[0, 1, 2, 3].flatMap((t) => {
+    const [left, right] = [
+      p(FROG_S, 0.5 - FROG_S),
+      p(1 - FROG_S, 0.5 - FROG_S),
+    ];
+    return [
+      crease(turn(p(0, 0), t), turn(left, t), "M"),
+      crease(turn(p(1, 0), t), turn(right, t), "M"),
+      crease(turn(p(0.5, 0), t), turn(left, t), "M"),
+      crease(turn(p(0.5, 0), t), turn(right, t), "M"),
+      crease(CENTRE, turn(left, t), "M"),
+      crease(CENTRE, turn(right, t), "M"),
+      crease(turn(left, t), turn(p(FROG_S, 0), t), "V"),
+      crease(turn(right, t), turn(p(1 - FROG_S, 0), t), "V"),
+      crease(turn(p(0.5, 0), t), CENTRE, "V"),
+      crease(turn(p(0, 0), t), CENTRE, t === 0 ? "M" : "V"),
+    ];
+  }),
+];
+
 /** Kite folds from two opposite corners, then the side corners rabbit-eared. */
 const FISH_BASE: readonly CreaseSegment[] = [
   ...[
@@ -195,7 +228,6 @@ const CRANE: OrigamiModel = {
         ),
         toward: p(0.9, 0.02),
         layers: (f) => f.folded.y > 1e-6 && f.folded.x > 0.3,
-        top: p(0.6, 0.13),
       },
       {
         kind: "inside-reverse",
@@ -207,16 +239,17 @@ const CRANE: OrigamiModel = {
         ),
         toward: p(0.9, -0.02),
         layers: (f) => f.folded.y < -1e-6 && f.folded.x > 0.3,
-        top: p(0.13, 0.6),
       },
       {
-        kind: "inside-reverse",
+        // No layer order lets an inside reverse fold pass here (the solver
+        // proves it), so the head is an outside reverse fold, a common way to
+        // fold the crane's head.
+        kind: "outside-reverse",
         instruction:
-          "Inside-reverse-fold the tip of the neck to form the head.",
+          "Outside-reverse-fold the tip of the neck down to form the head.",
         line: across(p(0.217, 0.283), 82.5, 0.06),
         toward: p(0.15, 0.35),
         layers: (f) => f.folded.y > 0.1,
-        top: p(0.9, 0.03),
       },
       ...wings(90),
     ],
@@ -242,7 +275,6 @@ const FLAPPING_BIRD: OrigamiModel = {
         ),
         toward: p(0.9, 0.02),
         layers: (f) => f.folded.y > 1e-6 && f.folded.x > 0.3,
-        top: p(0.6, 0.13),
       },
       {
         kind: "inside-reverse",
@@ -255,7 +287,6 @@ const FLAPPING_BIRD: OrigamiModel = {
         ),
         toward: p(0.9, -0.02),
         layers: (f) => f.folded.y < -1e-6 && f.folded.x > 0.3,
-        top: p(0.13, 0.6),
       },
       {
         kind: "inside-reverse",
@@ -264,7 +295,6 @@ const FLAPPING_BIRD: OrigamiModel = {
         line: across(p(0.203, 0.297), 82.5, 0.06),
         toward: p(0.15, 0.35),
         layers: (f) => f.folded.y > 0.1,
-        top: p(0.9, 0.03),
       },
       ...wings(60),
     ],
@@ -410,5 +440,12 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "Kite-fold two opposite corners toward the diagonal, then rabbit-ear the two side corners.",
     p(0.2, 0.15),
     "A long diamond with two small flaps; the start of the fish and the whale.",
+  ),
+  base(
+    "frog-base",
+    FROG_BASE,
+    "Fold a square base, squash-fold each of its four flaps, then petal-fold all four squashed flaps.",
+    p(0.5, 0.06),
+    "Four long flaps around a narrow diamond; the start of the frog and the lily.",
   ),
 ];

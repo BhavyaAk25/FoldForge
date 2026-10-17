@@ -11,7 +11,14 @@ import {
   type ExamplePrompt,
 } from "@/components/foldforge-start";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
-import { matchOrigamiModel } from "@/core/origami/catalog";
+import {
+  asksForOrigami,
+  isOrigamiModelId,
+  matchOrigamiModel,
+  PAPER_MM,
+  paperSizeFromPrompt,
+  type OrigamiModelId,
+} from "@/core/origami/catalog";
 import type {
   CandidateV2,
   ExportFormat,
@@ -40,6 +47,7 @@ import {
 } from "@/lib/client-api";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import {
+  OrigamiChoiceResponseSchema,
   OrigamiPayloadSchema,
   type OrigamiPayloadResponse,
 } from "@/lib/origami-contract";
@@ -146,7 +154,12 @@ export function FoldForgeApp() {
   const [finalizing, setFinalizing] = useState(false);
   const [checkpointReady, setCheckpointReady] = useState(false);
   const [resultsFocusRequest, setResultsFocusRequest] = useState(0);
-  const [origami, setOrigami] = useState<OrigamiPayloadResponse | null>(null);
+  const [origami, setOrigami] = useState<{
+    readonly payload: OrigamiPayloadResponse;
+    readonly paperMm: number;
+    /** Why the AI picked this model, when the prompt named none. */
+    readonly aiReason: string | null;
+  } | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const forgeInFlightRef = useRef(false);
   const latestPromptRef = useRef(prompt);
@@ -288,8 +301,26 @@ export function FoldForgeApp() {
 
     try {
       // A prompt that names a library model (a crane, a paper plane) gets the
-      // real origami sequence; everything else goes to the papercraft engine.
-      const origamiId = matchOrigamiModel(requestedPrompt);
+      // real origami sequence. One that asks for origami without naming a
+      // model lets the AI pick the closest one. Everything else goes to the
+      // papercraft engine.
+      let origamiId: OrigamiModelId | null = matchOrigamiModel(requestedPrompt);
+      let paperMm = paperSizeFromPrompt(requestedPrompt) ?? PAPER_MM.default;
+      let aiReason: string | null = null;
+      if (!origamiId && aiAvailable && asksForOrigami(requestedPrompt)) {
+        setStatusMessage("Choosing an origami model…");
+        // A failed or empty choice falls through to the papercraft engine.
+        const choice = await postJson(
+          "/api/origami/choose",
+          { prompt: requestedPrompt },
+          OrigamiChoiceResponseSchema,
+        ).catch(() => null);
+        if (choice?.modelId && isOrigamiModelId(choice.modelId)) {
+          origamiId = choice.modelId;
+          paperMm = choice.paperSizeMm ?? paperMm;
+          aiReason = choice.reason;
+        }
+      }
       if (origamiId) {
         void loadOrigamiPanel();
         const payload = await getJson(
@@ -301,7 +332,7 @@ export function FoldForgeApp() {
         ) {
           return;
         }
-        setOrigami(payload);
+        setOrigami({ payload, paperMm, aiReason });
         setPhase("ready");
         setStatusMessage(`${payload.name}: folding sequence ready.`);
         return;
@@ -627,7 +658,13 @@ export function FoldForgeApp() {
           </div>
         ) : null}
 
-        {origami ? <OrigamiResults payload={origami} /> : null}
+        {origami ? (
+          <OrigamiResults
+            payload={origami.payload}
+            paperMm={origami.paperMm}
+            aiReason={origami.aiReason}
+          />
+        ) : null}
 
         {candidates.length > 0 && baseSelected ? (
           <FoldForgeResults

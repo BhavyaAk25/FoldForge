@@ -1,6 +1,7 @@
 import { err, ok, type Result } from "../result";
 import {
   buildCreasePattern,
+  type CreaseAssignment,
   isFolded,
   type CreasePatternError,
   type CreasePatternV1,
@@ -16,6 +17,7 @@ import {
   type FoldRuleFailure,
   type Isometry,
 } from "./fold-rules";
+import { solveLayerOrder, type LayerOrder } from "./layers";
 
 /**
  * Folding sequences: a model is written as the folds a person makes, and the
@@ -70,8 +72,6 @@ export type FoldStep =
       readonly line: FoldLine;
       readonly toward: Point2;
       readonly layers?: (face: FaceSample) => boolean;
-      /** A paper point in the flap's layer nearest the viewer. */
-      readonly top: Point2;
     };
 
 export interface FoldSequence {
@@ -95,8 +95,12 @@ export type SequenceError =
       readonly step: number;
       readonly error: CreasePatternError;
     }
-  /** The anchor (or a reverse fold's top point) lies on a crease, not in a face. */
+  /** The anchor lies on a crease or off the sheet, not in a face. */
   | { readonly kind: "anchor_lost"; readonly step: number }
+  /** The fold line crosses none of the faces that take part. */
+  | { readonly kind: "fold_misses"; readonly step: number }
+  /** No stacking of the layers avoids paper passing through paper. */
+  | { readonly kind: "layers_cross"; readonly step: number }
   /** A pattern of creases folded all at once can only start a sequence. */
   | { readonly kind: "base_not_first"; readonly step: number }
   | {
@@ -209,6 +213,27 @@ const midpoint = (cp: CreasePatternV1, edge: number): Point2 => {
   };
 };
 
+/**
+ * The sense of every edge of `finalPattern` in an earlier state `state`: the
+ * assignment of the state's crease it lies along, or null if not creased yet.
+ */
+export const assignmentsIn = (
+  finalPattern: CreasePatternV1,
+  state: CreasePatternV1 | null,
+): (CreaseAssignment | null)[] =>
+  finalPattern.edges.map((_, e) => {
+    if (!state) return null;
+    const m = midpoint(finalPattern, e);
+    const along = state.edges.find((edge) =>
+      onSegment(m, {
+        from: state.vertices[edge.a]!,
+        to: state.vertices[edge.b]!,
+        assignment: "F",
+      }),
+    );
+    return along?.assignment ?? null;
+  });
+
 /** Indices of the edges of `cp` that lie along any of the segments. */
 export const edgesAlong = (
   cp: CreasePatternV1,
@@ -237,6 +262,8 @@ const flip = (assignment: "M" | "V"): "M" | "V" =>
 interface FoldedState {
   readonly cp: CreasePatternV1;
   readonly transforms: readonly Isometry[];
+  /** The solved layer order of this state. */
+  readonly order: LayerOrder;
 }
 
 /** Index of the face containing a paper point, or -1. */
@@ -256,12 +283,20 @@ export const foldedTransforms = (
   return root < 0 ? null : flatFoldedFaces(cp, root).transforms;
 };
 
+/** The folded state with its layer order, or null if either cannot be found. */
 const foldedState = (
   cp: CreasePatternV1,
   anchor: Point2,
 ): FoldedState | null => {
   const transforms = foldedTransforms(cp, anchor);
-  return transforms ? { cp, transforms } : null;
+  if (!transforms) return null;
+  const order = solveLayerOrder(
+    cp,
+    transforms,
+    cp.edges.map((edge) => edge.assignment),
+    cp.faces.map(() => 0),
+  );
+  return order ? { cp, transforms, order } : null;
 };
 
 /**
@@ -271,16 +306,31 @@ const foldedState = (
 const senseFor = (towardViewer: boolean, transform: Isometry): "M" | "V" =>
   towardViewer === orientation(transform) > 0 ? "V" : "M";
 
-/** Applies one fold to the current pattern and returns the new crease segments. */
+interface AppliedFold {
+  readonly segments: CreaseSegment[];
+  readonly added: CreaseSegment[];
+  /** For a paper point: whether its face moves, and whether it is in the near half. */
+  readonly moving: (paper: Point2) => {
+    readonly moves: boolean;
+    readonly near: boolean;
+  };
+  /** Stacking levels of the faces the line crosses, for choosing a reverse fold's split. */
+  readonly crossedLevels: readonly number[];
+}
+
+/**
+ * Applies one fold to the current state. A reverse fold opens the flap into a
+ * near half (layers above `split`) and a far half: for an inside reverse fold
+ * the near half folds away from the viewer and the far half toward, and the
+ * other way round for an outside one.
+ */
 const applyFold = (
   state: FoldedState,
   step: Extract<FoldStep, { line: FoldLine }>,
-): {
-  readonly segments: CreaseSegment[];
-  readonly added: CreaseSegment[];
-  readonly moving: (paper: Point2) => boolean;
-} | null => {
+  split: number,
+): AppliedFold | null => {
   const { cp, transforms } = state;
+  const { levels, above } = state.order;
   const direction = sub(step.line.to, step.line.from);
   const side = (folded: Point2) =>
     cross(direction, sub(folded, step.line.from));
@@ -290,45 +340,72 @@ const applyFold = (
     return { paper, folded: applyIsometry(transforms[index]!, paper) };
   });
   const takesPart = samples.map((sample) => step.layers?.(sample) ?? true);
-  // In a reverse fold, layers on either side of every crease the line crosses
-  // face opposite ways and turn opposite ways, so all new creases share one
-  // sense: the top layer goes behind for an inside reverse fold.
-  let reverse: "M" | "V" | null = null;
-  if (step.kind === "inside-reverse" || step.kind === "outside-reverse") {
-    const top = faceAt(cp, step.top);
-    if (top < 0) return null;
-    reverse = senseFor(step.kind === "outside-reverse", transforms[top]!);
-  }
-  const added: CreaseSegment[] = [];
-  cp.faces.forEach((face, index) => {
-    if (!takesPart[index]) return;
+  const pieces = cp.faces.map((face, index) => {
+    if (!takesPart[index]) return [];
     const inverse = invertIsometry(transforms[index]!);
     const from = applyIsometry(inverse, step.line.from);
     const along = sub(applyIsometry(inverse, step.line.to), from);
-    const assignment =
-      reverse ?? senseFor(step.kind === "valley", transforms[index]!);
-    for (const [p, q] of clipSegment(polygon(cp, face), from, along)) {
-      added.push({ from: p, to: q, assignment });
-    }
+    return clipSegment(polygon(cp, face), from, along);
   });
-  const moving = (paper: Point2): boolean => {
-    const face = cp.faces.findIndex((f) => contains(polygon(cp, f), paper));
-    if (face < 0 || !takesPart[face]) return false;
-    return (
-      Math.sign(side(applyIsometry(transforms[face]!, paper))) === movingSign
-    );
+  const crossed = pieces.flatMap((list, index) =>
+    list.length > 0 ? [index] : [],
+  );
+  if (crossed.length === 0) return null;
+  const reverse =
+    step.kind === "inside-reverse" || step.kind === "outside-reverse";
+  // Crossed layers split by height at the line. Any other face is in the near
+  // half if it lies above a far crossed layer it overlaps (or, overlapping
+  // only near ones, above one of them); global heights mean nothing there.
+  const nearCrossed = new Set(crossed.filter((f) => levels[f]! > split));
+  const farCrossed = crossed.filter((f) => !nearCrossed.has(f));
+  const isNear = (face: number): boolean => {
+    if (crossed.includes(face)) return nearCrossed.has(face);
+    for (const c of farCrossed) {
+      const relation = above(face, c);
+      if (relation !== null) return relation;
+    }
+    for (const c of nearCrossed) {
+      const relation = above(face, c);
+      if (relation !== null) return relation;
+    }
+    return levels[face]! > split;
   };
-  return { segments: [...segmentsOf(cp), ...added], added, moving };
+  const towardViewer = (face: number): boolean =>
+    reverse
+      ? isNear(face) === (step.kind === "outside-reverse")
+      : step.kind === "valley";
+  const added = pieces.flatMap((list, index) =>
+    list.map(([p, q]) => ({
+      from: p,
+      to: q,
+      assignment: senseFor(towardViewer(index), transforms[index]!),
+    })),
+  );
+  const moving = (paper: Point2) => {
+    const face = faceAt(cp, paper);
+    const moves =
+      face >= 0 &&
+      takesPart[face]! &&
+      Math.sign(side(applyIsometry(transforms[face]!, paper))) === movingSign;
+    return { moves, near: moves && isNear(face) };
+  };
+  return {
+    segments: [...segmentsOf(cp), ...added],
+    added,
+    moving,
+    crossedLevels: crossed.map((f) => levels[f]!),
+  };
 };
 
 /**
- * An inside reverse fold turns the moving part of the flap inside out, so
- * every existing crease between two moving faces changes sense.
+ * In a reverse fold each half of the flap keeps its own creases; the creases
+ * joining the moving near half to the moving far half (the spine that turns
+ * inside out) change sense.
  */
-const reverseInside = (
+const reverseSpine = (
   cp: CreasePatternV1,
   added: readonly CreaseSegment[],
-  moving: (paper: Point2) => boolean,
+  moving: AppliedFold["moving"],
 ): CreaseSegment[] => {
   const facesOfEdge = new Map<string, number[]>();
   cp.faces.forEach((face, index) => {
@@ -338,16 +415,20 @@ const reverseInside = (
       facesOfEdge.set(key, [...(facesOfEdge.get(key) ?? []), index]);
     });
   });
-  const movingFace = cp.faces.map((face) =>
-    moving(centroid(polygon(cp, face))),
-  );
+  const where = cp.faces.map((face) => moving(centroid(polygon(cp, face))));
   return cp.edges.flatMap((edge, index) => {
     if (edge.assignment === "B") return [];
     const key = edge.a < edge.b ? `${edge.a}-${edge.b}` : `${edge.b}-${edge.a}`;
+    const [f, g] = facesOfEdge.get(key) ?? [];
     const isNew = added.some((s) => onSegment(midpoint(cp, index), s));
-    const inside = (facesOfEdge.get(key) ?? []).every((f) => movingFace[f]);
+    const spine =
+      f !== undefined &&
+      g !== undefined &&
+      where[f]!.moves &&
+      where[g]!.moves &&
+      where[f]!.near !== where[g]!.near;
     const assignment =
-      !isNew && inside && isFolded(edge.assignment)
+      !isNew && spine && isFolded(edge.assignment)
         ? flip(edge.assignment as "M" | "V")
         : edge.assignment;
     return [
@@ -356,54 +437,96 @@ const reverseInside = (
   });
 };
 
+/** A step's pattern, checked: flat-foldable and with a non-crossing layer order. */
+const checkedPattern = (
+  segments: readonly CreaseSegment[],
+  anchor: Point2,
+  step: number,
+): Result<CreasePatternV1, SequenceError> => {
+  const built = buildCreasePattern(segments);
+  if (!built.ok) return err({ kind: "pattern", step, error: built.error });
+  const report = checkFoldRules(built.value);
+  if (!report.flatFoldable) {
+    return err({
+      kind: "not_flat_foldable",
+      step,
+      pattern: built.value,
+      failures: report.failures,
+    });
+  }
+  if (!foldedState(built.value, anchor)) {
+    return foldedTransforms(built.value, anchor)
+      ? err({ kind: "layers_cross", step })
+      : err({ kind: "anchor_lost", step });
+  }
+  return ok(built.value);
+};
+
 export const deriveSequence = (
   sequence: FoldSequence,
 ): Result<DerivedStep[], SequenceError> => {
   let segments: CreaseSegment[] = [];
   const steps: DerivedStep[] = [];
   for (const [index, step] of sequence.steps.entries()) {
-    let added: readonly CreaseSegment[];
     if (step.kind === "creases" && index > 0)
       return err({ kind: "base_not_first", step: index });
+    let added: readonly CreaseSegment[] =
+      step.kind === "creases" ? step.segments : [];
+    let result: Result<CreasePatternV1, SequenceError>;
     if (step.kind === "creases") {
-      added = step.segments;
-      segments = [...segments, ...step.segments];
+      segments = [...step.segments];
+      result = checkedPattern(segments, sequence.anchor, index);
     } else {
       const current = buildCreasePattern(segments);
       if (!current.ok)
         return err({ kind: "pattern", step: index, error: current.error });
       const state = foldedState(current.value, sequence.anchor);
       if (!state) return err({ kind: "anchor_lost", step: index });
-      const folded = applyFold(state, step);
-      if (!folded) return err({ kind: "anchor_lost", step: index });
-      added = folded.added;
-      segments = folded.segments;
-      if (step.kind === "inside-reverse" || step.kind === "outside-reverse") {
-        const built = buildCreasePattern(segments);
-        if (!built.ok)
-          return err({ kind: "pattern", step: index, error: built.error });
-        segments = reverseInside(built.value, added, folded.moving);
+      const probe = applyFold(state, step, Infinity);
+      if (!probe) return err({ kind: "fold_misses", step: index });
+      // A reverse fold may open the flap between any two crossed layers; try
+      // the most even split first and keep the first that folds flat.
+      const levels = [...new Set(probe.crossedLevels)].sort((p, q) => p - q);
+      const splits =
+        step.kind === "inside-reverse" || step.kind === "outside-reverse"
+          ? levels.slice(0, -1).sort((p, q) => {
+              const balance = (t: number) =>
+                Math.abs(
+                  probe.crossedLevels.filter((l) => l > t).length * 2 -
+                    probe.crossedLevels.length,
+                );
+              return balance(p) - balance(q);
+            })
+          : [Infinity];
+      result = err({ kind: "layers_cross", step: index });
+      for (const split of splits) {
+        const folded = applyFold(state, step, split)!;
+        let next = folded.segments;
+        if (step.kind === "inside-reverse" || step.kind === "outside-reverse") {
+          const built = buildCreasePattern(next);
+          if (!built.ok)
+            return err({ kind: "pattern", step: index, error: built.error });
+          next = reverseSpine(built.value, folded.added, folded.moving);
+        }
+        const attempt = checkedPattern(next, sequence.anchor, index);
+        if (attempt.ok || splits.length === 1) {
+          result = attempt;
+          segments = next;
+          added = folded.added;
+          if (attempt.ok) break;
+        }
       }
     }
-    const built = buildCreasePattern(segments);
-    if (!built.ok)
-      return err({ kind: "pattern", step: index, error: built.error });
-    const report = checkFoldRules(built.value);
-    if (!report.flatFoldable)
-      return err({
-        kind: "not_flat_foldable",
-        step: index,
-        pattern: built.value,
-        failures: report.failures,
-      });
+    if (!result.ok) return result;
+    const pattern = result.value;
     steps.push({
       step,
       instruction: step.instruction,
-      pattern: built.value,
-      added: edgesAlong(built.value, added).map((e) => ({
-        from: built.value.vertices[built.value.edges[e]!.a]!,
-        to: built.value.vertices[built.value.edges[e]!.b]!,
-        assignment: built.value.edges[e]!.assignment as "M" | "V",
+      pattern,
+      added: edgesAlong(pattern, added).map((e) => ({
+        from: pattern.vertices[pattern.edges[e]!.a]!,
+        to: pattern.vertices[pattern.edges[e]!.b]!,
+        assignment: pattern.edges[e]!.assignment as "M" | "V",
       })),
     });
   }

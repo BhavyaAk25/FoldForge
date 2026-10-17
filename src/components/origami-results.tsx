@@ -31,8 +31,7 @@ const DOWNLOADS = [
   {
     format: "svg",
     label: "Crease pattern",
-    description:
-      "Print at 100% on a 150 mm square: red dash-dot mountain, blue dashed valley.",
+    description: "Print at 100%: red dash-dot mountain, blue dashed valley.",
   },
   {
     format: "fold",
@@ -154,8 +153,12 @@ function CreasePatternView({
 
 export function OrigamiResults({
   payload,
+  paperMm,
+  aiReason,
 }: {
   readonly payload: OrigamiPayloadResponse;
+  readonly paperMm: number;
+  readonly aiReason: string | null;
 }) {
   const input: PoseInput = useMemo(
     () => ({
@@ -244,15 +247,25 @@ export function OrigamiResults({
         <p className={styles.kicker}>Origami from one square</p>
         <h2 id="origami-title">{payload.name}</h2>
         <p>{payload.summary}</p>
+        {aiReason ? (
+          <p className={styles.aiChoice}>
+            <strong>AI choice:</strong> {aiReason} The folds and checks below
+            are computed, not generated.
+          </p>
+        ) : null}
+        <p>Fold it from a {paperMm} mm square of paper.</p>
         <p className={styles.checks}>
           Checked at every one of {payload.verification.stepsChecked} steps:
           Maekawa and Kawasaki at all {payload.verification.interiorVertices}{" "}
-          inner vertices, and every face lands in one consistent flat-folded
-          place. {payload.verification.mountains} mountain and{" "}
+          inner vertices, every face lands in one consistent flat-folded place,
+          and the layers stack with no paper passing through paper.{" "}
+          {payload.verification.mountains} mountain and{" "}
           {payload.verification.valleys} valley creases.
           {payload.animation.collapseStrain !== null
             ? ` The base was collapsed in a bar-and-hinge simulation and lands within ${(payload.animation.collapseStrain * 100).toFixed(2)}% stretch of flat paper.`
-            : ""}
+            : payload.animation.collapse
+              ? " The base collapse animation turns faces about their creases to show the order; only its end state is checked."
+              : ""}
         </p>
       </header>
 
@@ -368,7 +381,7 @@ export function OrigamiResults({
             {DOWNLOADS.map((download) => (
               <li key={download.format}>
                 <a
-                  href={`/api/origami/${payload.id}/${download.format}`}
+                  href={`/api/origami/${payload.id}/${download.format}?paper=${paperMm}`}
                   download
                 >
                   {download.label}

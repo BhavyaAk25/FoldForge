@@ -110,6 +110,7 @@ export type OrigamiExportFormat = "svg" | "fold" | "instructions";
 export const origamiExport = (
   id: OrigamiModelId,
   format: OrigamiExportFormat,
+  paperMm: number,
 ): {
   readonly body: string;
   readonly contentType: string;
@@ -120,7 +121,7 @@ export const origamiExport = (
   switch (format) {
     case "svg":
       return {
-        body: creasePatternSvg(pattern, name),
+        body: creasePatternSvg(pattern, name, paperMm),
         contentType: "image/svg+xml",
         filename: `${id}-crease-pattern.svg`,
       };
@@ -141,6 +142,7 @@ export const origamiExport = (
           instructions,
           payload.animation.keyframes.at(-1)!,
           payload.viewDeg,
+          paperMm,
         ),
         contentType: "image/svg+xml",
         filename: `${id}-instructions.svg`,
