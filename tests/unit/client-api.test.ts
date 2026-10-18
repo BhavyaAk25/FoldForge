@@ -46,6 +46,26 @@ describe("forge client diagnostics", () => {
     } satisfies Partial<FoldForgeApiError>);
   });
 
+  it.each([
+    [504, "took too long"],
+    [429, "Too many requests"],
+    [500, "hit a problem"],
+    [404, "status 404"],
+  ])(
+    "explains a %i with no error body in plain words",
+    async (status, words) => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(new Response("An error occurred", { status })),
+      );
+      await expect(
+        postJson("/api/origami/choose", {}, z.object({}).strict()),
+      ).rejects.toThrow(words);
+    },
+  );
+
   it("marks a transport interruption as possibly started without retrying", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("socket reset"));
     vi.stubGlobal("fetch", fetchMock);

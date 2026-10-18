@@ -365,6 +365,9 @@ export class LlmFabricationDesignModel implements FabricationDesignModel {
       input: canonicalSerialize(
         fabricationPlanningInput(intent, usedTopologyIds),
       ),
+      // Synthesis (or the template fallback) still has to run inside the
+      // same 60 s request after this call.
+      deadlineMs: 35_000,
     });
   }
 }
