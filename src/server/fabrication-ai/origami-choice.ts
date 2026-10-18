@@ -46,6 +46,8 @@ export const chooseOrigamiModel = async (
     schemaName: "OrigamiChoice",
     instructions: ORIGAMI_CHOICE_PROMPT,
     input: prompt,
+    // Picking from a short list is quick; a slow answer means a busy model.
+    deadlineMs: 20_000,
   });
   return value;
 };

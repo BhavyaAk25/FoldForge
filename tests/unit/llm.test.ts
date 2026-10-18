@@ -113,23 +113,32 @@ describe("generateStructured", () => {
     ).rejects.toBeInstanceOf(LlmStructuredOutputError);
   });
 
-  it("moves to the next model when one is retired, busy, or rate limited", async () => {
+  it("moves to the next model when one is retired, rate limited, or too slow", async () => {
     const unavailable = (status: number) =>
       Object.assign(new Error(`status ${status}`), { status });
+    const slow = Object.assign(new Error("timed out"), {
+      name: "APIConnectionTimeoutError",
+    });
     create
       .mockRejectedValueOnce(unavailable(404))
       .mockRejectedValueOnce(unavailable(429))
+      .mockRejectedValueOnce(slow)
       .mockResolvedValueOnce(reply('{"name":"x","count":1}'));
     const result = await generateStructured(
       { schema: Schema, schemaName: "S", instructions: "i", input: "u" },
-      { AI_API_KEY: "k", AI_MODEL: "retired,limited,working" },
+      { AI_API_KEY: "k", AI_MODEL: "retired,limited,slow,working" },
     );
     expect(result.modelId).toBe("working");
     expect(create.mock.calls.map((call) => call[0].model)).toEqual([
       "retired",
       "limited",
+      "slow",
       "working",
     ]);
+    // Each attempt is bounded by what is left of the call's deadline.
+    expect(create.mock.calls.every((call) => call[1].timeout <= 50_000)).toBe(
+      true,
+    );
   });
 
   it("does not hide authentication failures behind fallbacks", async () => {

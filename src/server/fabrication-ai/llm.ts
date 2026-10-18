@@ -29,7 +29,14 @@ const DEFAULT_MODELS = [
 // Statuses that mean "this model, not this request": retired or unknown
 // model, rate limit, or temporary overload. The next model is tried.
 const NEXT_MODEL_STATUSES: ReadonlySet<number> = new Set([404, 429, 500, 503]);
-const REQUEST_TIMEOUT_MS = 120_000;
+/**
+ * Total time for one structured call, across models and the corrective
+ * retry. Vercel stops a function at 60 s, so a throttled free model must give
+ * way to the next one well before that rather than hang.
+ */
+const DEFAULT_DEADLINE_MS = 50_000;
+/** A model is not worth starting with less time than this left. */
+const MINIMUM_ATTEMPT_MS = 3_000;
 const CORRECTIVE_RETRIES = 1;
 const MAXIMUM_REPORTED_ISSUES = 6;
 
@@ -101,6 +108,15 @@ export interface StructuredRequest<Schema extends z.ZodType> {
   readonly schemaName: string;
   readonly instructions: string;
   readonly input: string;
+  /** Total time allowed for this call; defaults to 50 s. */
+  readonly deadlineMs?: number;
+}
+
+export class LlmDeadlineError extends Error {
+  constructor() {
+    super("The AI provider did not answer in time.");
+    this.name = "LlmDeadlineError";
+  }
 }
 
 export interface StructuredResult<Value> {
@@ -120,8 +136,9 @@ const clientFor = (configuration: LlmConfiguration): OpenAI => {
       client: new OpenAI({
         apiKey: configuration.apiKey,
         baseURL: configuration.baseURL,
-        maxRetries: 1,
-        timeout: REQUEST_TIMEOUT_MS,
+        // No SDK retries: a rate-limited model may ask to wait longer than
+        // the function lives. The model fallback below is the retry.
+        maxRetries: 0,
       }),
     };
   }
@@ -174,21 +191,31 @@ const completeWithModelFallback = async (
   client: OpenAI,
   models: readonly [string, ...string[]],
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  deadline: number,
 ): Promise<OpenAI.Chat.ChatCompletion & { readonly model: string }> => {
-  let lastError: unknown = null;
+  let lastError: unknown = new LlmDeadlineError();
   for (const model of models) {
+    const remaining = deadline - Date.now();
+    if (remaining < MINIMUM_ATTEMPT_MS) break;
     try {
-      const completion = await client.chat.completions.create({
-        model,
-        messages,
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      });
+      const completion = await client.chat.completions.create(
+        {
+          model,
+          messages,
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        },
+        { timeout: remaining },
+      );
       return { ...completion, model };
     } catch (error) {
+      // A model that is slow right now is as good as busy: try the next one.
+      const timedOut =
+        error instanceof Error && error.name === "APIConnectionTimeoutError";
       const status = statusOf(error);
-      if (status === null || !NEXT_MODEL_STATUSES.has(status)) throw error;
-      lastError = error;
+      if (!timedOut && (status === null || !NEXT_MODEL_STATUSES.has(status)))
+        throw error;
+      lastError = timedOut ? new LlmDeadlineError() : error;
     }
   }
   throw lastError;
@@ -212,12 +239,14 @@ export const generateStructured = async <Schema extends z.ZodType>(
     { role: "user", content: request.input },
   ];
 
+  const deadline = Date.now() + (request.deadlineMs ?? DEFAULT_DEADLINE_MS);
   let lastIssues: readonly string[] = [];
   for (let attempt = 0; attempt <= CORRECTIVE_RETRIES; attempt += 1) {
     const completion = await completeWithModelFallback(
       client,
       configuration.models,
       messages,
+      deadline,
     );
     const content = completion.choices[0]?.message.content ?? "";
     const outcome = parseStructuredContent(request.schema, content);
