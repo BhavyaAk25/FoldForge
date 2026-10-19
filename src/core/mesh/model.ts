@@ -16,7 +16,6 @@ import {
   unfold,
   type Cut,
   type Fold,
-  type Island,
   type Printable,
   type Vec2,
 } from "./unfold";
