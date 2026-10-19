@@ -54,6 +54,14 @@ jobs:
         run: pnpm run build
       - name: Size and speed budgets
         run: pnpm run check:budgets
+      - name: Visual bench (every prompt on its expected engine)
+        run: pnpm run bench --check
+      - name: Upload bench contact sheet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-contact-sheet
+          path: artifacts/bench/
       - name: Audit production dependencies
         run: pnpm audit --prod
 
