@@ -49,6 +49,18 @@ export class FoldForgeDiagnosticError extends Error {
 const errorBody = (value: unknown): ApiErrorBody =>
   typeof value === "object" && value !== null ? (value as ApiErrorBody) : {};
 
+/** What to tell a person when the server answered without an explanation. */
+const messageForStatus = (status: number): string => {
+  if (status === 504 || status === 502) {
+    return "The server took too long to answer; the free AI may be busy. Please try again in a minute.";
+  }
+  if (status === 429) {
+    return "Too many requests in a short time. Please wait a minute and try again.";
+  }
+  if (status >= 500) return "The server hit a problem. Please try again.";
+  return `The request failed (status ${status}). Please try again.`;
+};
+
 const responseError = async (
   response: Response,
 ): Promise<FoldForgeApiError> => {
@@ -59,7 +71,7 @@ const responseError = async (
   );
   return new FoldForgeApiError(
     parsed?.code ?? "REQUEST_FAILED",
-    parsed?.message ?? `Request failed with status ${response.status}.`,
+    parsed?.message ?? messageForStatus(response.status),
     parsed?.details ?? [],
     parsedDiagnostic.success ? parsedDiagnostic.data : null,
   );
