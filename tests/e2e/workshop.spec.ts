@@ -11,7 +11,11 @@ import type {
   FabricationProgramV1,
 } from "@/core/fabrication/types";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
+import { figureFromPreset, matchFigurePreset } from "@/core/mesh/presets";
+import type { FigureSpec } from "@/core/mesh/rigs";
+import { namesMechanism } from "@/core/origami/catalog";
 import { SAVED_EXAMPLE_IDS } from "@/lib/saved-examples";
+import { buildFigure } from "@/server/papercraft";
 import {
   buildCandidate,
   savedExample,
@@ -162,6 +166,26 @@ const installStudioMocks = async (
         aiModel: liveAiEnabled ? "e2e-model" : null,
         buildSha: "e2e-mock",
       });
+      return;
+    }
+
+    // The router and the figure builder run the real server code.
+    if (pathname === "/api/choose") {
+      const body = request.postDataJSON() as { readonly prompt: string };
+      const preset = matchFigurePreset(body.prompt);
+      await respondJson(
+        route,
+        preset && !namesMechanism(body.prompt)
+          ? { engine: "figure", figure: figureFromPreset(preset), reason: null }
+          : { engine: "mechanism" },
+      );
+      return;
+    }
+
+    if (pathname === "/api/papercraft") {
+      const body = request.postDataJSON() as { readonly figure: FigureSpec };
+      const built = buildFigure(body.figure);
+      await respondJson(route, built.ok ? built.payload : null);
       return;
     }
 
@@ -566,33 +590,23 @@ test("keeps prompt examples honest and provides a saved result in template mode"
   const savedDownload = await savedDownloadPromise;
   expect(savedDownload.suggestedFilename()).toMatch(/\.svg$/u);
 
+  // The duck example is a 3D papercraft figure: pages to print, no AI.
   const duckExample = page.locator("article").filter({
-    hasText: "Static duck crease pattern",
+    hasText: "Faceted 3D duck",
   });
-  await duckExample
-    .getByRole("button", { name: "Open prepared crease study" })
-    .click();
+  await duckExample.getByRole("button", { name: "Use this prompt" }).click();
+  await page.getByRole("button", { name: "Create design" }).click();
+  await expect(page.getByRole("heading", { name: "Duck" })).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: "Explore the static duck crease pattern.",
-    }),
-  ).toBeFocused();
-  await expect(
-    page.getByText("no open-and-close motion is modeled", { exact: false }),
+    page.getByRole("button", { name: /^Print all \d+ pages$/u }),
   ).toBeVisible();
-  await expect(page.getByLabel("Open and close the design")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Download GLB" }),
-  ).toContainText("This static model has no animation clip.");
-  const foldDownload = page.getByRole("button", { name: "Download FOLD" });
-  await expect(foldDownload).toBeEnabled();
-  const foldDownloadPromise = page.waitForEvent("download");
-  await foldDownload.click();
-  const downloadedFold = await foldDownloadPromise;
-  expect(downloadedFold.suggestedFilename()).toMatch(/\.fold$/u);
+  const pageDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download page 1" }).click();
+  expect((await pageDownloadPromise).suggestedFilename()).toBe(
+    "duck-page-1.svg",
+  );
   expect(state.exportRequests.map((request) => request.format)).toEqual([
     "svg",
-    "fold",
   ]);
   expect(state.intentPrompts).toEqual([]);
 });
@@ -707,7 +721,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
     await prompt.evaluate((element) => getComputedStyle(element).outlineWidth),
   ).not.toBe("0px");
   const duckExample = page.locator("article").filter({
-    hasText: "Static duck crease pattern",
+    hasText: "Faceted 3D duck",
   });
   const duckPromptButton = duckExample.getByRole("button", {
     name: "Use this prompt",
@@ -715,7 +729,7 @@ test("supports keyboard focus and reduced motion", async ({ page }) => {
   await duckPromptButton.focus();
   await page.keyboard.press("Enter");
   await expect(prompt).toHaveValue(
-    "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.",
+    "A faceted yellow paper duck with an orange beak.",
   );
 
   const styles = await page.evaluate(() => {

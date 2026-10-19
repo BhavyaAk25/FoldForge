@@ -11,14 +11,7 @@ import {
   type ExamplePrompt,
 } from "@/components/foldforge-start";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
-import {
-  asksForOrigami,
-  isOrigamiModelId,
-  matchOrigamiModel,
-  PAPER_MM,
-  paperSizeFromPrompt,
-  type OrigamiModelId,
-} from "@/core/origami/catalog";
+
 import type {
   CandidateV2,
   ExportFormat,
@@ -47,10 +40,14 @@ import {
 } from "@/lib/client-api";
 import { forgeDiagnostic } from "@/lib/forge-diagnostics";
 import {
-  OrigamiChoiceResponseSchema,
   OrigamiPayloadSchema,
   type OrigamiPayloadResponse,
 } from "@/lib/origami-contract";
+import {
+  PapercraftPayloadSchema,
+  RouteResponseSchema,
+  type PapercraftPayload,
+} from "@/lib/papercraft-contract";
 import {
   forgePromptHash,
   forgeResultMatchesPrompt,
@@ -65,6 +62,12 @@ import styles from "./foldforge-app.module.css";
 const loadResultsPanel = () => import("./foldforge-results");
 const FoldForgeResults = dynamic(
   () => loadResultsPanel().then((module) => module.FoldForgeResults),
+  { ssr: false },
+);
+
+const loadPapercraftPanel = () => import("./papercraft-results");
+const PapercraftResults = dynamic(
+  () => loadPapercraftPanel().then((module) => module.PapercraftResults),
   { ssr: false },
 );
 
@@ -158,6 +161,10 @@ export function FoldForgeApp() {
     readonly payload: OrigamiPayloadResponse;
     readonly paperMm: number;
     /** Why the AI picked this model, when the prompt named none. */
+    readonly aiReason: string | null;
+  } | null>(null);
+  const [papercraft, setPapercraft] = useState<{
+    readonly payload: PapercraftPayload;
     readonly aiReason: string | null;
   } | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -296,53 +303,50 @@ export function FoldForgeApp() {
     setResultBinding(null);
     resultBindingRef.current = null;
     setOrigami(null);
+    setPapercraft(null);
     setPhase("intent");
     setStatusMessage("Understanding your request…");
 
     try {
-      // A prompt that names a library model (a crane, a paper plane) gets the
-      // real origami sequence. One that asks for origami without naming a
-      // model lets the AI pick the closest one. Everything else goes to the
-      // papercraft engine.
-      let origamiId: OrigamiModelId | null = matchOrigamiModel(requestedPrompt);
-      let paperMm = paperSizeFromPrompt(requestedPrompt) ?? PAPER_MM.default;
-      let aiReason: string | null = null;
-      if (!origamiId && aiAvailable && asksForOrigami(requestedPrompt)) {
-        setStatusMessage("Choosing an origami model…");
-        // "None" falls through to the papercraft engine. A failed call stops
-        // here: the papercraft path would wait on the same busy AI.
-        const choice = await postJson(
-          "/api/origami/choose",
-          { prompt: requestedPrompt },
-          OrigamiChoiceResponseSchema,
-        ).catch(() => null);
-        if (!choice) {
-          setPhase("idle");
-          setError(
-            "The free AI is busy right now. Try again in a minute, or name a model directly: crane, flapping bird, paper plane, cup, or a bird, square, waterbomb, fish, or frog base.",
-          );
-          return;
-        }
-        if (choice.modelId && isOrigamiModelId(choice.modelId)) {
-          origamiId = choice.modelId;
-          paperMm = choice.paperSizeMm ?? paperMm;
-          aiReason = choice.reason;
-        }
-      }
-      if (origamiId) {
+      // The server routes the prompt: origami, a 3D papercraft figure, or
+      // the mechanism engine below (boxes, cards, stands). Words decide
+      // first; only an unrecognised prompt costs an AI call.
+      const route = await postJson(
+        "/api/choose",
+        { prompt: requestedPrompt },
+        RouteResponseSchema,
+      );
+      const current = () =>
+        sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding);
+      if (route.engine === "origami") {
         void loadOrigamiPanel();
         const payload = await getJson(
-          `/api/origami/${origamiId}`,
+          `/api/origami/${route.modelId}`,
           OrigamiPayloadSchema,
         );
-        if (
-          !sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding)
-        ) {
-          return;
-        }
-        setOrigami({ payload, paperMm, aiReason });
+        if (!current()) return;
+        setOrigami({
+          payload,
+          paperMm: route.paperSizeMm,
+          aiReason: route.reason,
+        });
         setPhase("ready");
         setStatusMessage(`${payload.name}: folding sequence ready.`);
+        return;
+      }
+      if (route.engine === "figure") {
+        void loadPapercraftPanel();
+        setPhase("programs");
+        setStatusMessage(`Building the ${route.figure.title.toLowerCase()}…`);
+        const payload = await postJson(
+          "/api/papercraft",
+          { figure: route.figure },
+          PapercraftPayloadSchema,
+        );
+        if (!current()) return;
+        setPapercraft({ payload, aiReason: route.reason });
+        setPhase("ready");
+        setStatusMessage(`${payload.title}: printable 3D papercraft ready.`);
         return;
       }
 
@@ -461,6 +465,7 @@ export function FoldForgeApp() {
 
   const applyExamplePrompt = (example: ExamplePrompt) => {
     setOrigami(null);
+    setPapercraft(null);
     setPrompt(example.prompt);
     latestPromptRef.current = example.prompt;
     setIntent(null);
@@ -492,9 +497,9 @@ export function FoldForgeApp() {
       setError(formatFailure(exampleError));
       return;
     }
-    const isDuck = exampleId === "duck";
     const { candidate } = example;
     setOrigami(null);
+    setPapercraft(null);
     const savedBinding: ForgeResultBinding = {
       attemptId: newForgeAttemptId(),
       promptHash: forgePromptHash(example.prompt),
@@ -512,12 +517,10 @@ export function FoldForgeApp() {
     setGenerationSource(null);
     setSavedLimitation(example.limitation);
     setPreviewMode("assembled");
-    setMotionPosition(isDuck ? 0 : 0.65);
+    setMotionPosition(0.65);
     setResultsFocusRequest((request) => request + 1);
     setPhase("ready");
-    setStatusMessage(
-      `Saved ${isDuck ? "static duck crease-pattern" : "vertical-lift flower"} example opened.`,
-    );
+    setStatusMessage("Saved vertical-lift flower example opened.");
   };
 
   const exportFormat = async (format: ExportFormat) => {
@@ -629,8 +632,9 @@ export function FoldForgeApp() {
           onPromptChange={(nextPrompt) => {
             latestPromptRef.current = nextPrompt;
             setPrompt(nextPrompt);
-            if (origami) {
+            if (origami || papercraft) {
               setOrigami(null);
+              setPapercraft(null);
               setPhase("idle");
             }
             if (candidates.length > 0) {
@@ -664,6 +668,13 @@ export function FoldForgeApp() {
               Dismiss
             </button>
           </div>
+        ) : null}
+
+        {papercraft ? (
+          <PapercraftResults
+            payload={papercraft.payload}
+            aiReason={papercraft.aiReason}
+          />
         ) : null}
 
         {origami ? (

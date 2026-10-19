@@ -49,7 +49,7 @@ const mentions = (text: string, phrase: string): boolean =>
   );
 
 /** Objects the cut-and-fold engine makes; "a crane-shaped box" is a box. */
-const PAPERCRAFT_WORDS = [
+export const PAPERCRAFT_WORDS = [
   "box",
   "card",
   "stand",
@@ -89,6 +89,10 @@ export const matchOrigamiModel = (prompt: string): OrigamiModelId | null => {
  * model. "Folding" alone is not enough ("a folding display" is papercraft),
  * and prompts naming a papercraft object never qualify.
  */
+/** Whether a prompt names something the mechanism engine makes (a box, a card, a stand). */
+export const namesMechanism = (prompt: string): boolean =>
+  PAPERCRAFT_WORDS.some((word) => mentions(prompt, word));
+
 export const asksForOrigami = (prompt: string): boolean =>
   !PAPERCRAFT_WORDS.some((word) => mentions(prompt, word)) &&
   (mentions(prompt, "origami") || /^\s*fold\b/iu.test(prompt));

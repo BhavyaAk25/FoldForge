@@ -20,7 +20,7 @@ import { stepDiagram } from "@/core/origami/export";
 import { poseAt, stepCount, type PoseInput } from "@/core/origami/pose";
 import type { OrigamiPayloadResponse } from "@/lib/origami-contract";
 
-import styles from "./origami-results.module.css";
+import styles from "./model-results.module.css";
 
 const DOWNLOADS = [
   {
