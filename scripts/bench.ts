@@ -5,9 +5,11 @@ import sharp from "sharp";
 import { compileFabricationProgram } from "../src/core/fabrication/compiler";
 import { homeMotionState } from "../src/core/fabrication/kinematics";
 import { intentFromPromptKeywords } from "../src/core/fabrication/prompt-intent";
-import { matchOrigamiModel } from "../src/core/origami/catalog";
+import { buildPapercraft } from "../src/core/mesh/model";
+import { rigSpec } from "../src/core/mesh/rigs";
 import { poseAt, stepCount } from "../src/core/origami/pose";
 import { templateFallback } from "../src/server/fabrication-ai/plan-response";
+import { routePrompt } from "../src/server/fabrication-ai/router";
 import { origamiPayload } from "../src/server/origami";
 import { BENCH_PROMPTS, type BenchPrompt } from "./bench-prompts";
 
@@ -20,7 +22,7 @@ import { BENCH_PROMPTS, type BenchPrompt } from "./bench-prompts";
  *   tsx scripts/bench.ts --check  also fails if a prompt misses its engine
  */
 
-type Engine = "origami" | "papercraft" | "none";
+type Engine = "origami" | "figure" | "papercraft" | "none";
 
 interface Face {
   readonly points: readonly (readonly [number, number, number])[];
@@ -38,7 +40,7 @@ interface BenchResult {
 const PAPER = "#e8d6b4";
 const CELL = 300;
 
-const run = (prompt: BenchPrompt): BenchResult => {
+const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
   const start = performance.now();
   const done = (
     engine: Engine,
@@ -51,9 +53,27 @@ const run = (prompt: BenchPrompt): BenchResult => {
     ms: Math.round(performance.now() - start),
     faces,
   });
-  const origamiId = matchOrigamiModel(prompt.text);
-  if (origamiId) {
-    const payload = origamiPayload(origamiId);
+  const route = await routePrompt(prompt.text);
+  if (route.engine === "figure") {
+    const built = buildPapercraft(rigSpec(route.figure));
+    if (!built.ok)
+      return done("none", `figure failed: ${built.error.kind}`, []);
+    const faces = built.value.parts.flatMap((part) =>
+      part.mesh.faces.map((face) => ({
+        color: part.color,
+        points: face.map((v) => part.mesh.vertices[v]!),
+      })),
+    );
+    return done(
+      "figure",
+      `${route.figure.title}, ${built.value.pages.length} pages`,
+      faces,
+    );
+  }
+  if (route.engine === "origami") {
+    const payload = origamiPayload(
+      route.modelId as Parameters<typeof origamiPayload>[0],
+    );
     const input = {
       ...payload.animation,
       vertices: payload.pattern.vertices,
@@ -174,7 +194,8 @@ const escape = (text: string) =>
   text.replace(/[<>&"]/gu, (c) => `&#${c.charCodeAt(0)};`);
 
 const main = async () => {
-  const results = BENCH_PROMPTS.map(run);
+  const results: BenchResult[] = [];
+  for (const prompt of BENCH_PROMPTS) results.push(await run(prompt));
   const outDir = "artifacts/bench";
   mkdirSync(outDir, { recursive: true });
   const columns = 4;

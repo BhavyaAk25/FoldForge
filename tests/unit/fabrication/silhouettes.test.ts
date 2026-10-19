@@ -8,9 +8,8 @@ import {
   PANEL_SILHOUETTES,
   applyPanelSilhouettes,
   canonicalSilhouette,
-  figureSilhouetteForText,
+  cutoutShapeForText,
 } from "@/core/fabrication/silhouettes";
-import { uprightFoldedProgram } from "@/core/fabrication/upright";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 
 import { fixtureProgram } from "../../fixtures/fabrication";
@@ -35,16 +34,16 @@ describe("canonical silhouettes", () => {
   );
 });
 
-describe("figureSilhouetteForText", () => {
+describe("cutoutShapeForText", () => {
   it.each([
-    ["a paper swan", "duck"],
+    ["a paper swan", null],
     ["Christmas trees for the table", "tree"],
     ["a tiny cottage", "house"],
     ["a gold star", "star"],
     ["start a box", null],
     ["a robot", null],
   ])("maps %j to %s", (text, expected) => {
-    expect(figureSilhouetteForText(text)).toBe(expected);
+    expect(cutoutShapeForText(text)).toBe(expected);
   });
 });
 
@@ -67,28 +66,6 @@ describe("applyPanelSilhouettes", () => {
     });
     expect(applyPanelSilhouettes(program, new Map())).toBe(program);
   });
-
-  it.each(["duck", "tree", "house", "star"])(
-    "produces a verified, upright, shaped %s figure",
-    (kind) => {
-      const intent = intentFromPromptKeywords(`a ${kind} 120 x 90 x 30 mm`)!;
-      const result = synthesizeFabricationDesign(
-        intent,
-        templateSpecForIntent(intent)!,
-        1,
-      );
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.report.valid).toBe(true);
-      const shaped = result.value.blueprint.panels.filter(
-        (panel) => panel.contour.vertices.length !== 4,
-      );
-      expect(shaped).toHaveLength(2);
-      // Already upright: mirroring again would make it hang.
-      expect(uprightFoldedProgram(result.value)).toBe(result.value);
-    },
-    30_000,
-  );
 
   it("draws a real flower on the pop-up card and keeps it verified", () => {
     const intent = intentFromPromptKeywords(
@@ -113,11 +90,8 @@ describe("applyPanelSilhouettes", () => {
   }, 120_000);
 });
 
-describe("animal, heart, cut-out, and stand templates", () => {
+describe("cut-out and stand templates", () => {
   it.each([
-    ["a sitting cat 80 x 100 x 30 mm", "Stand-up cat", 2],
-    ["a bunny 70 x 120 x 30 mm", "Stand-up rabbit", 2],
-    ["a heart 100 x 90 x 30 mm", "Stand-up heart", 2],
     ["a bookmark shaped like a star", "star cut-out", 1],
     ["a heart gift tag 60 x 80 mm", "heart cut-out", 1],
     ["a phone stand for my desk", "Desk stand", 0],
@@ -140,12 +114,8 @@ describe("animal, heart, cut-out, and stand templates", () => {
   });
 
   it("matches stand and cut-out keywords as whole words only", () => {
-    expect(figureSilhouetteForText("a kitten")).toBe("cat");
     expect(
       intentFromPromptKeywords("a box for a standard deck of cards")?.title,
     ).toBe("Folded box");
-    expect(intentFromPromptKeywords("a cat that stands up")?.title).toBe(
-      "Stand-up cat",
-    );
   });
 });

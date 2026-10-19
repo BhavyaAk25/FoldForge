@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { GET as exportGet } from "@/app/api/origami/[id]/[format]/route";
 import { GET as modelGet } from "@/app/api/origami/[id]/route";
-import { POST as choosePost } from "@/app/api/origami/choose/route";
 import { animateSequence } from "@/core/origami/animate";
 import {
   ORIGAMI_CATALOG,
@@ -20,7 +19,6 @@ import { poseAt, stepCount } from "@/core/origami/pose";
 import { deriveSequence, type FoldStep } from "@/core/origami/sequence";
 import { simulateFolding } from "@/core/origami/simulate";
 import { OrigamiPayloadSchema } from "@/lib/origami-contract";
-import { OrigamiChoiceSchema } from "@/server/fabrication-ai/origami-choice";
 
 const p = (x: number, y: number) => ({ x, y });
 const s = (
@@ -109,44 +107,6 @@ describe("origami prompts the AI chooses for", () => {
     ["a crane", null],
   ])("%j gives a %s mm sheet", (prompt, expected) => {
     expect(paperSizeFromPrompt(prompt)).toBe(expected);
-  });
-
-  it("returns no choice when no AI provider is configured", async () => {
-    vi.stubEnv("AI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
-    const response = await choosePost(
-      new Request("http://localhost:3000/api/origami/choose", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "http://localhost:3000",
-        },
-        body: JSON.stringify({ prompt: "an origami swan" }),
-      }),
-    );
-    vi.unstubAllEnvs();
-    expect(await response.json()).toEqual({
-      modelId: null,
-      paperSizeMm: null,
-      reason: null,
-    });
-  });
-
-  it("only lets the AI name a library model", () => {
-    expect(
-      OrigamiChoiceSchema.safeParse({
-        modelId: "dragon",
-        paperSizeMm: 150,
-        reason: "x",
-      }).success,
-    ).toBe(false);
-    expect(
-      OrigamiChoiceSchema.safeParse({
-        modelId: "crane",
-        paperSizeMm: 150,
-        reason: "A swan is closest to the crane.",
-      }).success,
-    ).toBe(true);
   });
 });
 

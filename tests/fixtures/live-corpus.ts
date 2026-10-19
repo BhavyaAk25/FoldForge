@@ -145,85 +145,6 @@ const cardBoxOverConstrained = (): LiveCorpusCase => ({
   },
 });
 
-// ── Static faceted duck (a hard-to-synthesize model spec). ──
-const facetedDuck = (): LiveCorpusCase => ({
-  name: "static faceted duck (fold-only, cuts forbidden, large envelope)",
-  mustProduceDesign: true,
-  intent: {
-    version: "1",
-    intentId: "intent-duck",
-    sourcePrompt:
-      "Make a static, faceted duck crease pattern from one sheet of cardstock. It should look like a simple duck using a body, head, and beak. Keep it fold-only and avoid glue.",
-    title: "One-Sheet Faceted Duck Crease Pattern",
-    objectLabel: "faceted duck",
-    functionalGoal:
-      "Create a static, self-supporting duck folded from a single uncut sheet without glue.",
-    visualDescription: "A simple angular duck with body, head, and beak.",
-    behavior: "static",
-    // The exact live envelope + the "fold-only, uncut sheet" budget the intent
-    // model produced for this prompt (cutsAllowed:false) — the case that broke.
-    requestedSize: { widthMm: 160, heightMm: 110, depthMm: 70 },
-    stockOptions: a4(0.3),
-    fabricationBudget: { ...budget, cutsAllowed: false },
-    semanticConstraints: [
-      {
-        constraintId: "constraint-duck-form",
-        hard: true,
-        source: "user",
-        kind: "recognizable_form",
-        label: "faceted duck",
-        semanticPartIds: ["part-body", "part-head", "part-beak"],
-        requiredLandmarks: ["body", "head", "beak"],
-        evaluation: "landmark_geometry",
-      },
-    ],
-    priorities: ["mechanical_simplicity"],
-    ...supported,
-  },
-  designSpec: {
-    version: "3",
-    label: "duck",
-    summary: "faceted duck",
-    parts: [
-      { key: "body", label: "body", role: "structural", ...boxPart(90, 80) },
-      { key: "head", label: "head", role: "structural", ...triPart(45, 45) },
-      { key: "beak", label: "beak", role: "decorative", ...triPart(22, 15) },
-    ],
-    relations: [
-      {
-        key: "bh",
-        partAKey: "body",
-        partBKey: "head",
-        kind: "fold",
-        angleRangeDeg: { minimum: 40, home: 45, maximum: 50 },
-      },
-      {
-        key: "hb",
-        partAKey: "head",
-        partBKey: "beak",
-        kind: "fold",
-        angleRangeDeg: { minimum: 40, home: 45, maximum: 50 },
-      },
-    ],
-    materialConstraints: {
-      materialLabel: "Cardstock",
-      thickness: { minimumMm: 0.3, preferredMm: 0.3, maximumMm: 0.3 },
-    },
-    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
-    glueAllowed: false,
-    driver: null,
-    outputs: [],
-    visibleLandmarks: [
-      { key: "b", label: "body", partKeys: ["body"], importance: "required" },
-      { key: "h", label: "head", partKeys: ["head"], importance: "required" },
-      { key: "k", label: "beak", partKeys: ["beak"], importance: "required" },
-    ],
-    aestheticPreferences: ["duck"],
-    priorities: ["mechanical_simplicity"],
-    tolerances: { dimensionMm: 1, clearanceMm: 0.5, angleDeg: 3 },
-  },
-});
-
 // ── Pop-up flower card (a coupled five-petal spec the synthesizer can't build). ──
 const popUpFlower = (): LiveCorpusCase => ({
   name: "pop-up flower card",
@@ -350,6 +271,5 @@ function lock(key: string, partAKey: string, partBKey: string) {
 
 export const liveCorpus = (): readonly LiveCorpusCase[] => [
   cardBoxOverConstrained(),
-  facetedDuck(),
   popUpFlower(),
 ];

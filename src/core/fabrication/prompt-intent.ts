@@ -1,11 +1,6 @@
 import { normalizeFabricationIntentFeasibility } from "./feasibility-normalization";
 import { sha256Hex } from "../sha256";
-import {
-  FIGURE_SILHOUETTE_KEYWORDS,
-  FIGURE_LANDMARKS,
-  containsWord,
-  figureSilhouetteForText,
-} from "./silhouettes";
+import { containsWord, cutoutShapeForText } from "./silhouettes";
 import { CUTOUT_KEYWORDS, STAND_KEYWORDS } from "./design-templates";
 import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
 
@@ -17,7 +12,7 @@ import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
  */
 
 export type PromptTemplateClass =
-  "cutout" | "pop_up_card" | "stand" | "enclosure" | "figure";
+  "cutout" | "pop_up_card" | "stand" | "enclosure";
 
 interface ClassProfile {
   readonly keywords: readonly string[];
@@ -29,7 +24,8 @@ interface ClassProfile {
   readonly landmarks: readonly string[];
 }
 
-// Ordered by precedence: a "pop-up card box" is a card, a "duck box" is a box.
+// Ordered by precedence: a "pop-up card box" is a card. Animals, vehicles,
+// and buildings are 3D papercraft figures, routed before this reader.
 const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
   cutout: {
     keywords: CUTOUT_KEYWORDS,
@@ -90,16 +86,6 @@ const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
     visualDescription: "A rectangular folded enclosure.",
     landmarks: [],
   },
-  figure: {
-    // Matched through figureSilhouetteForText; listed for documentation.
-    keywords: Object.values(FIGURE_SILHOUETTE_KEYWORDS).flat(),
-    title: "Stand-up figure",
-    behavior: "static",
-    defaultSizeMm: [120, 90, 30],
-    functionalGoal: "A static stand-up figure folded from one sheet.",
-    visualDescription: "Two matching silhouette sides folded up from a base.",
-    landmarks: [],
-  },
 };
 
 // Same precedence as the template router: a "star bookmark" is a cut-out and
@@ -109,7 +95,6 @@ const CLASS_ORDER: readonly PromptTemplateClass[] = [
   "pop_up_card",
   "stand",
   "enclosure",
-  "figure",
 ];
 
 // Short, common words that need whole-word matching ("standard" is not "stand").
@@ -124,21 +109,16 @@ export const promptTemplateClass = (
   const text = prompt.toLowerCase();
   return (
     CLASS_ORDER.find((templateClass) =>
-      templateClass === "figure"
-        ? figureSilhouetteForText(text) !== null
-        : // "a cat that stands up" is a figure, not a phone stand.
-          templateClass === "stand" && figureSilhouetteForText(text) !== null
-          ? false
-          : PROFILES[templateClass].keywords.some((keyword) =>
-              WHOLE_WORD_CLASSES.has(templateClass)
-                ? containsWord(text, keyword)
-                : text.includes(keyword),
-            ),
+      PROFILES[templateClass].keywords.some((keyword) =>
+        WHOLE_WORD_CLASSES.has(templateClass)
+          ? containsWord(text, keyword)
+          : text.includes(keyword),
+      ),
     ) ?? null
   );
 };
 
-/** Title and landmarks for the class, specialized by figure silhouette. */
+/** Title and landmarks for the class, specialized by the shape named. */
 const profileFor = (
   templateClass: PromptTemplateClass,
   prompt: string,
@@ -146,7 +126,7 @@ const profileFor = (
   const profile = PROFILES[templateClass];
   if (templateClass === "pop_up_card") {
     // Matches the template: the rising panel takes the named shape.
-    const shape = figureSilhouetteForText(prompt) ?? "flower";
+    const shape = cutoutShapeForText(prompt) ?? "flower";
     return {
       ...profile,
       title: `Pop-up ${shape} card`,
@@ -154,18 +134,10 @@ const profileFor = (
     };
   }
   if (templateClass === "cutout") {
-    const shape = figureSilhouetteForText(prompt);
+    const shape = cutoutShapeForText(prompt);
     return shape ? { ...profile, title: `${shape} cut-out` } : profile;
   }
-  if (templateClass !== "figure") return profile;
-  const silhouette = figureSilhouetteForText(prompt) ?? "duck";
-  return {
-    ...profile,
-    title: `Stand-up ${silhouette}`,
-    functionalGoal: `A static stand-up ${silhouette} folded from one sheet.`,
-    visualDescription: `Two ${silhouette}-shaped sides folded up from a base.`,
-    landmarks: FIGURE_LANDMARKS[silhouette],
-  };
+  return profile;
 };
 const UNIT_TO_MM: Readonly<Record<string, number>> = {
   mm: 1,

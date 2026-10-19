@@ -1,9 +1,8 @@
 import { FabricationDesignSpecV3Schema } from "./design-spec";
 import type { FabricationDesignSpecV3 } from "./design-spec";
 import {
-  FIGURE_LANDMARKS,
   containsWord,
-  figureSilhouetteForText,
+  cutoutShapeForText,
   type PanelSilhouette,
 } from "./silhouettes";
 import { normalizeFabricationIntentFeasibility } from "./feasibility-normalization";
@@ -212,89 +211,8 @@ export const enclosureTemplateSpec = (
   });
 };
 
-const figureText = (intent: FabricationIntentV1): string =>
+const requestText = (intent: FabricationIntentV1): string =>
   `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`;
-
-const looksLikeFigure = (intent: FabricationIntentV1): boolean =>
-  figureSilhouetteForText(figureText(intent)) !== null;
-
-/**
- * A static stand-up figure: two matching silhouette sides folded upright from
- * the long edges of a base, so the figure reads from either side. The
- * assembled envelope is width x height x depth, matching the requested size.
- */
-const figureLandmarks = (silhouette: PanelSilhouette): readonly string[] =>
-  silhouette === "flower" || silhouette === "arch"
-    ? [silhouette]
-    : FIGURE_LANDMARKS[silhouette];
-
-export const figureTemplateSpec = (
-  widthMm: number,
-  heightMm: number,
-  depthMm: number,
-  silhouette: PanelSilhouette = "duck",
-  // What the user asked for, when it differs from the outline used (a robot
-  // drawn with the neutral arch outline is still labelled a robot).
-  objectName: string = silhouette,
-): FabricationDesignSpecV3 => {
-  // A side profile runs along the longer footprint axis: a rat requested as
-  // 60 wide by 130 deep is 130 long, standing on a 60-deep base.
-  const w = Math.max(30, Math.round(Math.max(widthMm, depthMm)));
-  const h = Math.max(30, Math.round(heightMm));
-  const d = Math.max(12, Math.round(Math.min(widthMm, depthMm)));
-  const name = objectName.trim().toLowerCase().slice(0, 80) || silhouette;
-  const side = (key: string, label: string) => ({
-    key,
-    label,
-    role: "structural" as const,
-    width: exactMm(w),
-    height: exactMm(h),
-    shapePreference: "rectangle" as const,
-    silhouette,
-  });
-  const foldUp = (key: string, partBKey: string) => ({
-    key,
-    kind: "fold" as const,
-    partAKey: "base",
-    partBKey,
-    angleRangeDeg: { minimum: 90, home: 90, maximum: 90 },
-  });
-  return FabricationDesignSpecV3Schema.parse({
-    version: "3",
-    label: `Stand-up ${name}`,
-    summary: `A fold-only stand-up ${name}: two sides with the ${silhouette} outline folded upright from a shared base.`,
-    parts: [
-      {
-        key: "base",
-        label: "Base",
-        role: "support",
-        width: exactMm(w),
-        height: exactMm(d),
-        shapePreference: "rectangle",
-      },
-      side("body", `${name} body, front side`),
-      side("back", `${name} body, back side`),
-    ],
-    relations: [foldUp("base-body", "body"), foldUp("base-back", "back")],
-    materialConstraints: {
-      materialLabel: "Cardstock",
-      thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
-    },
-    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
-    glueAllowed: false,
-    driver: null,
-    outputs: [],
-    visibleLandmarks: figureLandmarks(silhouette).map((landmark) => ({
-      key: landmark,
-      label: landmark,
-      partKeys: ["body", "back"],
-      importance: "required",
-    })),
-    aestheticPreferences: [`${silhouette} silhouette, fold-only`],
-    priorities: ["visual_expression", "mechanical_simplicity"],
-    tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
-  });
-};
 
 const POPUP_KEYWORDS = [
   "pop-up",
@@ -432,7 +350,7 @@ const mentions = (
   intent: FabricationIntentV1,
   keywords: readonly string[],
 ): boolean => {
-  const haystack = figureText(intent);
+  const haystack = requestText(intent);
   return keywords.some((word) => containsWord(haystack, word));
 };
 
@@ -564,7 +482,6 @@ export const TEMPLATE_ARCHETYPES = [
   "enclosure",
   "stand",
   "cutout",
-  "figure",
   "popup_card",
 ] as const;
 
@@ -585,7 +502,6 @@ const specFromHint = (
   widthMm: number,
   heightMm: number,
   depthMm: number,
-  objectName: string,
 ): FabricationDesignSpecV3 => {
   switch (hint.archetype) {
     case "enclosure":
@@ -594,15 +510,6 @@ const specFromHint = (
       return standTemplateSpec(widthMm, heightMm, depthMm);
     case "cutout":
       return cutoutTemplateSpec(widthMm, heightMm, hint.silhouette ?? "arch");
-    case "figure":
-      // Without a fitting outline the neutral arch is used, never an animal.
-      return figureTemplateSpec(
-        widthMm,
-        heightMm,
-        depthMm,
-        hint.silhouette ?? "arch",
-        objectName,
-      );
     case "popup_card":
       return popUpCardTemplateSpec(
         widthMm,
@@ -625,14 +532,6 @@ interface TemplateDescriptor {
   ) => FabricationDesignSpecV3;
 }
 
-const buildFigure: TemplateDescriptor["build"] = (w, h, d, intent) =>
-  figureTemplateSpec(
-    w,
-    h,
-    d,
-    figureSilhouetteForText(figureText(intent)) ?? "duck",
-  );
-
 const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
   // A "star bookmark" is a flat cut-out, not a stand-up star.
   {
@@ -645,13 +544,8 @@ const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
       cutoutTemplateSpec(
         w,
         h,
-        figureSilhouetteForText(figureText(intent)) ?? "arch",
+        cutoutShapeForText(requestText(intent)) ?? "arch",
       ),
-  },
-  {
-    matches: (intent) =>
-      intent.behavior === "static" && looksLikeFigure(intent),
-    build: buildFigure,
   },
   {
     matches: looksLikePopUp,
@@ -662,17 +556,15 @@ const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
         w,
         h,
         d,
-        figureSilhouetteForText(figureText(intent)) ?? "flower",
+        cutoutShapeForText(requestText(intent)) ?? "flower",
       ),
   },
   // Before enclosures, so "phone stand holder" is a stand, not a box.
   {
-    matches: (intent) =>
-      mentions(intent, STAND_KEYWORDS) && !looksLikeFigure(intent),
+    matches: (intent) => mentions(intent, STAND_KEYWORDS),
     build: (w, h, d) => standTemplateSpec(w, h, d),
   },
   { matches: looksLikeEnclosure, build: enclosureTemplateSpec },
-  { matches: looksLikeFigure, build: buildFigure },
 ];
 
 /**
@@ -696,9 +588,7 @@ export const templateSpecForIntent = (
     candidate.matches(intent),
   );
   if (descriptor) return descriptor.build(widthMm, heightMm, depthMm, intent);
-  return hint
-    ? specFromHint(hint, widthMm, heightMm, depthMm, intent.objectLabel)
-    : null;
+  return hint ? specFromHint(hint, widthMm, heightMm, depthMm) : null;
 };
 
 /**

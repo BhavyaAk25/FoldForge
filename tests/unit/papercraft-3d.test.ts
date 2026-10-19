@@ -1,4 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { POST as choosePost } from "@/app/api/choose/route";
+import { POST as papercraftPost } from "@/app/api/papercraft/route";
+import { FIGURE_PRESETS, figureFromPreset } from "@/core/mesh/presets";
+import {
+  PapercraftPayloadSchema,
+  RouteResponseSchema,
+} from "@/lib/papercraft-contract";
+import { RouteChoiceSchema, routePrompt } from "@/server/fabrication-ai/router";
+import { buildFigure } from "@/server/papercraft";
 
 import { papercraftPageSvg } from "@/core/mesh/export";
 import {
@@ -182,5 +192,86 @@ describe("3D papercraft", () => {
   ])("catches %s", (_, tamper, check) => {
     const failures = verifyPapercraft(tamper(build(DUCK)));
     expect(failures.map((f) => f.check)).toContain(check);
+  });
+});
+
+describe("figures", () => {
+  it.each(FIGURE_PRESETS.map((p) => [p.id, p] as const))(
+    "the %s preset builds a checked model",
+    (_, preset) => {
+      const built = buildFigure(figureFromPreset(preset));
+      expect(
+        built.ok ? built.payload.pages.length : built.reason,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it.each([
+    ["fold a paper crane", { engine: "origami", modelId: "crane" }],
+    ["a red fox", { engine: "figure", preset: "Fox", primary: "#d6403a" }],
+    ["a 20 cm cat", { engine: "figure", preset: "Cat", sizeMm: 200 }],
+    ["an origami swan", { engine: "figure", preset: "Swan" }],
+    ["a gift box 120 x 80 x 40 mm", { engine: "mechanism" }],
+    ["a duck bookmark", { engine: "mechanism" }],
+    ["a paper mechanism nobody listed", { engine: "mechanism" }],
+  ] as const)("routes %j without AI", async (prompt, expected) => {
+    vi.stubEnv("AI_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const route = await routePrompt(prompt);
+    vi.unstubAllEnvs();
+    expect(route.engine).toBe(expected.engine);
+    if (route.engine === "origami" && "modelId" in expected)
+      expect(route.modelId).toBe(expected.modelId);
+    if (route.engine === "figure" && "preset" in expected) {
+      expect(route.figure.title).toBe(expected.preset);
+      if ("primary" in expected)
+        expect(route.figure.colors.primary).toBe(expected.primary);
+      if ("sizeMm" in expected)
+        expect(route.figure.sizeMm).toBe(expected.sizeMm);
+    }
+  });
+
+  it("lets the AI name only presets and library models", () => {
+    const base = {
+      engine: "figure",
+      origamiId: null,
+      colors: null,
+      sizeMm: null,
+      paperSizeMm: null,
+      reason: "A giraffe is closest to the horse.",
+    };
+    expect(
+      RouteChoiceSchema.safeParse({ ...base, presetId: "horse" }).success,
+    ).toBe(true);
+    expect(
+      RouteChoiceSchema.safeParse({ ...base, presetId: "giraffe" }).success,
+    ).toBe(false);
+  });
+
+  it("serves the route and the build over HTTP", async () => {
+    const origin = "http://localhost:3000";
+    const post = (path: string, body: unknown) =>
+      new Request(`${origin}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin },
+        body: JSON.stringify(body),
+      });
+    const route = RouteResponseSchema.parse(
+      await (
+        await choosePost(post("/api/choose", { prompt: "a penguin" }))
+      ).json(),
+    );
+    expect(route.engine).toBe("figure");
+    if (route.engine !== "figure") return;
+    const built = await papercraftPost(
+      post("/api/papercraft", { figure: route.figure }),
+    );
+    expect(PapercraftPayloadSchema.parse(await built.json()).title).toBe(
+      "Penguin",
+    );
+    const rejected = await papercraftPost(
+      post("/api/papercraft", { figure: { ...route.figure, sizeMm: 5000 } }),
+    );
+    expect(rejected.status).toBe(400);
   });
 });
