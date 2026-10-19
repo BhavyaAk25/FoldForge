@@ -190,7 +190,8 @@ export const unfold = (
 ): Unfolding => {
   let best: Unfolding | null = null;
   // Smaller islands leave more room for tabs; split only as far as needed.
-  for (const pieces of [1, 2, 3, 4, 6]) {
+  // The last resort, one face per island, always has room for every tab.
+  for (const pieces of [1, 2, 3, 4, 6, 10, mesh.faces.length]) {
     const maxFaces = Math.ceil(mesh.faces.length / pieces);
     const prefer = new Set<string>();
     for (let attempt = 0; attempt < 4; attempt += 1) {
