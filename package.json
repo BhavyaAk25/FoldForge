@@ -18,8 +18,9 @@
     "coverage": "vitest run --coverage",
     "validate:consumers": "tsx scripts/validate-consumer-exports.ts",
     "test:e2e": "playwright test",
-    "check": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test && pnpm run validate:consumers && pnpm run build && pnpm run check:budgets",
-    "check:budgets": "tsx scripts/check-budgets.ts"
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test && pnpm run validate:consumers && pnpm run build && pnpm run check:budgets && pnpm run bench --check",
+    "check:budgets": "tsx scripts/check-budgets.ts",
+    "bench": "tsx scripts/bench.ts"
   },
   "dependencies": {
     "@react-three/fiber": "9.6.1",
