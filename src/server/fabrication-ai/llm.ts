@@ -17,14 +17,15 @@ import { FabricationModelContractError } from "./model-contract-error";
 const GEMINI_OPENAI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/";
 // Google retires specific Gemini versions for new keys (gemini-2.5-flash was
-// withdrawn this way), so the default leads with the maintained alias and
-// keeps a pinned model as a fallback.
+// withdrawn this way), so each tier lists a pinned model and the maintained
+// alias. The lite models lead: every call fills a small bounded form, and
+// they answer in about a second where the full models can take over 25.
 // Free-tier quotas are per model, so each fallback also adds capacity.
 const DEFAULT_MODELS = [
-  "gemini-flash-latest",
-  "gemini-3.5-flash",
-  "gemini-flash-lite-latest",
   "gemini-3.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash",
+  "gemini-flash-latest",
 ] as const;
 // Statuses that mean "this model, not this request": retired or unknown
 // model, rate limit, or temporary overload. The next model is tried.
@@ -194,9 +195,15 @@ const completeWithModelFallback = async (
   deadline: number,
 ): Promise<OpenAI.Chat.ChatCompletion & { readonly model: string }> => {
   let lastError: unknown = new LlmDeadlineError();
-  for (const model of models) {
+  for (const [index, model] of models.entries()) {
     const remaining = deadline - Date.now();
     if (remaining < MINIMUM_ATTEMPT_MS) break;
+    // Share what is left among the models still to try, so one slow model
+    // cannot starve the rest; a model that fails fast passes its share on.
+    const share = Math.max(
+      MINIMUM_ATTEMPT_MS,
+      remaining / (models.length - index),
+    );
     try {
       const completion = await client.chat.completions.create(
         {
@@ -205,7 +212,7 @@ const completeWithModelFallback = async (
           response_format: { type: "json_object" },
           temperature: 0.2,
         },
-        { timeout: remaining },
+        { timeout: Math.min(remaining, share) },
       );
       return { ...completion, model };
     } catch (error) {
