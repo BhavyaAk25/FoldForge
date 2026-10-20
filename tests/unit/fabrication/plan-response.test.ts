@@ -89,7 +89,7 @@ describe("programProposalFromDesignSpec", () => {
 describe("templateFallback", () => {
   it("records that no model was used", () => {
     const fallback = templateFallback(
-      intentFromPromptKeywords("a faceted duck 120 x 90 x 30 mm")!,
+      intentFromPromptKeywords("a gift box 120 x 90 x 30 mm")!,
       1,
     );
     expect(fallback?.proposal.provenance).toMatchObject({
@@ -103,8 +103,6 @@ describe("templateFallback", () => {
   });
 
   it.each([
-    ["figure", "animal", 30, "Stand-up platypus"],
-    ["figure", null, 30, "Stand-up platypus"],
     ["enclosure", null, 40, "Folded enclosure"],
     ["stand", null, 70, "Desk stand"],
     ["cutout", "star", 1, "star cut-out"],
@@ -115,7 +113,7 @@ describe("templateFallback", () => {
       // "a platypus" matches no keyword rule; the model's hint still yields a
       // verified, labelled template instead of an error.
       const intent = {
-        ...intentFromPromptKeywords("a duck 120 x 90 x 30 mm")!,
+        ...intentFromPromptKeywords("a gift box 120 x 90 x 30 mm")!,
         sourcePrompt: "a platypus",
         title: "Platypus",
         objectLabel: "platypus",

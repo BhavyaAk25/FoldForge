@@ -7,14 +7,14 @@
 
 export interface BenchPrompt {
   readonly text: string;
-  readonly expect: "origami" | "papercraft" | "none";
+  readonly expect: "origami" | "figure" | "papercraft" | "none";
   readonly photo?: string;
 }
 
 export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   {
     text: "a faceted paper duck",
-    expect: "papercraft",
+    expect: "figure",
     photo: "duck-shaped-gift-box.jpg",
   },
   {
@@ -27,16 +27,16 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
     expect: "papercraft",
     photo: "playing-card-box.jpg",
   },
-  { text: "a paper rat", expect: "papercraft" },
-  { text: "a cat", expect: "papercraft" },
-  { text: "a rabbit", expect: "papercraft" },
-  { text: "a fox", expect: "papercraft" },
-  { text: "a penguin", expect: "none" },
-  { text: "a fish", expect: "none" },
-  { text: "a car", expect: "none" },
-  { text: "a house", expect: "papercraft" },
-  { text: "a tree", expect: "papercraft" },
-  { text: "a robot", expect: "none" },
+  { text: "a paper rat", expect: "figure" },
+  { text: "a cat", expect: "figure" },
+  { text: "a rabbit", expect: "figure" },
+  { text: "a fox", expect: "figure" },
+  { text: "a penguin", expect: "figure" },
+  { text: "a fish", expect: "figure" },
+  { text: "a car", expect: "figure" },
+  { text: "a house", expect: "figure" },
+  { text: "a tree", expect: "figure" },
+  { text: "a robot", expect: "figure" },
   { text: "a phone stand", expect: "papercraft" },
   { text: "a gift box 120 x 80 x 40 mm", expect: "papercraft" },
   { text: "a bookmark", expect: "papercraft" },

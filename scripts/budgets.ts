@@ -13,13 +13,13 @@ export const BUDGETS = {
    */
   homePageJsGzipKb: 265,
   /**
-   * Lines of TypeScript under src/ (measured 32,634 after adding the origami
-   * engine: crease patterns, fold-rule checks, simulator, fold sequences,
-   * animation, exports, the model library, and its page panel).
+   * Lines of TypeScript under src/ (measured 36,008 after adding the 3D
+   * papercraft engine, its body types and 32 figures, the prompt router, and
+   * the papercraft page, net of deleting the stand-up figure path).
    */
-  sourceLines: 33_500,
-  /** Lines of TypeScript under tests/ (measured 19,869 after removing repair). */
-  testLines: 20_300,
+  sourceLines: 36_500,
+  /** Lines of TypeScript under tests/ (measured 20,281 with the papercraft and router tests). */
+  testLines: 21_000,
   /** Test lines per source line (measured 0.68): tests may not outgrow code. */
   testToSourceRatio: 0.75,
   /** Runtime dependencies in package.json (measured 10). */
@@ -39,6 +39,5 @@ export const TIMED_PROMPTS = [
   "a ring box 50 x 50 x 40 mm",
   "a phone stand 80 x 100 x 70 mm",
   "a star bookmark",
-  "a duck 120 x 90 x 30 mm",
   "a pop-up birthday card with a heart",
 ] as const;

@@ -2,10 +2,7 @@ import {
   buildFabricationCandidate,
   type CandidateBuildError,
 } from "@/core/fabrication/candidate";
-import {
-  createFacetedDuckGiftBoxShowcase,
-  createPullTabPopUpFlowerShowcase,
-} from "@/core/fabrication/examples";
+import { createPullTabPopUpFlowerShowcase } from "@/core/fabrication/examples";
 import { inspectFabricationFoldCompatibility } from "@/core/fabrication/export";
 import type { Result } from "@/core/result";
 import type {
@@ -13,10 +10,7 @@ import type {
   FabricationIntentV1,
   FabricationProgramV1,
 } from "@/core/fabrication/types";
-import {
-  DUCK_CREASE_PATTERN_PROMPT,
-  type SavedExampleId,
-} from "@/lib/saved-examples";
+import { type SavedExampleId } from "@/lib/saved-examples";
 
 /**
  * Builds finished candidates on the server: compile, verify, score, and hash
@@ -101,21 +95,15 @@ export interface SavedExample extends BuiltCandidate {
 
 /** A prepared example, labelled as such and verified like any design. */
 export const savedExample = (id: SavedExampleId): SavedExample | null => {
-  const isDuck = id === "duck";
-  const showcase = isDuck
-    ? createFacetedDuckGiftBoxShowcase()
-    : createPullTabPopUpFlowerShowcase();
+  const showcase = createPullTabPopUpFlowerShowcase();
   const built = buildCandidate({
     candidateId: `saved-example-${id}`,
     intent: showcase.intent,
     program: {
       ...showcase.program,
-      candidateLabel: isDuck
-        ? "Static duck crease pattern"
-        : "Vertical-lift flower study",
-      designSummary: isDuck
-        ? "A prepared static crease-pattern study with a faceted duck silhouette. The verified file contains cut and score geometry only; no lid motion or open-and-close animation is modeled."
-        : "A prepared motion study: a directly driven vertical tab moves a rigid flower crown 30 mm along its guide.",
+      candidateLabel: "Vertical-lift flower study",
+      designSummary:
+        "A prepared motion study: a directly driven vertical tab moves a rigid flower crown 30 mm along its guide.",
     },
     generation: null,
     generatedAtIso: SAVED_EXAMPLE_GENERATED_AT,
@@ -123,7 +111,7 @@ export const savedExample = (id: SavedExampleId): SavedExample | null => {
   if (!built.ok) return null;
   return {
     ...built.value,
-    prompt: isDuck ? DUCK_CREASE_PATTERN_PROMPT : showcase.prompt,
+    prompt: showcase.prompt,
     limitation: showcase.limitation,
   };
 };

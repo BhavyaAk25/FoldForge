@@ -186,3 +186,56 @@
   color: var(--graphite) !important;
   font-size: 0.88rem;
 }
+
+.primaryAction {
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--graphite);
+  background: var(--graphite);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pages li {
+  display: grid;
+  gap: 6px;
+}
+
+.pages img {
+  width: 100%;
+  aspect-ratio: 210 / 297;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.pages button {
+  padding: 6px 8px;
+  border: 1px solid var(--border-dark);
+  background: var(--surface);
+  color: var(--graphite);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.instructions {
+  margin: 0;
+  padding-left: 1.2em;
+  line-height: 1.55;
+}
+
+.instructions li + li {
+  margin-top: 8px;
+}

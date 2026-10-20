@@ -1,10 +1,7 @@
 import Image from "next/image";
 import type { RefObject } from "react";
 
-import {
-  DUCK_CREASE_PATTERN_PROMPT,
-  type SavedExampleId,
-} from "@/lib/saved-examples";
+import type { SavedExampleId } from "@/lib/saved-examples";
 
 import styles from "./foldforge-app.module.css";
 
@@ -47,16 +44,14 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
     savedExampleId: "flower",
   },
   {
-    id: "duck-shaped-gift-box",
-    title: "Static duck crease pattern",
-    description: "A fold-only duck study with no open-and-close motion.",
+    id: "faceted-duck",
+    title: "Faceted 3D duck",
+    description:
+      "A low-poly papercraft duck: printed pages, numbered glue tabs, and a 3D preview.",
     imageLabel: "Prompt inspiration",
     imageSrc: "/examples/duck-shaped-gift-box.jpg",
-    imageAlt:
-      "A yellow paper duck gift-box concept used as inspiration for a static crease-pattern prompt",
-    prompt: DUCK_CREASE_PATTERN_PROMPT,
-    savedActionLabel: "Open prepared crease study",
-    savedExampleId: "duck",
+    imageAlt: "A yellow faceted paper duck with an orange beak",
+    prompt: "A faceted yellow paper duck with an orange beak.",
   },
 ] as const;
 

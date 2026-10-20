@@ -18,11 +18,6 @@ import { flatWorldPoint } from "./upright";
  */
 
 export const PANEL_SILHOUETTES = [
-  "duck",
-  "cat",
-  "rabbit",
-  "mouse",
-  "animal",
   "heart",
   "flower",
   "tree",
@@ -43,135 +38,6 @@ interface CanonicalPoint {
 const MINIMUM_SEGMENT_MM = 2.5;
 
 const point = (s: number, t: number): CanonicalPoint => ({ s, t });
-
-// A sitting duck in side view: chest and beak toward -s, tail toward +s.
-const DUCK: readonly CanonicalPoint[] = [
-  point(0, 0),
-  point(1, 0),
-  point(0.97, 0.2),
-  point(1, 0.46),
-  point(0.86, 0.4),
-  point(0.72, 0.46),
-  point(0.56, 0.5),
-  point(0.44, 0.52),
-  point(0.4, 0.62),
-  point(0.4, 0.74),
-  point(0.37, 0.85),
-  point(0.31, 0.94),
-  point(0.23, 1),
-  point(0.15, 0.95),
-  point(0.11, 0.88),
-  point(0.1, 0.8),
-  point(0, 0.76),
-  point(0.1, 0.71),
-  point(0.16, 0.66),
-  point(0.22, 0.58),
-  point(0.2, 0.45),
-  point(0.1, 0.3),
-  point(0.04, 0.14),
-];
-
-// A sitting cat seen from the front: pointed ears, round head, wide haunches.
-const CAT: readonly CanonicalPoint[] = [
-  point(0, 0),
-  point(1, 0),
-  point(0.92, 0.12),
-  point(0.86, 0.3),
-  point(0.78, 0.45),
-  point(0.7, 0.52),
-  point(0.76, 0.6),
-  point(0.78, 0.72),
-  point(0.76, 0.82),
-  point(0.8, 1),
-  point(0.64, 0.88),
-  point(0.5, 0.86),
-  point(0.36, 0.88),
-  point(0.2, 1),
-  point(0.24, 0.82),
-  point(0.22, 0.72),
-  point(0.24, 0.6),
-  point(0.3, 0.52),
-  point(0.22, 0.45),
-  point(0.14, 0.3),
-  point(0.08, 0.12),
-];
-
-// A sitting rabbit seen from the front, with two tall ears.
-const RABBIT: readonly CanonicalPoint[] = [
-  point(0, 0),
-  point(1, 0),
-  point(0.9, 0.12),
-  point(0.82, 0.3),
-  point(0.72, 0.42),
-  point(0.68, 0.5),
-  point(0.74, 0.58),
-  point(0.74, 0.66),
-  point(0.66, 0.72),
-  point(0.7, 0.86),
-  point(0.68, 1),
-  point(0.6, 0.99),
-  point(0.57, 0.86),
-  point(0.56, 0.74),
-  point(0.44, 0.74),
-  point(0.43, 0.86),
-  point(0.4, 0.99),
-  point(0.32, 1),
-  point(0.3, 0.86),
-  point(0.34, 0.72),
-  point(0.26, 0.66),
-  point(0.26, 0.58),
-  point(0.32, 0.5),
-  point(0.28, 0.42),
-  point(0.18, 0.3),
-  point(0.1, 0.12),
-];
-
-// A mouse or rat in side view: pointed nose toward -s, round ear, raised tail.
-const MOUSE: readonly CanonicalPoint[] = [
-  point(0, 0),
-  point(1, 0),
-  point(0.98, 0.22),
-  point(1, 0.55),
-  point(0.95, 0.56),
-  point(0.93, 0.25),
-  point(0.86, 0.3),
-  point(0.72, 0.62),
-  point(0.55, 0.8),
-  point(0.42, 0.82),
-  point(0.36, 0.92),
-  point(0.3, 1),
-  point(0.22, 0.96),
-  point(0.2, 0.84),
-  point(0.12, 0.7),
-  point(0, 0.4),
-  point(0.06, 0.3),
-  point(0.1, 0.16),
-  point(0.05, 0.06),
-];
-
-// A generic four-legged animal lying down, head raised: the outline for
-// animals without a dedicated shape (dog, horse, giraffe, ...).
-const ANIMAL: readonly CanonicalPoint[] = [
-  point(0, 0),
-  point(1, 0),
-  point(0.98, 0.25),
-  point(1, 0.4),
-  point(0.92, 0.4),
-  point(0.85, 0.45),
-  point(0.55, 0.5),
-  point(0.38, 0.55),
-  point(0.32, 0.75),
-  point(0.3, 0.9),
-  point(0.24, 1),
-  point(0.2, 0.9),
-  point(0.12, 0.88),
-  point(0, 0.74),
-  point(0.02, 0.66),
-  point(0.14, 0.64),
-  point(0.2, 0.5),
-  point(0.16, 0.3),
-  point(0.06, 0.12),
-];
 
 /**
  * A heart resting point-down on a low plinth that carries the hinge, from the
@@ -332,16 +198,6 @@ export const canonicalSilhouette = (
   depthMm: number,
 ): readonly CanonicalPoint[] => {
   switch (silhouette) {
-    case "duck":
-      return DUCK;
-    case "cat":
-      return CAT;
-    case "rabbit":
-      return RABBIT;
-    case "mouse":
-      return MOUSE;
-    case "animal":
-      return ANIMAL;
     case "heart":
       return HEART;
     case "flower":
@@ -558,64 +414,16 @@ export const applyPanelSilhouettes = (
     : program;
 };
 
-/** Standing-figure silhouettes and the prompt words that select them. */
-export const FIGURE_SILHOUETTE_KEYWORDS: Readonly<
-  Record<Exclude<PanelSilhouette, "flower" | "arch">, readonly string[]>
+/** The words that pick each flat cut-out shape (a bookmark, a tag, an ornament). */
+const CUTOUT_WORDS: Readonly<
+  Record<Exclude<PanelSilhouette, "arch">, readonly string[]>
 > = {
-  duck: [
-    "duck",
-    "duckling",
-    "bird",
-    "swan",
-    "goose",
-    "chick",
-    "chicken",
-    "hen",
-  ],
-  cat: ["cat", "kitten", "kitty"],
-  rabbit: ["rabbit", "bunny", "bunnies", "hare"],
-  mouse: ["mouse", "mice", "rat", "hamster", "gerbil", "rodent"],
-  animal: [
-    "dog",
-    "puppy",
-    "horse",
-    "pony",
-    "cow",
-    "pig",
-    "fox",
-    "deer",
-    "lion",
-    "tiger",
-    "wolf",
-    "sheep",
-    "goat",
-    "giraffe",
-    "elephant",
-    "zebra",
-    "donkey",
-    "bear",
-    "animal",
-  ],
   heart: ["heart", "valentine"],
+  flower: ["flower", "daisy", "rose", "tulip"],
   tree: ["tree", "pine", "christmas tree", "fir"],
-  house: ["house", "home", "cottage", "cabin", "hut"],
+  house: ["house", "home", "cottage"],
   star: ["star"],
 };
-
-export type FigureSilhouette = keyof typeof FIGURE_SILHOUETTE_KEYWORDS;
-
-const FIGURE_ORDER: readonly FigureSilhouette[] = [
-  "duck",
-  "cat",
-  "rabbit",
-  "mouse",
-  "heart",
-  "tree",
-  "house",
-  "star",
-  // Generic last: a named shape always wins over "animal".
-  "animal",
-];
 
 /** Whole-word (optionally plural) match, so "standard" is not "stand". */
 export const containsWord = (text: string, word: string): boolean =>
@@ -624,27 +432,8 @@ export const containsWord = (text: string, word: string): boolean =>
     "iu",
   ).test(text);
 
-/** The first figure silhouette whose keyword appears as a whole word. */
-export const figureSilhouetteForText = (
-  text: string,
-): FigureSilhouette | null =>
-  FIGURE_ORDER.find((silhouette) =>
-    FIGURE_SILHOUETTE_KEYWORDS[silhouette].some((word) =>
-      containsWord(text, word),
-    ),
+/** The cut-out shape a prompt names, if any. */
+export const cutoutShapeForText = (text: string): PanelSilhouette | null =>
+  (Object.keys(CUTOUT_WORDS) as Exclude<PanelSilhouette, "arch">[]).find(
+    (shape) => CUTOUT_WORDS[shape].some((word) => containsWord(text, word)),
   ) ?? null;
-
-/** Named landmarks each figure silhouette visibly carries. */
-export const FIGURE_LANDMARKS: Readonly<
-  Record<FigureSilhouette, readonly string[]>
-> = {
-  duck: ["head", "beak", "tail"],
-  cat: ["ears", "head", "haunches"],
-  rabbit: ["ears", "head", "haunches"],
-  mouse: ["ears", "nose", "tail"],
-  animal: ["head", "body", "tail"],
-  heart: ["lobes", "point"],
-  tree: ["crown", "trunk"],
-  house: ["roof", "walls"],
-  star: ["points"],
-};

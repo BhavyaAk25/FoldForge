@@ -13,7 +13,8 @@ describe("promptTemplateClass", () => {
     ["desk organizer with a lid", "enclosure"],
     ["birthday card with a pop-up flower", "pop_up_card"],
     ["a pop-up card box", "pop_up_card"],
-    ["a faceted paper swan", "figure"],
+    // Animals are 3D papercraft figures, routed before this reader.
+    ["a faceted paper swan", null],
     ["a walking robot", null],
   ])("classifies %j as %s", (prompt, expected) => {
     expect(promptTemplateClass(prompt)).toBe(expected);
@@ -109,10 +110,11 @@ describe("parsePromptSizeMm units and fallbacks", () => {
     ).toEqual({ widthMm: 70, heightMm: 95, depthMm: 40 });
   });
 
-  it("adds landmark constraints only for figures and cards", () => {
+  it("adds landmark constraints only for cards", () => {
     expect(intentFromPromptKeywords("a box")?.semanticConstraints).toEqual([]);
     expect(
-      intentFromPromptKeywords("a duck")?.semanticConstraints[0]?.kind,
+      intentFromPromptKeywords("a pop-up flower card")?.semanticConstraints[0]
+        ?.kind,
     ).toBe("recognizable_form");
   });
 });

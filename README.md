@@ -1,14 +1,18 @@
 # FoldForge
 
-Describe something made of paper or thin card, such as "a gift box 120 x 80 x 40 mm" or "a birthday card where a flower pops up". FoldForge produces a checked cut-and-fold design: a 3D preview you can rotate and animate, a print-scale cutting pattern, and the files to make it.
+Describe something made of paper or card, such as "a red fox", "a gift box 120 x 80 x 40 mm", or "fold a paper crane". FoldForge builds a checked paper model with a 3D preview you can turn and the print-scale pages to make it.
 
 ![FoldForge Describe screen](./docs/images/foldforge-describe.png)
+
+## 3D papercraft
+
+Animals, vehicles, buildings, trees, robots, snowmen, and people come out as low-poly papercraft: coloured A4 pages to print, cut, fold, and glue, with every seam numbered and given a glue tab, printed eyes and windows, a 3D view, and step-by-step instructions. "A blue cat", "a 20 cm penguin", or "a red car" pick the colour and size. Code checks that every printed piece folds back into the 3D model within 0.1 mm and that nothing overlaps or runs off a page. Thirty-two figures are built in (duck, swan, penguin, owl, rat, cat, dog, fox, bear, pig, cow, horse, rabbit, fish, shark, car, bus, truck, house, tower, tree, pine, robot, snowman, person, and more); with an AI key, anything else maps to the closest one, labelled as the AI's choice.
 
 ## Real origami
 
 Ask for a library model, such as "fold a paper crane", and FoldForge answers with real origami from one uncut square: the crane, the flapping bird, a dart paper plane, a paper cup, and the bird, square, waterbomb, fish, and frog bases. A prompt that asks for origami without naming one, such as "an origami swan from a 20 cm square", lets the AI pick the closest library model and the paper size; the page labels that choice as the AI's. Each model is written as the folds a person makes; code derives the crease pattern from those folds and checks every intermediate state: Maekawa and Kawasaki at every vertex, one consistent flat-folded place for every face, and a layer order in which no paper passes through paper. The page plays the folding in 3D, step by step, next to diagrams and the crease pattern. Downloads: printable instructions (SVG), the crease pattern (SVG, red dash-dot mountain, blue dashed valley), and a FOLD file for Origami Simulator.
 
-Anything outside the library goes to the cut-and-fold engine below.
+Boxes, cards, stands, and anything that opens or slides go to the cut-and-fold engine below.
 
 ## How it works
 
