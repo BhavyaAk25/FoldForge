@@ -189,9 +189,14 @@ export function PopupResults({
           role="img"
           aria-label={`3D view of the ${payload.card.title.toLowerCase()} opening and closing.`}
         >
-          <Canvas camera={{ position: [0.7, 0.3, 2.9], fov: 38 }} dpr={[1, 2]}>
-            <hemisphereLight args={["#fffaf0", "#b9a88f", 0.95]} />
-            <directionalLight position={[1.5, 2.5, 3]} intensity={1.3} />
+          <Canvas
+            camera={{ position: [0, 0.45, 2.7], fov: 38 }}
+            dpr={[1, 2]}
+            flat
+          >
+            {/* Viewed face-on at the spine, like the card on a table. */}
+            <hemisphereLight args={["#fffaf0", "#e6dccb", 2.4]} />
+            <directionalLight position={[1.5, 2.5, 3]} intensity={1.2} />
             <Card payload={payload} theta={theta} />
           </Canvas>
         </div>

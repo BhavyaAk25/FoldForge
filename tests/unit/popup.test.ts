@@ -119,7 +119,10 @@ describe("the playing-card box", () => {
     const tray = built.payload.parts.find((p) => p.id === "tray")!;
     expect(tray.open).toBe(true);
     expect(tray.slide?.[0]).toBeGreaterThan(0);
-    expect(built.payload.decals.length).toBe(5);
+    // A framed card back on the lid and the four suits down the front.
+    const on = (axis: number, sign: number) =>
+      built.payload.decals.filter((d) => d.normal[axis] === sign).length;
+    expect([on(2, 1), on(1, -1)]).toEqual([4, 4]);
   });
 });
 

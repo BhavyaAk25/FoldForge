@@ -1,4 +1,4 @@
-import type { PopupCard, Vec2 } from "./popup";
+import type { PopupCard, Vec2, VFold } from "./popup";
 
 /**
  * Pop-up card designs: one V-fold piece per card, cut as a single outline
@@ -55,15 +55,32 @@ export interface CardColors {
   readonly second: string;
 }
 
+/**
+ * Designs are drawn at full size, then shrunk about the apex so the piece,
+ * folded flat at 60 degrees to the spine, stays inside the closed card.
+ */
+const SCALE = 0.9;
+const scaled = (piece: VFold): VFold => {
+  const k = (points: readonly Vec2[]) =>
+    points.map(([s, t]): Vec2 => [s * SCALE, t * SCALE]);
+  return {
+    ...piece,
+    tabMm: piece.tabMm * SCALE,
+    half: k(piece.half),
+    prints: piece.prints.map((p) => ({ ...p, points: k(p.points) })),
+  };
+};
+
 /** A card (100 x 140 mm folded; one A4 sheet holds it unfolded) with the named pop-up rising from its centre. */
 export const popupCard = (
   design: CardDesign,
   colors: CardColors,
   title: string,
 ): PopupCard => {
-  // Low angles make the piece rise facing the viewer (about 41 degrees from
-  // the spine at a 90-degree opening) and fold close to the spine when shut.
-  const [alphaDeg, phiDeg] = [20, 30];
+  // Equal angles make the piece's halves open as wide as the card (it lies
+  // flat when the card does), so the shape faces the viewer; 30 degrees
+  // keeps it inside the closed card once drawn at SCALE.
+  const [alphaDeg, phiDeg] = [30, 30];
   const tab = 24;
   const tabEnd: Vec2 = [
     tab * Math.cos(rad(phiDeg)),
@@ -89,7 +106,7 @@ export const popupCard = (
       pageHeightMm: 140,
       cardColor: colors.card,
       pieces: [
-        {
+        scaled({
           id: "heart",
           name: "Heart",
           color: colors.main,
@@ -103,7 +120,7 @@ export const popupCard = (
             [shape.at(-1)![0], 0],
           ],
           prints: [{ points: [...stem, [64, 0]], color: colors.second }],
-        },
+        }),
       ],
     };
   }
@@ -114,7 +131,7 @@ export const popupCard = (
     pageHeightMm: 140,
     cardColor: colors.card,
     pieces: [
-      {
+      scaled({
         id: "flower",
         name: "Flower",
         color: colors.main,
@@ -132,7 +149,7 @@ export const popupCard = (
           },
           { points: halfDisc(92, 9), color: "#f6c945" },
         ],
-      },
+      }),
     ],
   };
 };

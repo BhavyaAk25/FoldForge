@@ -18,7 +18,7 @@ export const RigParamsSchema = z.discriminatedUnion("rig", [
       rig: z.literal("quadruped"),
       ears: z.enum(["pointy", "round", "long", "floppy", "small"]),
       snout: z.enum(["short", "long", "flat"]),
-      tail: z.enum(["thin", "bushy", "short", "curly"]),
+      tail: z.enum(["thin", "raised", "bushy", "short", "curly"]),
       legs: z.enum(["short", "long"]),
     })
     .strict(),

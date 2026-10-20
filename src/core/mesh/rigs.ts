@@ -22,7 +22,7 @@ export type RigParams =
       readonly rig: "quadruped";
       readonly ears: "pointy" | "round" | "long" | "floppy" | "small";
       readonly snout: "short" | "long" | "flat";
-      readonly tail: "thin" | "bushy" | "short" | "curly";
+      readonly tail: "thin" | "raised" | "bushy" | "short" | "curly";
       readonly legs: "short" | "long";
     }
   | {
@@ -47,7 +47,14 @@ export interface FigureSpec {
   readonly params: RigParams;
 }
 
+/** Perceived brightness of a #rrggbb colour, 0 to 255. */
+export const luma = (hex: string): number => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return 0.299 * r! + 0.587 * g! + 0.114 * b!;
+};
+
 const EYE = "#1d1d1d";
+const EYE_ON_DARK = "#f2e7c9";
 const ELLIPSOID: Shape = { kind: "ellipsoid", segments: 8, rings: 5 };
 /** Small parts (ears, feet) need fewer, larger faces to leave room for tabs. */
 const PEBBLE: Shape = { kind: "ellipsoid", segments: 6, rings: 4 };
@@ -90,18 +97,15 @@ const eyes = (
   up: number,
   radius: number,
 ) => {
-  b.decals.push({
-    part,
-    direction: [forward, side, up],
-    radiusMm: radius,
-    color: EYE,
-  });
-  b.decals.push({
-    part,
-    direction: [forward, -side, up],
-    radiusMm: radius,
-    color: EYE,
-  });
+  // Dark eyes vanish on a dark head (a black cat); those get light eyes.
+  const dark = luma(b.parts.find((p) => p.id === part)?.color ?? "#fff") < 90;
+  for (const s of [side, -side])
+    b.decals.push({
+      part,
+      direction: [forward, s, up],
+      radiusMm: radius,
+      color: dark ? EYE_ON_DARK : EYE,
+    });
 };
 
 /**
@@ -239,6 +243,18 @@ const quadruped = (
       c.secondary,
       [0, -105, 0],
     );
+  // A cat's tail: up from the rump and leaning back.
+  if (p.tail === "raised")
+    add(
+      b,
+      "tail",
+      "Tail",
+      taper(6, 0.45),
+      [0.09 * L, 0.09 * L, 0.5 * L],
+      [back - 0.07 * L, 0, bodyAt[2] + 0.32 * L],
+      c.secondary,
+      [0, -30, 0],
+    );
   if (p.tail === "bushy")
     add(
       b,
@@ -324,11 +340,12 @@ const bird = (
       b,
       "beak",
       "Beak",
-      taper(4, 0.35),
-      [0.2 * L, 0.24 * L, 0.2 * L],
-      [headAt[0] + headSize * 0.5 + 0.05 * L, 0, headAt[2] - 0.05 * L],
+      // A thin, wide diamond pointing straight ahead reads as a duck's bill.
+      taper(4, 0.55),
+      [0.1 * L, 0.34 * L, 0.3 * L],
+      [headAt[0] + headSize * 0.5 + 0.1 * L, 0, headAt[2] - 0.08 * L],
       c.accent,
-      [45, 90, 0],
+      [0, 90, 0],
     );
   else
     add(
@@ -704,27 +721,40 @@ const cardbox = (b: Builder, L: number, c: Colors) => {
     color: c.secondary,
     slide: [0.7 * L, 0, 0],
   });
-  const suits = [
-    ["heart", -2.6, 1.7, "#c0392b"],
-    ["spade", 2.6, 1.7, "#1d1d1d"],
-    ["diamond", -2.6, -1.7, "#c0392b"],
-    ["club", 2.6, -1.7, "#1d1d1d"],
-  ] as const;
-  for (const [shape, x, y, color] of suits)
+  // The sleeve's top carries a card back: a red card, a cream frame, a red
+  // centre, and a cream medallion (on a level face a card's length runs
+  // along the box). Later decals on a face print over earlier ones.
+  for (const [radius, color, shape] of [
+    [0.42, c.accent, "card"],
+    [0.38, c.primary, "card"],
+    [0.355, c.accent, "card"],
+    [0.1, c.primary, "diamond"],
+  ] as const)
     b.decals.push({
       part: "sleeve",
-      direction: [x, y, 1],
-      radiusMm: 0.12 * L,
+      direction: [0, 0, 1],
+      radiusMm: radius * L,
       color,
       shape,
     });
-  b.decals.push({
-    part: "sleeve",
-    direction: [0, 0, 1],
-    radiusMm: 0.2 * L,
-    color: c.accent,
-    shape: "spade",
-  });
+  // The four suits down the front of the sleeve, clear of the tray's end.
+  const suits = [
+    ["club", "#1d1d1d"],
+    ["diamond", "#c0392b"],
+    ["spade", "#1d1d1d"],
+    ["heart", "#c0392b"],
+  ] as const;
+  suits.forEach(([shape, color], k) =>
+    b.decals.push({
+      part: "sleeve",
+      // A ray from the sleeve's centre that leaves through its front (-y)
+      // face, k steps along it.
+      direction: [(-0.4 + 0.11 * k) * (L / (sleeve[1] / 2)), -1, 0],
+      radiusMm: 0.055 * L,
+      color,
+      shape,
+    }),
+  );
 };
 
 /** The papercraft parts for a figure; every rig and option yields a valid model. */
