@@ -22,6 +22,8 @@ import type { OrigamiPayloadResponse } from "@/lib/origami-contract";
 
 import styles from "./model-results.module.css";
 
+const PAPER_BACK = "#f6f1e7";
+
 const DOWNLOADS = [
   {
     format: "instructions",
@@ -57,10 +59,12 @@ function FoldedPaper({
   input,
   at,
   viewDeg,
+  paperColor,
 }: {
   readonly input: PoseInput;
   readonly at: number;
   readonly viewDeg: number;
+  readonly paperColor: string;
 }) {
   const indices = useMemo(() => triangleCorners(input.faces), [input.faces]);
   const geometry = useMemo(() => {
@@ -86,16 +90,20 @@ function FoldedPaper({
   geometry.computeVertexNormals();
   return (
     <group rotation={[0, 0, (viewDeg * Math.PI) / 180]}>
-      {/* Paper faces are wound counter-clockwise from the front, so FrontSide is the coloured side. */}
+      {/* Paper faces are wound counter-clockwise from the front, so FrontSide is the coloured side; the back is white, like origami paper. */}
       <mesh geometry={geometry}>
         <meshStandardMaterial
-          color="#e8d6b4"
+          color={paperColor}
           roughness={0.9}
           side={FrontSide}
         />
       </mesh>
       <mesh geometry={geometry}>
-        <meshStandardMaterial color="#c0533f" roughness={0.9} side={BackSide} />
+        <meshStandardMaterial
+          color={PAPER_BACK}
+          roughness={0.9}
+          side={BackSide}
+        />
       </mesh>
     </group>
   );
@@ -154,10 +162,13 @@ function CreasePatternView({
 export function OrigamiResults({
   payload,
   paperMm,
+  paperColor,
   aiReason,
 }: {
   readonly payload: OrigamiPayloadResponse;
   readonly paperMm: number;
+  /** The paper's coloured side; the back is white. */
+  readonly paperColor: string;
   readonly aiReason: string | null;
 }) {
   const input: PoseInput = useMemo(
@@ -287,7 +298,12 @@ export function OrigamiResults({
             <directionalLight position={[1.5, 2, 3]} intensity={1.2} />
             <directionalLight position={[-2, -1, -3]} intensity={0.5} />
             <group rotation={[turn.pitch, turn.yaw, 0]}>
-              <FoldedPaper input={input} at={at} viewDeg={payload.viewDeg} />
+              <FoldedPaper
+                input={input}
+                at={at}
+                viewDeg={payload.viewDeg}
+                paperColor={paperColor}
+              />
             </group>
           </Canvas>
         </div>
@@ -339,7 +355,7 @@ export function OrigamiResults({
                         <polygon
                           key={i}
                           points={polygon.points}
-                          fill={polygon.front ? "#f3e6cf" : "#d9b77a"}
+                          fill={polygon.front ? paperColor : PAPER_BACK}
                           stroke="#5b4a33"
                           strokeOpacity={0.35}
                           strokeWidth={0.003}

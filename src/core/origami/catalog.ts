@@ -36,7 +36,28 @@ export const ORIGAMI_CATALOG = [
   },
   { id: "fish-base", name: "Fish base", keywords: ["fish base"] },
   { id: "frog-base", name: "Frog base", keywords: ["frog base"] },
+  {
+    id: "dog-face",
+    name: "Dog face",
+    keywords: ["dog face", "puppy face", "origami dog", "paper dog"],
+  },
+  {
+    id: "swan",
+    name: "Swan",
+    keywords: ["origami swan", "paper swan", "folded swan"],
+  },
 ] as const;
+
+/**
+ * Words that pick a model only when the prompt asks for origami ("fold a
+ * dog"): on their own they name a 3D papercraft figure.
+ */
+const LOOSE_WORDS: Readonly<
+  Partial<Record<(typeof ORIGAMI_CATALOG)[number]["id"], readonly string[]>>
+> = {
+  swan: ["swan", "goose"],
+  "dog-face": ["dog", "puppy"],
+};
 
 export type OrigamiModelId = (typeof ORIGAMI_CATALOG)[number]["id"];
 
@@ -92,6 +113,15 @@ export const matchOrigamiModel = (prompt: string): OrigamiModelId | null => {
 /** Whether a prompt names something the mechanism engine makes (a box, a card, a stand). */
 export const namesMechanism = (prompt: string): boolean =>
   PAPERCRAFT_WORDS.some((word) => mentions(prompt, word));
+
+/** The library model a prompt that asks for origami names loosely ("an origami swan"). */
+export const matchOrigamiLoose = (prompt: string): OrigamiModelId | null => {
+  for (const [id, words] of Object.entries(LOOSE_WORDS)) {
+    if (words.some((word) => mentions(prompt, word)))
+      return id as OrigamiModelId;
+  }
+  return null;
+};
 
 export const asksForOrigami = (prompt: string): boolean =>
   !PAPERCRAFT_WORDS.some((word) => mentions(prompt, word)) &&

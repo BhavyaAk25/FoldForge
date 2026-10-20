@@ -168,6 +168,7 @@ export function FoldForgeApp() {
   const [origami, setOrigami] = useState<{
     readonly payload: OrigamiPayloadResponse;
     readonly paperMm: number;
+    readonly paperColor: string;
     /** Why the AI picked this model, when the prompt named none. */
     readonly aiReason: string | null;
   } | null>(null);
@@ -341,6 +342,7 @@ export function FoldForgeApp() {
         setOrigami({
           payload,
           paperMm: route.paperSizeMm,
+          paperColor: route.paperColor,
           aiReason: route.reason,
         });
         setPhase("ready");
@@ -716,6 +718,7 @@ export function FoldForgeApp() {
           <OrigamiResults
             payload={origami.payload}
             paperMm={origami.paperMm}
+            paperColor={origami.paperColor}
             aiReason={origami.aiReason}
           />
         ) : null}
