@@ -18,6 +18,8 @@ export interface OrigamiModel {
   readonly sequence: FoldSequence;
   /** Rotation that shows the finished model upright, in degrees. */
   readonly viewDeg: number;
+  /** Folded starting coloured side down, so the colour ends up outside. */
+  readonly colorDown?: true;
 }
 
 const K = Math.tan(Math.PI / 8) / 2;
@@ -452,20 +454,29 @@ const DOG_FACE: OrigamiModel = {
 };
 
 /**
+ * The kite folds keep each point's distance from the tip corner, so the
+ * swan's neck is the paper nearer that corner than the neck's base fold; this
+ * leaves out the kite's corner flaps, which lie in the body.
+ */
+const NECK = (f: FaceSample) => Math.hypot(f.paper.x, f.paper.y) < 0.76;
+
+/**
  * Swan: a kite, narrowed behind into a long point, the point folded up as
- * the neck with the tip folded back as the head, the body folded in half,
- * and the neck inside-reverse-folded upright between the body's halves.
+ * the neck, the body folded in half, the neck inside-reverse-folded upright
+ * between the body's halves, and its tip outside-reverse-folded forward.
  */
 const SWAN: OrigamiModel = {
   id: "swan",
   summary: "The classic swan from a kite base: long neck, folded head.",
-  viewDeg: 135,
+  viewDeg: -45,
+  colorDown: true,
   sequence: {
     anchor: p(0.8, 0.86),
     steps: [
       {
         kind: "valley",
-        instruction: "Fold one edge to the diagonal crease.",
+        instruction:
+          "Start coloured side down, crease the diagonal, and fold one edge to it.",
         line: ray(p(0, 0), 22.5, 1.6),
         toward: p(0.9, 0.05),
       },
@@ -496,13 +507,6 @@ const SWAN: OrigamiModel = {
       },
       {
         kind: "valley",
-        instruction: "Fold the tip back down to make the head.",
-        line: { from: p(0.62, 1.2), to: p(1.2, 0.62) },
-        toward: p(1.02, 1.02),
-        layers: (f) => f.paper.x + f.paper.y < 0.9,
-      },
-      {
-        kind: "valley",
         instruction: "Fold the body in half along the centre.",
         line: { from: p(-0.05, -0.05), to: p(1.1, 1.1) },
         toward: p(0.3, 0.7),
@@ -511,9 +515,18 @@ const SWAN: OrigamiModel = {
         kind: "inside-reverse",
         instruction:
           "Pull the neck up between the body's halves (inside reverse fold) and flatten.",
-        line: { from: p(0.66, 0.51), to: p(0.66, 0.81) },
+        line: { from: p(0.56, 0.51), to: p(0.56, 0.81) },
         toward: p(0.85, 0.85),
-        layers: (f) => f.paper.x + f.paper.y < 1.05,
+        layers: NECK,
+      },
+      {
+        kind: "outside-reverse",
+        instruction:
+          "Fold the top of the neck forward around itself (outside reverse fold) for the head.",
+        // The neck now runs from (0.56, 0.56) up to its tip near (0.07, 1.05).
+        line: across(p(0.168, 0.952), 167.5, 0.15),
+        toward: p(0.05, 1.07),
+        layers: NECK,
       },
     ],
   },

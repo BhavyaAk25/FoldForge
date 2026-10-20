@@ -24,6 +24,12 @@ import styles from "./model-results.module.css";
 
 const PAPER_BACK = "#f6f1e7";
 
+/** Colours of the paper's starting face up (front) and face down (back). */
+interface Sides {
+  readonly front: string;
+  readonly back: string;
+}
+
 const DOWNLOADS = [
   {
     format: "instructions",
@@ -55,56 +61,94 @@ const triangleCorners = (faces: readonly (readonly number[])[]): number[] => {
   return indices;
 };
 
+/** Centre and scale that fit a pose's outline into the view. */
+const frame = (pose: readonly number[]) => {
+  const xs = pose.filter((_, i) => i % 3 === 0);
+  const ys = pose.filter((_, i) => i % 3 === 1);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const radius = Math.max(...xs.map((px, i) => Math.hypot(px - x, ys[i]! - y)));
+  return { x, y, scale: Math.min(1.4, 0.45 / radius) };
+};
+
+/** Each face's outline as line-segment pairs, in face-corner indices. */
+const outlineCorners = (faces: readonly (readonly number[])[]): number[] => {
+  const indices: number[] = [];
+  let start = 0;
+  for (const face of faces) {
+    face.forEach((_, i) =>
+      indices.push(start + i, start + ((i + 1) % face.length)),
+    );
+    start += face.length;
+  }
+  return indices;
+};
+
 function FoldedPaper({
   input,
   at,
   viewDeg,
-  paperColor,
+  colors,
 }: {
   readonly input: PoseInput;
   readonly at: number;
   readonly viewDeg: number;
-  readonly paperColor: string;
+  readonly colors: Sides;
 }) {
-  const indices = useMemo(() => triangleCorners(input.faces), [input.faces]);
-  const geometry = useMemo(() => {
-    const next = new BufferGeometry();
-    next.setIndex(indices);
-    return next;
-  }, [indices]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  // Centre on the finished model so the view does not jump between steps.
-  const centre = useMemo(() => {
-    const finalPose = poseAt(input, stepCount(input));
-    const xs = finalPose.filter((_, i) => i % 3 === 0);
-    const ys = finalPose.filter((_, i) => i % 3 === 1);
-    return {
-      x: (Math.min(...xs) + Math.max(...xs)) / 2,
-      y: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
-  }, [input]);
-  const positions = poseAt(input, at).map((value, i) =>
-    i % 3 === 0 ? value - centre.x : i % 3 === 1 ? value - centre.y : value,
+  const [geometry, outline] = useMemo(() => {
+    const surface = new BufferGeometry();
+    surface.setIndex(triangleCorners(input.faces));
+    const edges = new BufferGeometry();
+    edges.setIndex(outlineCorners(input.faces));
+    return [surface, edges] as const;
+  }, [input.faces]);
+  useEffect(
+    () => () => {
+      geometry.dispose();
+      outline.dispose();
+    },
+    [geometry, outline],
   );
-  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  // Frame the flat sheet at the start and the finished model at the end,
+  // blending between them as the folding goes on.
+  const [start, end] = useMemo(
+    () => [frame(poseAt(input, 0)), frame(poseAt(input, stepCount(input)))],
+    [input],
+  );
+  const t = Math.min(1, at / Math.max(1, stepCount(input)));
+  const view = {
+    x: start.x + (end.x - start.x) * t,
+    y: start.y + (end.y - start.y) * t,
+    scale: start.scale + (end.scale - start.scale) * t,
+  };
+  const positions = poseAt(input, at).map((value, i) =>
+    i % 3 === 0 ? value - view.x : i % 3 === 1 ? value - view.y : value,
+  );
+  const position = new Float32BufferAttribute(positions, 3);
+  geometry.setAttribute("position", position);
   geometry.computeVertexNormals();
+  outline.setAttribute("position", position);
   return (
-    <group rotation={[0, 0, (viewDeg * Math.PI) / 180]}>
-      {/* Paper faces are wound counter-clockwise from the front, so FrontSide is the coloured side; the back is white, like origami paper. */}
+    <group rotation={[0, 0, (viewDeg * Math.PI) / 180]} scale={view.scale}>
+      {/* Paper faces are wound counter-clockwise from the front, so FrontSide is the paper's starting face up. */}
       <mesh geometry={geometry}>
         <meshStandardMaterial
-          color={paperColor}
+          color={colors.front}
           roughness={0.9}
           side={FrontSide}
         />
       </mesh>
       <mesh geometry={geometry}>
         <meshStandardMaterial
-          color={PAPER_BACK}
+          color={colors.back}
           roughness={0.9}
           side={BackSide}
         />
       </mesh>
+      {/* Face edges, faint, so folds and layers read like a paper model. */}
+      <lineSegments geometry={outline}>
+        <lineBasicMaterial color="#3d3226" transparent opacity={0.28} />
+      </lineSegments>
     </group>
   );
 }
@@ -171,6 +215,10 @@ export function OrigamiResults({
   readonly paperColor: string;
   readonly aiReason: string | null;
 }) {
+  // White origami paper's back is the face up when a model starts colour down.
+  const colors: Sides = payload.colorDown
+    ? { front: PAPER_BACK, back: paperColor }
+    : { front: paperColor, back: PAPER_BACK };
   const input: PoseInput = useMemo(
     () => ({
       vertices: payload.pattern.vertices,
@@ -293,16 +341,19 @@ export function OrigamiResults({
           <Canvas
             camera={{ position: [0, 0, 1.45], fov: 40, near: 0.05, far: 20 }}
             dpr={[1, 2]}
+            flat
           >
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[1.5, 2, 3]} intensity={1.2} />
-            <directionalLight position={[-2, -1, -3]} intensity={0.5} />
+            {/* Without tone mapping, ambient plus a face-on key light sum to
+                about 1, so paper shows its true colour and folds still shade. */}
+            <ambientLight intensity={1.1} />
+            <directionalLight position={[1.5, 2, 3]} intensity={1.3} />
+            <directionalLight position={[-2, -1, -3]} intensity={0.9} />
             <group rotation={[turn.pitch, turn.yaw, 0]}>
               <FoldedPaper
                 input={input}
                 at={at}
                 viewDeg={payload.viewDeg}
-                paperColor={paperColor}
+                colors={colors}
               />
             </group>
           </Canvas>
@@ -355,7 +406,7 @@ export function OrigamiResults({
                         <polygon
                           key={i}
                           points={polygon.points}
-                          fill={polygon.front ? paperColor : PAPER_BACK}
+                          fill={polygon.front ? colors.front : colors.back}
                           stroke="#5b4a33"
                           strokeOpacity={0.35}
                           strokeWidth={0.003}

@@ -17,6 +17,7 @@ export const OrigamiPayloadSchema = z.object({
   name: z.string(),
   summary: z.string(),
   viewDeg: z.number(),
+  colorDown: z.boolean(),
   pattern: z.object({
     version: z.literal("1"),
     vertices: z.array(PointSchema),

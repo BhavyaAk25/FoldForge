@@ -13,10 +13,15 @@ import {
   buildCreasePattern,
   type CreaseSegment,
 } from "@/core/origami/crease-pattern";
-import { checkFoldRules } from "@/core/origami/fold-rules";
+import { applyIsometry, checkFoldRules } from "@/core/origami/fold-rules";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
 import { poseAt, stepCount } from "@/core/origami/pose";
-import { deriveSequence, type FoldStep } from "@/core/origami/sequence";
+import {
+  deriveSequence,
+  faceAt,
+  foldedTransforms,
+  type FoldStep,
+} from "@/core/origami/sequence";
 import { simulateFolding } from "@/core/origami/simulate";
 import { OrigamiPayloadSchema } from "@/lib/origami-contract";
 
@@ -69,6 +74,26 @@ describe("origami library", () => {
       }
     },
   );
+
+  it("shows the swan upright: its neck rises well above the body", () => {
+    const swan = ORIGAMI_MODELS.find((m) => m.id === "swan")!;
+    const derived = deriveSequence(swan.sequence);
+    if (!derived.ok) throw new Error(derived.error.kind);
+    const final = derived.value.at(-1)!.pattern;
+    const transforms = foldedTransforms(final, swan.sequence.anchor)!;
+    const r = (swan.viewDeg * Math.PI) / 180;
+    // Height on screen once the page turns the model by viewDeg.
+    const height = (x: number, y: number) => {
+      const q = applyIsometry(transforms[faceAt(final, p(x, y))]!, p(x, y));
+      return q.x * Math.sin(r) + q.y * Math.cos(r);
+    };
+    const body = Math.max(
+      height(0.97, 0.9),
+      height(0.9, 0.2),
+      height(0.2, 0.9),
+    );
+    expect(height(0.03, 0.01) - body).toBeGreaterThan(0.4);
+  });
 });
 
 describe("matchOrigamiModel", () => {
