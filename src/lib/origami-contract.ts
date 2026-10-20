@@ -60,10 +60,3 @@ export const OrigamiPayloadSchema = z.object({
 });
 
 export type OrigamiPayloadResponse = z.infer<typeof OrigamiPayloadSchema>;
-
-/** The /api/origami/choose response: the AI's pick, or nulls for none. */
-export const OrigamiChoiceResponseSchema = z.object({
-  modelId: z.string().nullable(),
-  paperSizeMm: z.number().nullable(),
-  reason: z.string().nullable(),
-});

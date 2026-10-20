@@ -42,6 +42,21 @@ export const ORIGAMI_CATALOG = [
     keywords: ["dog face", "puppy face", "origami dog", "paper dog"],
   },
   {
+    id: "cat-face",
+    name: "Cat face",
+    keywords: ["cat face", "kitty face", "origami cat", "paper cat"],
+  },
+  {
+    id: "heart",
+    name: "Heart",
+    keywords: ["origami heart", "paper heart", "folded heart"],
+  },
+  {
+    id: "tulip",
+    name: "Tulip",
+    keywords: ["tulip", "origami flower", "paper flower", "folded flower"],
+  },
+  {
     id: "swan",
     name: "Swan",
     keywords: ["origami swan", "paper swan", "folded swan"],
@@ -57,6 +72,9 @@ const LOOSE_WORDS: Readonly<
 > = {
   swan: ["swan", "goose"],
   "dog-face": ["dog", "puppy"],
+  "cat-face": ["cat", "kitten", "kitty"],
+  heart: ["heart", "love"],
+  tulip: ["flower", "blossom"],
 };
 
 export type OrigamiModelId = (typeof ORIGAMI_CATALOG)[number]["id"];
