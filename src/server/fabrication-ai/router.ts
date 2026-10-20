@@ -11,6 +11,7 @@ import {
   ORIGAMI_CATALOG,
   PAPER_MM,
   asksForOrigami,
+  matchOrigamiLoose,
   matchOrigamiModel,
   namesMechanism,
   paperSizeFromPrompt,
@@ -64,7 +65,7 @@ export const RouteChoiceSchema = z
 const ROUTER_PROMPT = `You route a request to one of FoldForge's three engines.
 
 - "figure": a 3D papercraft model of an animal, vehicle, building, tree, robot, snowman, or person. Set presetId to the closest preset below, colors to the request's colours as #rrggbb (primary main surface, secondary contrast surface, accent small details), or null to keep the preset's, and sizeMm to the requested length or height, or null.
-- "origami": the user says origami or folding from one square, and a library model below fits. Set origamiId and paperSizeMm (the square's side, or null).
+- "origami": the user says origami or folding from one square, and a library model below fits. Set origamiId, paperSizeMm (the square's side, or null), and colors.primary to the paper colour if one is named.
 - "popup": a card that opens with something rising from it (birthday, greeting, thank-you, love cards). Set cardDesign to "flower" or "heart", and colors.primary to the shape's colour if the request names one.
 - "mechanism": boxes, trays, stands, organizers, and anything that slides or holds something.
 
@@ -82,6 +83,9 @@ const sizeFromPrompt = (prompt: string): number | null => {
     ? null
     : Math.min(FIGURE_SIZE_MM.maximum, Math.max(FIGURE_SIZE_MM.minimum, mm));
 };
+
+/** Classic origami paper: red on the front, white on the back. */
+const ORIGAMI_RED = "#c8463d";
 
 export type RouteResult =
   RouteResponse | { readonly engine: "error"; readonly error: unknown };
@@ -111,12 +115,15 @@ export const popupChoice = (
 };
 
 export const routePrompt = async (prompt: string): Promise<RouteResult> => {
-  const origamiId = matchOrigamiModel(prompt);
+  const origamiId =
+    matchOrigamiModel(prompt) ??
+    (asksForOrigami(prompt) ? matchOrigamiLoose(prompt) : null);
   if (origamiId) {
     return {
       engine: "origami",
       modelId: origamiId,
       paperSizeMm: paperSizeFromPrompt(prompt) ?? PAPER_MM.default,
+      paperColor: colorWord(prompt) ?? ORIGAMI_RED,
       reason: null,
     };
   }
@@ -164,6 +171,7 @@ export const routePrompt = async (prompt: string): Promise<RouteResult> => {
         engine: "origami",
         modelId: value.origamiId,
         paperSizeMm: Math.round(value.paperSizeMm ?? PAPER_MM.default),
+        paperColor: value.colors?.primary ?? colorWord(prompt) ?? ORIGAMI_RED,
         reason: value.reason,
       };
     }

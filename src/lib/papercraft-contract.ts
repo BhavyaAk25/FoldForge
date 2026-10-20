@@ -113,6 +113,8 @@ export const RouteResponseSchema = z.discriminatedUnion("engine", [
     engine: z.literal("origami"),
     modelId: z.string(),
     paperSizeMm: z.number(),
+    /** The paper's coloured side, #rrggbb. */
+    paperColor: Hex,
     reason: z.string().nullable(),
   }),
   z.object({

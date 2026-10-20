@@ -122,3 +122,12 @@ describe("the playing-card box", () => {
     expect(built.payload.decals.length).toBe(5);
   });
 });
+
+describe("origami paper colour", () => {
+  it("takes the paper colour from the prompt", async () => {
+    const route = await routePrompt("a blue origami crane");
+    expect(route.engine === "origami" ? route.paperColor : route.engine).toBe(
+      "#3a7bd5",
+    );
+  });
+});

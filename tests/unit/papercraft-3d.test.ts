@@ -210,7 +210,9 @@ describe("figures", () => {
     ["fold a paper crane", { engine: "origami", modelId: "crane" }],
     ["a red fox", { engine: "figure", preset: "Fox", primary: "#d6403a" }],
     ["a 20 cm cat", { engine: "figure", preset: "Cat", sizeMm: 200 }],
-    ["an origami swan", { engine: "figure", preset: "Swan" }],
+    ["an origami swan", { engine: "origami", modelId: "swan" }],
+    ["fold a dog", { engine: "origami", modelId: "dog-face" }],
+    ["a swan", { engine: "figure", preset: "Swan" }],
     ["a gift box 120 x 80 x 40 mm", { engine: "mechanism" }],
     ["a duck bookmark", { engine: "mechanism" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
@@ -220,8 +222,10 @@ describe("figures", () => {
     const route = await routePrompt(prompt);
     vi.unstubAllEnvs();
     expect(route.engine).toBe(expected.engine);
-    if (route.engine === "origami" && "modelId" in expected)
+    if (route.engine === "origami" && "modelId" in expected) {
       expect(route.modelId).toBe(expected.modelId);
+      expect(route.paperColor).toMatch(/^#[0-9a-f]{6}$/u);
+    }
     if (route.engine === "figure" && "preset" in expected) {
       expect(route.figure.title).toBe(expected.preset);
       if ("primary" in expected)

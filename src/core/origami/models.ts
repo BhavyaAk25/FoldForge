@@ -408,11 +408,124 @@ const PAPER_CUP: OrigamiModel = {
   },
 };
 
+/**
+ * Dog face: a triangle folded behind (coloured side out, point down), the
+ * two top corners folded down as hanging ears about 37 degrees off the top
+ * edge, and the chin tucked behind.
+ */
+const DOG_FACE: OrigamiModel = {
+  id: "dog-face",
+  summary: "A puppy's face with floppy ears, from four folds.",
+  viewDeg: -135,
+  sequence: {
+    anchor: p(0.75, 0.8),
+    steps: [
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the square in half behind, corner to corner, into a triangle pointing down.",
+        line: { from: p(-0.05, 1.05), to: p(1.05, -0.05) },
+        toward: p(0.1, 0.1),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the left corner down so it hangs beside the face as an ear.",
+        line: { from: p(0.297, 0.703), to: p(0.258, 1) },
+        toward: p(0.02, 0.99),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the right corner down the same way for the other ear.",
+        line: { from: p(0.703, 0.297), to: p(1, 0.258) },
+        toward: p(0.99, 0.02),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the bottom point behind to square off the chin.",
+        line: { from: p(0.78, 1), to: p(1, 0.78) },
+        toward: p(0.99, 0.99),
+      },
+    ],
+  },
+};
+
+/**
+ * Swan: a kite, narrowed behind into a long point, the point folded up as
+ * the neck with the tip folded back as the head, the body folded in half,
+ * and the neck inside-reverse-folded upright between the body's halves.
+ */
+const SWAN: OrigamiModel = {
+  id: "swan",
+  summary: "The classic swan from a kite base: long neck, folded head.",
+  viewDeg: 135,
+  sequence: {
+    anchor: p(0.8, 0.86),
+    steps: [
+      {
+        kind: "valley",
+        instruction: "Fold one edge to the diagonal crease.",
+        line: ray(p(0, 0), 22.5, 1.6),
+        toward: p(0.9, 0.05),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the other edge to the diagonal too, making a kite.",
+        line: ray(p(0, 0), 67.5, 1.6),
+        toward: p(0.05, 0.9),
+      },
+      {
+        kind: "mountain",
+        instruction:
+          "Turn over and fold one long edge to the centre, narrowing the point.",
+        line: ray(p(0, 0), 33.75, 1.6),
+        toward: p(0.9, 0.3),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the other long edge to the centre.",
+        line: ray(p(0, 0), 56.25, 1.6),
+        toward: p(0.3, 0.9),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the narrow point up to the top: this is the neck.",
+        line: { from: p(0.2, 0.86), to: p(0.86, 0.2) },
+        toward: p(0.1, 0.1),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the tip back down to make the head.",
+        line: { from: p(0.62, 1.2), to: p(1.2, 0.62) },
+        toward: p(1.02, 1.02),
+        layers: (f) => f.paper.x + f.paper.y < 0.9,
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the body in half along the centre.",
+        line: { from: p(-0.05, -0.05), to: p(1.1, 1.1) },
+        toward: p(0.3, 0.7),
+      },
+      {
+        kind: "inside-reverse",
+        instruction:
+          "Pull the neck up between the body's halves (inside reverse fold) and flatten.",
+        line: { from: p(0.66, 0.51), to: p(0.66, 0.81) },
+        toward: p(0.85, 0.85),
+        layers: (f) => f.paper.x + f.paper.y < 1.05,
+      },
+    ],
+  },
+};
+
 export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   CRANE,
   FLAPPING_BIRD,
   PAPER_PLANE,
   PAPER_CUP,
+  DOG_FACE,
+  SWAN,
   base(
     "bird-base",
     BIRD_BASE,
