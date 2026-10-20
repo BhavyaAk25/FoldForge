@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as OpenAIModule from "openai";
+import { APIConnectionTimeoutError } from "openai";
 import { z } from "zod";
 
 const create = vi.fn();
 
-vi.mock("openai", () => ({
+// The client is faked; the SDK's error classes stay real.
+vi.mock("openai", async (importOriginal) => ({
+  ...(await importOriginal<typeof OpenAIModule>()),
   default: class {
     chat = { completions: { create } };
   },
@@ -116,9 +120,8 @@ describe("generateStructured", () => {
   it("moves to the next model when one is retired, rate limited, or too slow", async () => {
     const unavailable = (status: number) =>
       Object.assign(new Error(`status ${status}`), { status });
-    const slow = Object.assign(new Error("timed out"), {
-      name: "APIConnectionTimeoutError",
-    });
+    // The SDK's own timeout error, whose name is plain "Error".
+    const slow = new APIConnectionTimeoutError();
     create
       .mockRejectedValueOnce(unavailable(404))
       .mockRejectedValueOnce(unavailable(429))
@@ -138,9 +141,13 @@ describe("generateStructured", () => {
     // Each attempt gets a share of what is left, so a model that hangs
     // cannot use up the deadline before the others are tried.
     expect(create.mock.calls[0]![1].timeout).toBeLessThanOrEqual(50_000 / 4);
-    expect(create.mock.calls.every((call) => call[1].timeout <= 50_000)).toBe(
-      true,
-    );
+    // Whole milliseconds: the SDK rejects anything else before calling.
+    expect(
+      create.mock.calls.every(
+        (call) =>
+          Number.isInteger(call[1].timeout) && call[1].timeout <= 50_000,
+      ),
+    ).toBe(true);
   });
 
   it("does not hide authentication failures behind fallbacks", async () => {
