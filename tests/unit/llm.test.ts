@@ -34,12 +34,12 @@ describe("llmConfiguration", () => {
     expect(llmConfiguration({ GEMINI_API_KEY: "k" })).toEqual({
       apiKey: "k",
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-      model: "gemini-flash-latest",
+      model: "gemini-3.5-flash-lite",
       models: [
-        "gemini-flash-latest",
-        "gemini-3.5-flash",
-        "gemini-flash-lite-latest",
         "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
       ],
     });
   });
@@ -135,7 +135,9 @@ describe("generateStructured", () => {
       "slow",
       "working",
     ]);
-    // Each attempt is bounded by what is left of the call's deadline.
+    // Each attempt gets a share of what is left, so a model that hangs
+    // cannot use up the deadline before the others are tried.
+    expect(create.mock.calls[0]![1].timeout).toBeLessThanOrEqual(50_000 / 4);
     expect(create.mock.calls.every((call) => call[1].timeout <= 50_000)).toBe(
       true,
     );
