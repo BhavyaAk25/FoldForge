@@ -37,6 +37,8 @@ interface BenchResult {
   readonly detail: string;
   readonly ms: number;
   readonly faces: readonly Face[];
+  /** Bench view turn about the vertical, in degrees. */
+  readonly yawDeg: number;
 }
 
 const PAPER = "#e8d6b4";
@@ -48,24 +50,39 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
     engine: Engine,
     detail: string,
     faces: Face[],
+    yawDeg = -35,
   ): BenchResult => ({
     prompt,
     engine,
     detail,
     ms: Math.round(performance.now() - start),
     faces,
+    yawDeg,
   });
   const route = await routePrompt(prompt.text);
   if (route.engine === "figure") {
     const built = buildPapercraft(rigSpec(route.figure));
     if (!built.ok)
       return done("none", `figure failed: ${built.error.kind}`, []);
-    const faces = built.value.parts.flatMap((part) =>
+    const faces: Face[] = built.value.parts.flatMap((part) =>
       part.mesh.faces.map((face) => ({
         color: part.color,
         points: face.map((v) => part.mesh.vertices[v]!),
       })),
     );
+    // Printed decals, lifted off their face so they sort in front of it.
+    for (const decal of built.value.decals)
+      faces.push({
+        color: decal.color,
+        points: decal.points.map(
+          (p) =>
+            [
+              p[0] + decal.normal[0] * 0.5,
+              p[1] + decal.normal[1] * 0.5,
+              p[2] + decal.normal[2] * 0.5,
+            ] as const,
+        ),
+      });
     return done(
       "figure",
       `${route.figure.title}, ${built.value.pages.length} pages`,
@@ -73,15 +90,16 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
     );
   }
   if (route.engine === "popup") {
-    // The card standing open at 110 degrees: spine up, opening toward the viewer.
+    // The card standing open at 110 degrees, spine up.
     const card = popupCard(
       route.card.design,
       route.card.colors,
       route.card.title,
     );
     const theta = 110;
+    // Turned half round about the spine so the opening faces the bench view.
     const toBench = ([x, y, z]: readonly [number, number, number]) =>
-      [x, -z, y] as const;
+      [-x, z, y] as const;
     const faces: Face[] = ([1, -1] as const).map((side) => ({
       color: card.cardColor,
       points: [
@@ -107,7 +125,8 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
           });
       }
     }
-    return done("popup", `${card.title}, 1 page`, faces);
+    // Face-on, as the page shows it.
+    return done("popup", `${card.title}, 1 page`, faces, 0);
   }
   if (route.engine === "origami") {
     const payload = origamiPayload(
@@ -123,7 +142,7 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
     let k = 0;
     // Origami lies in x-y with z toward the viewer; stand it up (y up, z depth).
     const faces = payload.pattern.faces.map((face) => ({
-      color: PAPER,
+      color: route.paperColor,
       points: face.map(() => {
         const [x, y, z] = [pose[k]!, pose[k + 1]!, pose[k + 2]!];
         k += 3;
@@ -164,9 +183,16 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
   );
 };
 
+/** A colour darkened toward black by 1 - k. */
+const darken = (hex: string, k: number) =>
+  `#${[1, 3, 5]
+    .map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k))
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("")}`;
+
 /** Shaded isometric view (z up), painter-sorted, fitted to one cell. */
-const renderSvg = (faces: readonly Face[]): string => {
-  const yaw = (-35 * Math.PI) / 180;
+const renderSvg = (faces: readonly Face[], yawDeg: number): string => {
+  const yaw = (yawDeg * Math.PI) / 180;
   const pitch = (25 * Math.PI) / 180;
   const view = ([x, y, z]: readonly [number, number, number]) => {
     const [rx, ry] = [
@@ -196,11 +222,11 @@ const renderSvg = (faces: readonly Face[]): string => {
   const scale = (CELL * 0.8) / Math.max(maxU - minU, maxV - minV, 1e-9);
   const light = { x: 0.4, y: -0.5, z: 0.75 };
   return projected
-    .sort(
-      (a, b) =>
-        Math.min(...a.points.map((p) => p.depth)) -
-        Math.min(...b.points.map((p) => p.depth)),
-    )
+    .sort((a, b) => {
+      const mean = (f: typeof a) =>
+        f.points.reduce((sum, p) => sum + p.depth, 0) / f.points.length;
+      return mean(a) - mean(b);
+    })
     .map(({ face, points }) => {
       const [a, b, c] = face.points;
       let shade = 0.75;
@@ -224,7 +250,8 @@ const renderSvg = (faces: readonly Face[]): string => {
             `${(CELL / 2 + (p.u - (minU + maxU) / 2) * scale).toFixed(1)},${(CELL / 2 - (p.v - (minV + maxV) / 2) * scale).toFixed(1)}`,
         )
         .join(" ");
-      return `<polygon points="${d}" fill="${face.color}" fill-opacity="${shade.toFixed(2)}" stroke="#4a3f30" stroke-width="0.6"/>`;
+      const fill = darken(face.color, shade);
+      return `<polygon points="${d}" fill="${fill}" stroke="${darken(face.color, shade * 0.7)}" stroke-width="0.5" stroke-linejoin="round"/>`;
     })
     .join("");
 };
@@ -241,7 +268,7 @@ const main = async () => {
   const rowHeight = CELL + 70;
   const tiles = await Promise.all(
     results.map(async (result) => {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CELL}" height="${rowHeight}"><rect width="100%" height="100%" fill="#fbf8f1"/>${renderSvg(result.faces)}<text x="8" y="${CELL + 18}" font-family="sans-serif" font-size="13" font-weight="bold">${escape(result.prompt.text.slice(0, 44))}</text><text x="8" y="${CELL + 38}" font-family="sans-serif" font-size="12" fill="${result.engine === result.prompt.expect ? "#247a4a" : "#b43a32"}">${result.engine} (want ${result.prompt.expect}) · ${result.ms} ms</text><text x="8" y="${CELL + 56}" font-family="sans-serif" font-size="11" fill="#6e6a62">${escape(result.detail.slice(0, 48))}</text></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CELL}" height="${rowHeight}"><rect width="100%" height="100%" fill="#fbf8f1"/>${renderSvg(result.faces, result.yawDeg)}<text x="8" y="${CELL + 18}" font-family="sans-serif" font-size="13" font-weight="bold">${escape(result.prompt.text.slice(0, 44))}</text><text x="8" y="${CELL + 38}" font-family="sans-serif" font-size="12" fill="${result.engine === result.prompt.expect ? "#247a4a" : "#b43a32"}">${result.engine} (want ${result.prompt.expect}) · ${result.ms} ms</text><text x="8" y="${CELL + 56}" font-family="sans-serif" font-size="11" fill="#6e6a62">${escape(result.detail.slice(0, 48))}</text></svg>`;
       let tile = sharp(Buffer.from(svg));
       if (result.prompt.photo) {
         const photo = await sharp(`public/examples/${result.prompt.photo}`)
@@ -275,7 +302,7 @@ const main = async () => {
   writeFileSync(
     `${outDir}/results.json`,
     JSON.stringify(
-      results.map(({ faces: _faces, ...rest }) => rest),
+      results.map(({ faces: _faces, yawDeg: _yaw, ...rest }) => rest),
       null,
       1,
     ),
