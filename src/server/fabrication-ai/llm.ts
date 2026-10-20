@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { APIConnectionTimeoutError } from "openai";
 import { z } from "zod";
 
 import { FabricationModelContractError } from "./model-contract-error";
@@ -200,9 +200,9 @@ const completeWithModelFallback = async (
     if (remaining < MINIMUM_ATTEMPT_MS) break;
     // Share what is left among the models still to try, so one slow model
     // cannot starve the rest; a model that fails fast passes its share on.
-    const share = Math.max(
-      MINIMUM_ATTEMPT_MS,
-      remaining / (models.length - index),
+    // The SDK takes whole milliseconds only.
+    const share = Math.floor(
+      Math.max(MINIMUM_ATTEMPT_MS, remaining / (models.length - index)),
     );
     try {
       const completion = await client.chat.completions.create(
@@ -212,13 +212,13 @@ const completeWithModelFallback = async (
           response_format: { type: "json_object" },
           temperature: 0.2,
         },
-        { timeout: Math.min(remaining, share) },
+        { timeout: Math.min(Math.floor(remaining), share) },
       );
       return { ...completion, model };
     } catch (error) {
       // A model that is slow right now is as good as busy: try the next one.
-      const timedOut =
-        error instanceof Error && error.name === "APIConnectionTimeoutError";
+      // The SDK's timeout error reports its name as plain "Error".
+      const timedOut = error instanceof APIConnectionTimeoutError;
       const status = statusOf(error);
       if (!timedOut && (status === null || !NEXT_MODEL_STATUSES.has(status)))
         throw error;
