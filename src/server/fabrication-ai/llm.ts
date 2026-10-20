@@ -17,14 +17,15 @@ import { FabricationModelContractError } from "./model-contract-error";
 const GEMINI_OPENAI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/";
 // Google retires specific Gemini versions for new keys (gemini-2.5-flash was
-// withdrawn this way), so each tier lists a pinned model and the maintained
-// alias. The lite models lead: every call fills a small bounded form, and
-// they answer in about a second where the full models can take over 25.
-// Free-tier quotas are per model, so each fallback also adds capacity.
+// withdrawn this way), so the list mixes pinned models and maintained
+// aliases. Gemini models think before answering by default, which turns a
+// small bounded form into a 12 to 25 s call; asked not to think, 3.5 Flash
+// answers in about 2 s, so it leads. Free-tier quotas are per model, so each
+// fallback also adds capacity.
 const DEFAULT_MODELS = [
+  "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
   "gemini-flash-lite-latest",
-  "gemini-3.5-flash",
   "gemini-flash-latest",
 ] as const;
 // Statuses that mean "this model, not this request": retired or unknown
@@ -188,11 +189,42 @@ const statusOf = (error: unknown): number | null =>
     ? error.status
     : null;
 
+/**
+ * One model's answer. A model that refuses to skip thinking (400) is asked
+ * plainly; a 503 ("high demand") is usually gone a moment later, and the
+ * next model is slower, so the same model is asked once more first.
+ */
+const askOneModel = async <T>(
+  ask: (noThinking: boolean) => Promise<T>,
+  askNotToThink: boolean,
+  deadline: number,
+): Promise<T> => {
+  let noThinking = askNotToThink;
+  let busyRetried = false;
+  for (;;) {
+    try {
+      return await ask(noThinking);
+    } catch (error) {
+      const status = statusOf(error);
+      if (noThinking && status === 400) noThinking = false;
+      else if (
+        status === 503 &&
+        !busyRetried &&
+        deadline - Date.now() > MINIMUM_ATTEMPT_MS
+      )
+        busyRetried = true;
+      else throw error;
+    }
+  }
+};
+
 const completeWithModelFallback = async (
   client: OpenAI,
   models: readonly [string, ...string[]],
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   deadline: number,
+  // Gemini only: other providers may reject the parameter.
+  askNotToThink: boolean,
 ): Promise<OpenAI.Chat.ChatCompletion & { readonly model: string }> => {
   let lastError: unknown = new LlmDeadlineError();
   for (const [index, model] of models.entries()) {
@@ -204,16 +236,19 @@ const completeWithModelFallback = async (
     const share = Math.floor(
       Math.max(MINIMUM_ATTEMPT_MS, remaining / (models.length - index)),
     );
-    try {
-      const completion = await client.chat.completions.create(
+    const ask = (noThinking: boolean) =>
+      client.chat.completions.create(
         {
           model,
           messages,
           response_format: { type: "json_object" },
           temperature: 0.2,
+          ...(noThinking ? { reasoning_effort: "none" as const } : {}),
         },
         { timeout: Math.min(Math.floor(remaining), share) },
       );
+    try {
+      const completion = await askOneModel(ask, askNotToThink, deadline);
       return { ...completion, model };
     } catch (error) {
       // A model that is slow right now is as good as busy: try the next one.
@@ -254,6 +289,7 @@ export const generateStructured = async <Schema extends z.ZodType>(
       configuration.models,
       messages,
       deadline,
+      configuration.baseURL === GEMINI_OPENAI_BASE_URL,
     );
     const content = completion.choices[0]?.message.content ?? "";
     const outcome = parseStructuredContent(request.schema, content);
