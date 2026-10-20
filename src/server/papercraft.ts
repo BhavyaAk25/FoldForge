@@ -58,15 +58,21 @@ export const buildFigure = (figure: FigureSpec): FigureBuild => {
     title: model.title,
     sizeMm: figure.sizeMm,
     parts: model.parts.map((part) => ({
+      id: part.id,
+      open: part.open,
+      slide: part.slide ? [...part.slide] : null,
       name: part.name,
       color: part.color,
       vertices: part.mesh.vertices.flatMap((v) => v.map(round)),
       faces: part.mesh.faces.map((f) => [...f]),
     })),
     decals: model.decals.map((d) => ({
-      centre: [round(d.centre[0]), round(d.centre[1]), round(d.centre[2])],
+      part: d.part,
+      points: d.points.map(
+        (p) =>
+          [round(p[0]), round(p[1]), round(p[2])] as [number, number, number],
+      ),
       normal: [round(d.normal[0]), round(d.normal[1]), round(d.normal[2])],
-      radiusMm: d.radiusMm,
       color: d.color,
     })),
     pages: model.pages.map((_, page) => papercraftPageSvg(model, page)),

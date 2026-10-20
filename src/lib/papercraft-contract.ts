@@ -52,6 +52,7 @@ export const RigParamsSchema = z.discriminatedUnion("rig", [
       build: z.enum(["robot", "snowman", "person"]),
     })
     .strict(),
+  z.object({ rig: z.literal("cardbox") }).strict(),
 ]);
 
 export const FIGURE_SIZE_MM = { minimum: 80, maximum: 240 } as const;
@@ -74,6 +75,11 @@ export const PapercraftPayloadSchema = z.object({
   sizeMm: z.number(),
   parts: z.array(
     z.object({
+      id: z.string(),
+      /** Open parts (a tray, a sleeve) show both sides. */
+      open: z.boolean(),
+      /** Travel for the preview's slider, mm. */
+      slide: z.tuple([z.number(), z.number(), z.number()]).nullable(),
       name: z.string(),
       color: z.string(),
       /** x, y, z per vertex, mm, z up. */
@@ -83,9 +89,9 @@ export const PapercraftPayloadSchema = z.object({
   ),
   decals: z.array(
     z.object({
-      centre: z.tuple([z.number(), z.number(), z.number()]),
+      part: z.string(),
+      points: z.array(z.tuple([z.number(), z.number(), z.number()])),
       normal: z.tuple([z.number(), z.number(), z.number()]),
-      radiusMm: z.number(),
       color: z.string(),
     }),
   ),
@@ -114,7 +120,55 @@ export const RouteResponseSchema = z.discriminatedUnion("engine", [
     figure: FigureSpecSchema,
     reason: z.string().nullable(),
   }),
+  z.object({
+    engine: z.literal("popup"),
+    card: z.lazy(() => PopupChoiceSchema),
+    reason: z.string().nullable(),
+  }),
   z.object({ engine: z.literal("mechanism") }),
 ]);
 
 export type RouteResponse = z.infer<typeof RouteResponseSchema>;
+
+const Point2 = z.tuple([z.number(), z.number()]);
+
+export const CARD_DESIGNS = ["flower", "heart"] as const;
+
+/** What the router picks for a pop-up card: a design, colours, and a title. */
+export const PopupChoiceSchema = z
+  .object({
+    title: z.string().trim().min(1).max(60),
+    design: z.enum(CARD_DESIGNS),
+    colors: z.object({ card: Hex, main: Hex, second: Hex }).strict(),
+  })
+  .strict();
+
+export type PopupChoice = z.infer<typeof PopupChoiceSchema>;
+
+export const PopupPayloadSchema = z.object({
+  card: z.object({
+    title: z.string(),
+    pageWidthMm: z.number(),
+    pageHeightMm: z.number(),
+    cardColor: z.string(),
+    pieces: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        color: z.string(),
+        apexMm: z.number(),
+        alphaDeg: z.number(),
+        phiDeg: z.number(),
+        half: z.array(Point2),
+        tabMm: z.number(),
+        prints: z.array(
+          z.object({ points: z.array(Point2), color: z.string() }),
+        ),
+      }),
+    ),
+  }),
+  page: z.string(),
+  instructions: z.array(z.string()),
+});
+
+export type PopupPayload = z.infer<typeof PopupPayloadSchema>;

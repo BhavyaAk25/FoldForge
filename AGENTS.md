@@ -2,14 +2,15 @@
 
 ## What it is
 
-FoldForge turns a text prompt into a buildable paper model through one of three engines: 3D papercraft figures (animals, vehicles, buildings), real origami, and cut-and-fold mechanisms (boxes, cards, stands). A language model at most picks an engine and fills a bounded form; deterministic code builds the geometry, verifies it, previews it in 3D, and exports it.
+FoldForge turns a text prompt into a buildable paper model through one of four engines: 3D papercraft figures (animals, vehicles, buildings, and the sliding playing-card box), pop-up cards, real origami, and cut-and-fold mechanisms (boxes, stands, bookmarks). A language model at most picks an engine and fills a bounded form; deterministic code builds the geometry, verifies it, previews it in 3D, and exports it.
 
 The model never decides whether a design is valid. Code compiles, verifies, scores, and exports.
 
 ## How a prompt becomes a design
 
-0. **Route** (`/api/choose`, `routePrompt` in `src/server/fabrication-ai/router.ts`). Words decide first, with no AI: an origami model name goes to origami; a mechanism word (box, card, stand, bookmark, tag) to the mechanism engine below; an animal, vehicle, building, tree, robot, snowman, or person to a figure preset (`src/core/mesh/presets.ts`, recoloured by a colour word, sized by a length). Only an unrecognised prompt costs one AI call (20 s deadline), whose answer is limited to library ids, preset ids, colours, and sizes; the page labels its choice as AI.
+0. **Route** (`/api/choose`, `routePrompt` in `src/server/fabrication-ai/router.ts`). Words decide first, with no AI: an origami model name goes to origami; a pop-up or greeting card to the pop-up engine; a deck of cards to the card-box figure; a mechanism word (box, stand, bookmark, tag) to the mechanism engine below; an animal, vehicle, building, tree, robot, snowman, or person to a figure preset (`src/core/mesh/presets.ts`, recoloured by a colour word, sized by a length). Only an unrecognised prompt costs one AI call (20 s deadline), whose answer is limited to library ids, preset ids, colours, and sizes; the page labels its choice as AI.
    - **Figures** (`/api/papercraft`): `rigSpec` turns a preset's rig parameters into low-poly parts; `buildPapercraft` unfolds each part into islands with numbered glue tabs and packs them onto A4 pages; `verifyPapercraft` rechecks everything (closed outward solids, every printed face congruent and right side out so the net refolds within 0.1 mm, folds that meet, paired tabbed seams, no overlap, nothing off the page). The route returns the 3D parts, page SVGs, and instructions; a figure that fails a check is never returned.
+   - **Pop-up cards** (`/api/popup`): `src/core/popup` solves a V-fold exactly (the fold angle beta from cos(alpha) cos(beta) + sin(alpha) cos(theta/2) sin(beta) = cos(phi)), and `verifyPopup` checks the piece folds flat inside the closed card and never passes through a page or another piece at any opening angle. One A4 page holds the card, its glue guides, and the piece.
    - **Origami** (`/api/origami/[id]`): the server derives the crease pattern from the model's fold sequence, checks every step, builds the animation keyframes, and caches the result. Downloads come from `/api/origami/[id]/[format]` (`svg`, `fold`, `instructions`).
    - **Mechanisms** continue below.
 1. **Intent** (`/api/intent`). With an AI provider configured, the model fills `FabricationIntentV1`. Without one, or if the provider fails, `intentFromPromptKeywords` in `src/core/fabrication/prompt-intent.ts` recognizes boxes, desk stands, pop-up cards, and flat cut-outs (bookmarks, tags, ornaments) and parses sizes such as `90 x 60 x 40 mm` or `70 mm wide`.
@@ -24,7 +25,8 @@ The model never decides whether a design is valid. Code compiles, verifies, scor
 
 ## Code layout
 
-- `src/core/mesh`: 3D papercraft. `geometry.ts` and `primitives.ts` (closed low-poly solids), `unfold.ts` (non-overlapping islands, numbered seams, glue tabs), `model.ts` (parts to packed A4 pages, printed decals), `verify.ts` (the independent checks), `export.ts` (page SVG), `rigs.ts` and `presets.ts` (body types and named figures).
+- `src/core/popup`: pop-up cards. `popup.ts` (V-fold kinematics and checks), `cards.ts` (designs), `export.ts` (the printable page).
+- `src/core/mesh`: 3D papercraft. `geometry.ts` and `primitives.ts` (closed low-poly solids), `unfold.ts` (non-overlapping islands, numbered seams, glue tabs), `model.ts` (parts, open boxes, and sliding parts to packed A4 pages, printed decals from `decals.ts`), `verify.ts` (the independent checks), `export.ts` (page SVG), `rigs.ts` and `presets.ts` (body types and named figures).
 - `src/core/origami`: one-sheet origami. `crease-pattern.ts` (planar crease graph), `fold-rules.ts` (Maekawa, Kawasaki, flat-folded face placement), `layers.ts` (layer-order solver: fold sense, taco-tortilla, taco-taco, transitivity), `simulate.ts` (bar-and-hinge simulator for bases that collapse at once), `sequence.ts` (models written as folds; derives creases and checks each step), `animate.ts` and `pose.ts` (keyframes and 3D poses), `export.ts` (crease-pattern SVG, FOLD, instruction sheet), `models.ts` and `catalog.ts` (the library).
 - `src/core`: units, schemas, canonical serialization, compiler, geometry, kinematics, verification, scoring, templates, and exporters. Pure TypeScript: no React, no browser APIs, no network.
 - `src/server/fabrication-ai`: prompts, the LLM client, model classes, and conversion from model output to programs.
@@ -49,7 +51,7 @@ Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 m
 `pnpm check:budgets` runs in CI and fails the build when the home page JavaScript, source lines, test lines, test-to-source ratio, dependency counts, or template design time exceed `scripts/budgets.ts`. Raise a budget only in its own commit that says what grew and why; lower it after every cleanup.
 
 - **Tests:** one test per behaviour change, preferably a new row in an existing table test. A bug fix gets one regression test. Tests for deleted code are deleted with it. No snapshot dumps or copied model output as fixtures.
-- **Three engines, one each:** figures, origami, and mechanisms each have exactly one builder and one verifier; a new capability extends the engine it belongs to. A replacement deletes what it supersedes in the same PR; no parallel paths kept "just in case".
+- **Four engines, one each:** figures, pop-ups, origami, and mechanisms each have exactly one builder and one verifier; a new capability extends the engine it belongs to. A replacement deletes what it supersedes in the same PR; no parallel paths kept "just in case".
 - **Visual bench:** `pnpm bench` renders a fixed prompt set to `artifacts/bench/contact-sheet.png` beside the example photos; CI fails when a prompt leaves its expected engine. Look at the sheet before calling visual work done.
 - **Server does the heavy work:** compiling, verifying, and synthesizing run on the server; the browser renders results and never repeats those checks.
 - **Dependencies:** none added without removing one or raising the budget explicitly.

@@ -60,10 +60,7 @@ export const papercraftPageSvg = (
         )
         .join("");
       const decals = island.decals
-        .map(
-          (d) =>
-            `<circle cx="${n(d.centre[0])}" cy="${n(d.centre[1])}" r="${n(d.radiusMm)}" fill="${d.color}"/>`,
-        )
+        .map((d) => `<polygon points="${pts(d.points)}" fill="${d.color}"/>`)
         .join("");
       const folds = island.folds
         .map(
@@ -78,6 +75,7 @@ export const papercraftPageSvg = (
         )
         .join("");
       const labels = island.cuts
+        .filter((c) => c.label > 0)
         .map((c) => edgeLabel(c.from, c.to, String(c.label), 2.2))
         .join("");
       // The part's name on its largest face, so pieces can be told apart.

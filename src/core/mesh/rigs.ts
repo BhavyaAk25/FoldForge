@@ -36,7 +36,8 @@ export type RigParams =
   | { readonly rig: "vehicle"; readonly cabin: "car" | "bus" | "truck" }
   | { readonly rig: "building"; readonly roof: "pyramid" | "tower" }
   | { readonly rig: "tree"; readonly crown: "round" | "pine" }
-  | { readonly rig: "figure"; readonly build: "robot" | "snowman" | "person" };
+  | { readonly rig: "figure"; readonly build: "robot" | "snowman" | "person" }
+  | { readonly rig: "cardbox" };
 
 export interface FigureSpec {
   readonly title: string;
@@ -495,7 +496,7 @@ const vehicle = (
   });
   if (p.cabin === "bus") {
     // A row of round windows down each side.
-    for (const x of [-0.3, -0.1, 0.1, 0.3]) {
+    for (const x of [-1.5, -0.5, 0.5, 1.5]) {
       for (const side of [1, -1])
         b.decals.push({
           part: "body",
@@ -677,6 +678,55 @@ const figure = (
     );
 };
 
+/**
+ * A sleeve open at both ends and a tray open on top that slides out of it,
+ * sized round a deck L long (a playing card is 63 x 88 mm, a deck about 19
+ * mm thick), with 1 mm of play each way. Suits are printed on the sleeve.
+ */
+const cardbox = (b: Builder, L: number, c: Colors) => {
+  const tray: Vec3 = [L + 2, 0.72 * L + 2, 0.22 * L + 1];
+  const sleeve: Vec3 = [tray[0] + 1, tray[1] + 2, tray[2] + 2];
+  add(
+    b,
+    "sleeve",
+    "Sleeve",
+    { kind: "box", open: ["left", "right"] },
+    sleeve,
+    [0, 0, sleeve[2] / 2],
+    c.primary,
+  );
+  b.parts.push({
+    id: "tray",
+    name: "Tray",
+    shape: { kind: "box", open: ["top"] },
+    size: tray,
+    position: [0, 0, tray[2] / 2 + 1],
+    color: c.secondary,
+    slide: [0.7 * L, 0, 0],
+  });
+  const suits = [
+    ["heart", -2.6, 1.7, "#c0392b"],
+    ["spade", 2.6, 1.7, "#1d1d1d"],
+    ["diamond", -2.6, -1.7, "#c0392b"],
+    ["club", 2.6, -1.7, "#1d1d1d"],
+  ] as const;
+  for (const [shape, x, y, color] of suits)
+    b.decals.push({
+      part: "sleeve",
+      direction: [x, y, 1],
+      radiusMm: 0.12 * L,
+      color,
+      shape,
+    });
+  b.decals.push({
+    part: "sleeve",
+    direction: [0, 0, 1],
+    radiusMm: 0.2 * L,
+    color: c.accent,
+    shape: "spade",
+  });
+};
+
 /** The papercraft parts for a figure; every rig and option yields a valid model. */
 export const rigSpec = (figure_: FigureSpec): PapercraftSpec => {
   const b = make();
@@ -702,6 +752,9 @@ export const rigSpec = (figure_: FigureSpec): PapercraftSpec => {
       break;
     case "figure":
       figure(b, L, c, params);
+      break;
+    case "cardbox":
+      cardbox(b, L, c);
       break;
   }
   return { title: figure_.title, parts: b.parts, decals: b.decals };

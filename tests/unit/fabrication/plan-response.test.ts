@@ -106,7 +106,6 @@ describe("templateFallback", () => {
     ["enclosure", null, 40, "Folded enclosure"],
     ["stand", null, 70, "Desk stand"],
     ["cutout", "star", 1, "star cut-out"],
-    ["popup_card", "heart", 30, "Pop-up heart card"],
   ] as const)(
     "builds the model's %s/%s choice for an object no keyword knows",
     (archetype, silhouette, depthMm, label) => {

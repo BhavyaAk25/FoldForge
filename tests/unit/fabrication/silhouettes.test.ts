@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import { synthesizeFabricationDesign } from "@/core/fabrication/design-synthesis";
 import { templateSpecForIntent } from "@/core/fabrication/design-templates";
 import { intentFromPromptKeywords } from "@/core/fabrication/prompt-intent";
@@ -10,7 +9,6 @@ import {
   canonicalSilhouette,
   cutoutShapeForText,
 } from "@/core/fabrication/silhouettes";
-import { verifyFabricationIr } from "@/core/fabrication/verification";
 
 import { fixtureProgram } from "../../fixtures/fabrication";
 
@@ -66,28 +64,6 @@ describe("applyPanelSilhouettes", () => {
     });
     expect(applyPanelSilhouettes(program, new Map())).toBe(program);
   });
-
-  it("draws a real flower on the pop-up card and keeps it verified", () => {
-    const intent = intentFromPromptKeywords(
-      "a birthday card where a flower pops up, A6",
-    )!;
-    const result = synthesizeFabricationDesign(
-      intent,
-      templateSpecForIntent(intent)!,
-      1,
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const flower = result.value.blueprint.panels.find(
-      (panel) => panel.panelId === "panel-flower",
-    );
-    expect(flower?.contour.vertices.length).toBeGreaterThan(20);
-    const compiled = compileFabricationProgram(intent, result.value);
-    expect(compiled.ok).toBe(true);
-    if (compiled.ok) {
-      expect(verifyFabricationIr(compiled.value, "flower").valid).toBe(true);
-    }
-  }, 120_000);
 });
 
 describe("cut-out and stand templates", () => {

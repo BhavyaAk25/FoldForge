@@ -46,7 +46,11 @@ export type PapercraftFailure =
 export const REFOLD_MM = 0.1;
 const FLAT_MM = 0.01;
 
-const meshFailures = (part: string, mesh: Mesh): PapercraftFailure[] => {
+const meshFailures = (
+  part: string,
+  mesh: Mesh,
+  open: boolean,
+): PapercraftFailure[] => {
   const failures: PapercraftFailure[] = [];
   const uses = new Map<string, number>();
   mesh.faces.forEach((face) =>
@@ -55,9 +59,10 @@ const meshFailures = (part: string, mesh: Mesh): PapercraftFailure[] => {
       uses.set(key, (uses.get(key) ?? 0) + 1);
     }),
   );
-  if ([...uses.values()].some((n) => n !== 2))
+  // An open part may have raw edges, used once; no edge is ever shared by three.
+  if ([...uses.values()].some((n) => n > 2 || (n < 2 && !open)))
     failures.push({ check: "open_surface", part });
-  if (volume(mesh) <= 0) failures.push({ check: "inside_out", part });
+  if (!open && volume(mesh) <= 0) failures.push({ check: "inside_out", part });
   mesh.faces.forEach((face, f) => {
     const n = faceNormal(mesh, f);
     const p0 = mesh.vertices[face[0]!]!;
@@ -92,7 +97,7 @@ export const verifyPapercraft = (
   model: PapercraftModel,
 ): PapercraftFailure[] => {
   const failures: PapercraftFailure[] = model.parts.flatMap((p) =>
-    meshFailures(p.id, p.mesh),
+    meshFailures(p.id, p.mesh, p.open),
   );
   const meshes = new Map(model.parts.map((p) => [p.id, p.mesh]));
   const cutLengths = new Map<number, number[]>();
@@ -157,6 +162,7 @@ export const verifyPapercraft = (
       if (joined !== island.folds.length)
         failures.push({ check: "fold_gap", part: island.part });
       for (const cut of island.cuts) {
+        if (cut.label === 0) continue;
         cutLengths.set(cut.label, [
           ...(cutLengths.get(cut.label) ?? []),
           distance2(cut.from, cut.to),

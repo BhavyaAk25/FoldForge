@@ -234,6 +234,7 @@ describe("figures", () => {
   it("lets the AI name only presets and library models", () => {
     const base = {
       engine: "figure",
+      cardDesign: null,
       origamiId: null,
       colors: null,
       sizeMm: null,

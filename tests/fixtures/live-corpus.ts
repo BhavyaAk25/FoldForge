@@ -145,113 +145,11 @@ const cardBoxOverConstrained = (): LiveCorpusCase => ({
   },
 });
 
-// ── Pop-up flower card (a coupled five-petal spec the synthesizer can't build). ──
-const popUpFlower = (): LiveCorpusCase => ({
-  name: "pop-up flower card",
-  mustProduceDesign: true,
-  intent: {
-    version: "1",
-    intentId: "intent-flower",
-    sourcePrompt:
-      "Make a birthday card from one sheet of cardstock. When the card opens, a five-petal flower rises from the center and folds flat when it closes. Fits an A6 envelope.",
-    title: "Pop-up Flower Card",
-    objectLabel: "pop-up flower card",
-    functionalGoal:
-      "A card that opens and a flower rises, then folds flat when closed.",
-    visualDescription: "A pop-up card with a rising flower.",
-    behavior: "open_close",
-    requestedSize: { widthMm: 105, heightMm: 148, depthMm: 30 },
-    stockOptions: a4(0.3),
-    fabricationBudget: budget,
-    semanticConstraints: [
-      {
-        constraintId: "constraint-flower-form",
-        hard: true,
-        source: "user",
-        kind: "recognizable_form",
-        label: "pop-up flower card",
-        semanticPartIds: ["part-card", "part-flower"],
-        requiredLandmarks: ["card", "flower"],
-        evaluation: "landmark_geometry",
-      },
-    ],
-    priorities: ["mechanical_simplicity"],
-    ...supported,
-  },
-  designSpec: {
-    version: "3",
-    label: "flower card",
-    summary: "pop-up",
-    parts: [
-      { key: "card", label: "card", role: "support", ...boxPart(105, 148) },
-      { key: "stem", label: "stem", role: "moving", ...boxPart(10, 50) },
-      { key: "p1", label: "p1", role: "moving", ...triPart(28, 28) },
-      { key: "p2", label: "p2", role: "moving", ...triPart(28, 28) },
-      { key: "p3", label: "p3", role: "moving", ...triPart(28, 28) },
-    ],
-    relations: [
-      {
-        key: "open",
-        partAKey: "card",
-        partBKey: "stem",
-        kind: "open_close",
-        angleRangeDeg: { minimum: 0, home: 90, maximum: 120 },
-      },
-      {
-        key: "f1",
-        partAKey: "stem",
-        partBKey: "p1",
-        kind: "fold",
-        angleRangeDeg: { minimum: 30, home: 45, maximum: 60 },
-      },
-      {
-        key: "f2",
-        partAKey: "stem",
-        partBKey: "p2",
-        kind: "fold",
-        angleRangeDeg: { minimum: 30, home: 45, maximum: 60 },
-      },
-      {
-        key: "f3",
-        partAKey: "stem",
-        partBKey: "p3",
-        kind: "fold",
-        angleRangeDeg: { minimum: 30, home: 45, maximum: 60 },
-      },
-    ],
-    materialConstraints: {
-      materialLabel: "Cardstock",
-      thickness: { minimumMm: 0.3, preferredMm: 0.3, maximumMm: 0.3 },
-    },
-    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
-    glueAllowed: false,
-    driver: { relationKey: "open", label: "open", control: "fold" },
-    outputs: [
-      { key: "out", relationKey: "open", partKey: "stem", label: "rises" },
-    ],
-    visibleLandmarks: [
-      { key: "c", label: "card", partKeys: ["card"], importance: "required" },
-      { key: "f", label: "flower", partKeys: ["stem"], importance: "required" },
-    ],
-    aestheticPreferences: ["flower"],
-    priorities: ["mechanical_simplicity"],
-    tolerances: { dimensionMm: 1, clearanceMm: 0.5, angleDeg: 3 },
-  },
-});
-
 function boxPart(widthMm: number, heightMm: number) {
   return {
     width: dimRange(widthMm),
     height: dimRange(heightMm),
     shapePreference: "rectangle" as const,
-  };
-}
-
-function triPart(widthMm: number, heightMm: number) {
-  return {
-    width: dimRange(widthMm),
-    height: dimRange(heightMm),
-    shapePreference: "triangle" as const,
   };
 }
 
@@ -271,5 +169,4 @@ function lock(key: string, partAKey: string, partBKey: string) {
 
 export const liveCorpus = (): readonly LiveCorpusCase[] => [
   cardBoxOverConstrained(),
-  popUpFlower(),
 ];

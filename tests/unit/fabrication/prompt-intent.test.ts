@@ -11,8 +11,8 @@ describe("promptTemplateClass", () => {
   it.each([
     ["a small box for playing cards", "enclosure"],
     ["desk organizer with a lid", "enclosure"],
-    ["birthday card with a pop-up flower", "pop_up_card"],
-    ["a pop-up card box", "pop_up_card"],
+    // Pop-up cards are their own engine, routed before this reader.
+    ["birthday card with a pop-up flower", null],
     // Animals are 3D papercraft figures, routed before this reader.
     ["a faceted paper swan", null],
     ["a walking robot", null],
@@ -108,13 +108,5 @@ describe("parsePromptSizeMm units and fallbacks", () => {
       intentFromPromptKeywords("a box 70 mm wide and 95 mm tall")
         ?.requestedSize,
     ).toEqual({ widthMm: 70, heightMm: 95, depthMm: 40 });
-  });
-
-  it("adds landmark constraints only for cards", () => {
-    expect(intentFromPromptKeywords("a box")?.semanticConstraints).toEqual([]);
-    expect(
-      intentFromPromptKeywords("a pop-up flower card")?.semanticConstraints[0]
-        ?.kind,
-    ).toBe("recognizable_form");
   });
 });
