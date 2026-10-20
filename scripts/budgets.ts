@@ -13,11 +13,10 @@ export const BUDGETS = {
    */
   homePageJsGzipKb: 265,
   /**
-   * Lines of TypeScript under src/ (measured 36,008 after adding the 3D
-   * papercraft engine, its body types and 32 figures, the prompt router, and
-   * the papercraft page, net of deleting the stand-up figure path).
+   * Lines of TypeScript under src/ (measured 37,103 after adding pop-up
+   * cards and the playing-card box, net of deleting the old pop-up template).
    */
-  sourceLines: 36_500,
+  sourceLines: 37_600,
   /** Lines of TypeScript under tests/ (measured 20,281 with the papercraft and router tests). */
   testLines: 21_000,
   /** Test lines per source line (measured 0.68): tests may not outgrow code. */
@@ -39,5 +38,4 @@ export const TIMED_PROMPTS = [
   "a ring box 50 x 50 x 40 mm",
   "a phone stand 80 x 100 x 70 mm",
   "a star bookmark",
-  "a pop-up birthday card with a heart",
 ] as const;
