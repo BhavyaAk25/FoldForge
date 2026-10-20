@@ -46,13 +46,26 @@ const partGeometry = (
   return geometry;
 };
 
-/** A decal outline as a flat mesh lifted just off its face. */
+/**
+ * A decal outline as a flat mesh lifted just off its face; each decal sits
+ * a little above the ones printed before it on the same face.
+ */
 const decalGeometry = (
   decal: PapercraftPayload["decals"][number],
+  index: number,
+  all: PapercraftPayload["decals"],
 ): BufferGeometry => {
   const [nx, ny, nz] = decal.normal;
+  const below = all
+    .slice(0, index)
+    .filter(
+      (d) =>
+        d.part === decal.part &&
+        d.normal.every((v, i) => Math.abs(v - decal.normal[i]!) < 1e-6),
+    ).length;
+  const h = 0.3 + 0.2 * below;
   const lift = (p: readonly number[]) =>
-    toScene(p[0]! + nx * 0.4, p[1]! + ny * 0.4, p[2]! + nz * 0.4);
+    toScene(p[0]! + nx * h, p[1]! + ny * h, p[2]! + nz * h);
   // Triangulate in the face's own plane.
   const o = decal.points[0]!;
   const u = new Vector3(...decal.points[1]!).sub(new Vector3(...o)).normalize();
@@ -81,27 +94,45 @@ function Model({
   const group = useRef<Group>(null);
   const spin = useRef(0);
   const geometries = useMemo(() => payload.parts.map(partGeometry), [payload]);
-  const decals = useMemo(() => payload.decals.map(decalGeometry), [payload]);
+  const decals = useMemo(
+    () => payload.decals.map((d, k, all) => decalGeometry(d, k, all)),
+    [payload],
+  );
   useEffect(
     () => () => [...geometries, ...decals].forEach((g) => g.dispose()),
     [geometries, decals],
   );
-  // Centre on the model and scale it to about one unit.
+  // Centre on the model and fill the wide view: the footprint's diagonal
+  // (what it sweeps as it turns) across, the height (z) up, whichever is
+  // tighter.
   const { centre, scale } = useMemo(() => {
-    const all = payload.parts.flatMap((p) => p.vertices);
+    // Sliding parts count at both ends of their travel.
+    const all = payload.parts.flatMap((p) => [
+      ...p.vertices,
+      ...(p.slide ? p.vertices.map((v, k) => v + p.slide![k % 3]!) : []),
+    ]);
     const axis = (i: number) => all.filter((_, k) => k % 3 === i);
     const mid = [0, 1, 2].map(
       (i) => (Math.min(...axis(i)) + Math.max(...axis(i))) / 2,
     ) as [number, number, number];
-    const extent = Math.max(
-      ...[0, 1, 2].map((i) => Math.max(...axis(i)) - Math.min(...axis(i))),
-    );
-    return { centre: toScene(...mid), scale: 1.6 / extent };
+    const [x, y, z] = [0, 1, 2].map(
+      (i) => Math.max(...axis(i)) - Math.min(...axis(i)),
+    ) as [number, number, number];
+    return {
+      centre: toScene(...mid),
+      scale: Math.min(1.9 / Math.hypot(x, y), 1.45 / z),
+    };
   }, [payload]);
   useFrame((_, delta) => {
-    spin.current += delta * 0.35;
+    // A slow swing about the three-quarter view keeps the face in sight;
+    // dragging turns the model any way round.
+    spin.current += delta * 0.6;
     if (group.current)
-      group.current.rotation.set(turn.pitch, turn.yaw + spin.current, 0);
+      group.current.rotation.set(
+        turn.pitch,
+        turn.yaw + 0.7 * Math.sin(spin.current),
+        0,
+      );
   });
   return (
     <group ref={group}>
@@ -243,11 +274,12 @@ export function PapercraftResults({
           <Canvas
             camera={{ position: [0, 0.35, 2.6], fov: 38 }}
             dpr={[1, 2]}
-            shadows
+            flat
           >
-            <hemisphereLight args={["#fffaf0", "#b9a88f", 0.9]} />
-            <directionalLight position={[2, 3, 2]} intensity={1.4} castShadow />
-            <directionalLight position={[-2, 1, -2]} intensity={0.35} />
+            {/* No tone mapping: card shows its printed colour, facets shade. */}
+            <hemisphereLight args={["#fffaf0", "#e6dccb", 1.6]} />
+            <directionalLight position={[2, 3, 2]} intensity={1.4} />
+            <directionalLight position={[-2, 1, -2]} intensity={0.6} />
             <Model payload={payload} turn={turn} slide={slide} />
           </Canvas>
         </div>

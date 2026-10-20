@@ -1,4 +1,4 @@
-import type { Colors, FigureSpec, RigParams } from "./rigs";
+import { luma, type Colors, type FigureSpec, type RigParams } from "./rigs";
 
 /**
  * Named figures: the words that pick them, a rig, colours, and a size. They
@@ -17,7 +17,7 @@ export interface FigurePreset {
 const quad = (
   ears: Extract<RigParams, { rig: "quadruped" }>["ears"],
   snout: "short" | "long" | "flat",
-  tail: "thin" | "bushy" | "short" | "curly",
+  tail: "thin" | "raised" | "bushy" | "short" | "curly",
   legs: "short" | "long" = "short",
 ): RigParams => ({ rig: "quadruped", ears, snout, tail, legs });
 const bird = (
@@ -45,7 +45,7 @@ export const FIGURE_PRESETS: readonly FigurePreset[] = [
       "card box",
     ],
     sizeMm: 88,
-    colors: col("#f6f1e7", "#e3d5bb", "#1d1d1d"),
+    colors: col("#f6f1e7", "#eee5d4", "#c8463d"),
     params: { rig: "cardbox" },
   },
   {
@@ -118,7 +118,7 @@ export const FIGURE_PRESETS: readonly FigurePreset[] = [
     words: ["cat", "kitten", "kitty"],
     sizeMm: 150,
     colors: col("#e8964a", "#f6e3c8", "#e88f9a"),
-    params: quad("pointy", "flat", "thin"),
+    params: quad("pointy", "flat", "raised"),
   },
   {
     id: "dog",
@@ -349,14 +349,38 @@ const COLOR_WORDS: Readonly<Record<string, string>> = {
 
 /** The first colour word in a prompt, as #rrggbb ("a blue cat"). */
 export const colorWord = (prompt: string): string | null => {
-  const word = Object.keys(COLOR_WORDS).find((name) => mentions(prompt, name));
-  return word ? COLOR_WORDS[word]! : null;
+  // The first colour named is the subject's ("a yellow duck with an orange
+  // beak"); later ones describe its parts.
+  const first = Object.keys(COLOR_WORDS)
+    .map((name) => ({
+      name,
+      at: prompt.search(new RegExp(`\\b${name}\\b`, "iu")),
+    }))
+    .filter(({ at }) => at >= 0)
+    .sort((a, b) => a.at - b.at)[0];
+  return first ? COLOR_WORDS[first.name]! : null;
 };
 
-/** A preset recoloured by the prompt's colour word. */
+/**
+ * A shade of a colour for the parts beside it (tails, snouts, wings):
+ * darker for light colours, lighter for dark ones, so the parts still read.
+ */
+const shade = (hex: string): string => {
+  const light = luma(hex) > 128;
+  return `#${[1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16))
+    .map((v) => Math.round(light ? v * 0.86 : v + (255 - v) * 0.22))
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+
+/** A preset recoloured by the prompt's colour word, with a matching shade. */
 export const recolor = (figure: FigureSpec, prompt: string): FigureSpec => {
   const primary = colorWord(prompt);
   return primary
-    ? { ...figure, colors: { ...figure.colors, primary } }
+    ? {
+        ...figure,
+        colors: { ...figure.colors, primary, secondary: shade(primary) },
+      }
     : figure;
 };

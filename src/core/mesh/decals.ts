@@ -12,6 +12,7 @@ export const DECAL_SHAPES = [
   "diamond",
   "spade",
   "club",
+  "card",
 ] as const;
 export type DecalShape = (typeof DECAL_SHAPES)[number];
 
@@ -63,6 +64,20 @@ const spadeLobes = (): Vec2[] =>
     return [(x / 17) * 0.9, (-(y + 2) / 17) * 0.9 + 0.15] as Vec2;
   });
 
+/** A playing card, portrait: 0.66 wide by 1 tall, with rounded corners. */
+const card = (): Vec2[] =>
+  [
+    [0.56, -0.9, -Math.PI / 2],
+    [0.56, 0.9, 0],
+    [-0.56, 0.9, Math.PI / 2],
+    [-0.56, -0.9, Math.PI],
+  ].flatMap(([cx, cy, from]) =>
+    Array.from({ length: 5 }, (_, i): Vec2 => {
+      const a = from! + (Math.PI / 2) * (i / 4);
+      return [cx! + 0.1 * Math.cos(a), cy! + 0.1 * Math.sin(a)];
+    }),
+  );
+
 const clubLobes = (): Vec2[] =>
   Array.from({ length: 37 }, (_, i) => {
     const a = -Math.PI / 2 + 0.35 + ((2 * Math.PI - 0.7) * i) / 36;
@@ -94,5 +109,7 @@ export const decalOutline = (shape: DecalShape): Vec2[] => {
       return [...spadeLobes(), ...stem(-0.4)];
     case "club":
       return [...clubLobes(), ...stem(-0.42)];
+    case "card":
+      return card();
   }
 };

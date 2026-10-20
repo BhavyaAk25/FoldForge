@@ -209,7 +209,21 @@ describe("figures", () => {
   it.each([
     ["fold a paper crane", { engine: "origami", modelId: "crane" }],
     ["a red fox", { engine: "figure", preset: "Fox", primary: "#d6403a" }],
+    [
+      "a yellow duck with an orange beak",
+      { engine: "figure", preset: "Duck", primary: "#f2c230" },
+    ],
     ["a 20 cm cat", { engine: "figure", preset: "Cat", sizeMm: 200 }],
+    // A recoloured figure's tail and snout take a lighter shade, not cream.
+    [
+      "a black cat",
+      {
+        engine: "figure",
+        preset: "Cat",
+        primary: "#2b2b2b",
+        secondary: "#5a5a5a",
+      },
+    ],
     ["an origami swan", { engine: "origami", modelId: "swan" }],
     ["fold a dog", { engine: "origami", modelId: "dog-face" }],
     ["a swan", { engine: "figure", preset: "Swan" }],
@@ -230,6 +244,8 @@ describe("figures", () => {
       expect(route.figure.title).toBe(expected.preset);
       if ("primary" in expected)
         expect(route.figure.colors.primary).toBe(expected.primary);
+      if ("secondary" in expected)
+        expect(route.figure.colors.secondary).toBe(expected.secondary);
       if ("sizeMm" in expected)
         expect(route.figure.sizeMm).toBe(expected.sizeMm);
     }
