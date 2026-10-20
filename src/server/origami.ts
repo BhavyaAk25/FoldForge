@@ -24,6 +24,8 @@ export interface OrigamiPayload {
   readonly name: string;
   readonly summary: string;
   readonly viewDeg: number;
+  /** The coloured side starts down, so the paper's back is its first face up. */
+  readonly colorDown: boolean;
   readonly pattern: CreasePatternV1;
   readonly steps: readonly {
     readonly instruction: string;
@@ -75,6 +77,7 @@ const build = (id: OrigamiModelId): Built => {
       name: entry.name,
       summary: model.summary,
       viewDeg: model.viewDeg,
+      colorDown: model.colorDown ?? false,
       pattern,
       // Each step's creases, as edges of the finished pattern the page draws.
       steps: derived.value.map((step) => ({
