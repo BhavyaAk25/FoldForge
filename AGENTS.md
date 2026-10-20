@@ -59,7 +59,7 @@ Verification limits (from `FABRICATION_SPEC.md`): closure residual at most 0.1 m
 
 ## Roadmap
 
-Done: the light page; the crease-pattern core; fold-rule checks; a layer-order solver run on every state; the simulator for base collapses and rigid step animation for folds; the bird, square, waterbomb, fish, and frog bases with the crane, swan, dog face, flapping bird, paper plane, and cup; paper colour from the prompt; the AI choosing a library model and paper size; printable crease patterns, instructions, FOLD, and the 3D animation. Prompts outside the library use the papercraft engine.
+Done: the light page; the crease-pattern core; fold-rule checks; a layer-order solver run on every state; the simulator for base collapses and rigid step animation for folds; the bird, square, waterbomb, fish, and frog bases with the crane, swan, dog face, cat face, heart, tulip, flapping bird, paper plane, and cup; paper colour from the prompt; the AI choosing a library model and paper size; printable crease patterns, instructions, FOLD, and the 3D animation. Prompts outside the library use the papercraft engine.
 
 Next, in order:
 

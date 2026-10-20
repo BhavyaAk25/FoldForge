@@ -1,6 +1,6 @@
 import type { OrigamiModelId } from "./catalog";
 import type { CreaseSegment, Point2 } from "./crease-pattern";
-import type { FaceSample, FoldLine, FoldSequence } from "./sequence";
+import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
 
 /**
  * The origami library. Bases are crease patterns that collapse all at once;
@@ -454,6 +454,172 @@ const DOG_FACE: OrigamiModel = {
 };
 
 /**
+ * Cat face: a triangle folded behind (point down), each top corner folded
+ * down to the point to make a diamond, then each of those flaps folded back
+ * up as an ear. In the folded frame the top edge runs from (0, 1) to (1, 0)
+ * and the chin is at (1, 1). An ear's fold runs from the flap's folded edge
+ * to its outer corner, a boundary point, never across the flap's hinge; from
+ * (0.65, 0.65) it lifts the tip about 0.15 above the top edge.
+ */
+const CAT_FACE: OrigamiModel = {
+  id: "cat-face",
+  summary: "A cat's face with pointed ears, from six folds.",
+  viewDeg: -135,
+  sequence: {
+    anchor: p(0.75, 0.8),
+    steps: [
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the square in half behind, corner to corner, into a triangle pointing down.",
+        line: { from: p(-0.05, 1.05), to: p(1.05, -0.05) },
+        toward: p(0.1, 0.1),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the left corner down to the bottom point.",
+        line: { from: p(0.5, 0.45), to: p(0.5, 1.05) },
+        toward: p(0.05, 0.95),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the right corner down to the bottom point too.",
+        line: { from: p(0.45, 0.5), to: p(1.05, 0.5) },
+        toward: p(0.95, 0.05),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the left flap's point back up past the top edge for an ear.",
+        line: { from: p(0.65, 0.65), to: p(0.5, 1) },
+        toward: p(0.97, 0.99),
+        // Both layers of the left flap: front paper left of centre, and the
+        // back half's paper that folded onto it.
+        layers: ({ paper: { x, y } }) => (x + y > 1 ? x < 0.5 : y > 0.5),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the right flap up the same way for the other ear.",
+        line: { from: p(0.65, 0.65), to: p(1, 0.5) },
+        toward: p(0.99, 0.97),
+        layers: ({ paper: { x, y } }) => (x + y > 1 ? y < 0.5 : x > 0.5),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the bottom point behind for the chin.",
+        line: { from: p(0.82, 1.02), to: p(1.02, 0.82) },
+        toward: p(0.99, 0.99),
+      },
+    ],
+  },
+};
+
+/**
+ * Heart: the top edge folded to the centre and the bottom edge up to meet
+ * it make a strip from y = 0.375 to 0.75; its four corners go behind to
+ * round the lobes and the notch; then each half of the bottom edge folds up
+ * at 45 degrees from the bottom centre, which makes the point and lifts the
+ * two lobes above the strip. The strip's top corners become the lobes' outer
+ * corners and its bottom corners meet at the notch.
+ */
+const HEART_CORNER = 0.08;
+const heartCorner = (x: number, y: number): FoldLine => {
+  const [sx, sy] = [x < 0.5 ? 1 : -1, y > 0.5 ? -1 : 1];
+  return {
+    from: p(x, y + sy * HEART_CORNER),
+    to: p(x + sx * HEART_CORNER, y),
+  };
+};
+const HEART: OrigamiModel = {
+  id: "heart",
+  summary: "A flat heart from one square, folded with no cuts.",
+  viewDeg: 0,
+  colorDown: true,
+  sequence: {
+    anchor: p(0.5, 0.62),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down and fold the top edge down to the horizontal centre.",
+        line: { from: p(-0.05, 0.75), to: p(1.05, 0.75) },
+        toward: p(0.5, 0.95),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the bottom edge up to meet the top fold.",
+        line: { from: p(-0.05, 0.375), to: p(1.05, 0.375) },
+        toward: p(0.5, 0.05),
+      },
+      ...(
+        [
+          [0, 0.75, "top left"],
+          [1, 0.75, "top right"],
+          [0, 0.375, "bottom left"],
+          [1, 0.375, "bottom right"],
+        ] as const
+      ).map(([x, y, name]): FoldStep => ({
+        kind: "mountain",
+        instruction: `Fold the ${name} corner of the strip behind.`,
+        line: heartCorner(x, y),
+        toward: p(x + (x < 0.5 ? 0.01 : -0.01), y + (y > 0.5 ? -0.01 : 0.01)),
+      })),
+      {
+        kind: "valley",
+        instruction:
+          "Fold the right half of the bottom edge up to the centre line, from the bottom centre.",
+        line: { from: p(0.5, 0.375), to: p(0.95, 0.825) },
+        toward: p(0.95, 0.4),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the left half up the same way to finish the heart.",
+        line: { from: p(0.5, 0.375), to: p(0.05, 0.825) },
+        toward: p(0.05, 0.4),
+      },
+    ],
+  },
+};
+
+/**
+ * Tulip: a triangle folded behind (point up), then each bottom corner folded
+ * up along a line from the bottom centre at 145 degrees to the bottom edge,
+ * which sets its tip just beside the top point as a side petal (a fold at
+ * angle a from the edge turns the corner by 2a - 180 about the centre).
+ */
+const TULIP: OrigamiModel = {
+  id: "tulip",
+  summary: "A tulip head with three petals, from three folds.",
+  viewDeg: 45,
+  sequence: {
+    anchor: p(0.8, 0.9),
+    steps: [
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the square in half behind, corner to corner, into a triangle pointing up.",
+        line: { from: p(-0.05, 1.05), to: p(1.05, -0.05) },
+        toward: p(0.1, 0.1),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the left corner up from the bottom centre so its point stands beside the top point.",
+        line: { from: p(0.5, 0.5), to: p(0.403, 1.05) },
+        toward: p(0.02, 0.99),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the right corner up the same way for the third petal.",
+        line: { from: p(0.5, 0.5), to: p(1.05, 0.403) },
+        toward: p(0.99, 0.02),
+      },
+    ],
+  },
+};
+
+/**
  * The kite folds keep each point's distance from the tip corner, so the
  * swan's neck is the paper nearer that corner than the neck's base fold; this
  * leaves out the kite's corner flaps, which lie in the body.
@@ -538,6 +704,9 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   PAPER_PLANE,
   PAPER_CUP,
   DOG_FACE,
+  CAT_FACE,
+  HEART,
+  TULIP,
   SWAN,
   base(
     "bird-base",
