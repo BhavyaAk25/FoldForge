@@ -38,11 +38,11 @@ describe("llmConfiguration", () => {
     expect(llmConfiguration({ GEMINI_API_KEY: "k" })).toEqual({
       apiKey: "k",
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-3.5-flash",
       models: [
+        "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
-        "gemini-3.5-flash",
         "gemini-flash-latest",
       ],
     });
@@ -148,6 +148,31 @@ describe("generateStructured", () => {
           Number.isInteger(call[1].timeout) && call[1].timeout <= 50_000,
       ),
     ).toBe(true);
+  });
+
+  it("asks Gemini not to think, plainly if a model refuses, and once more after a 503", async () => {
+    const failing = (status: number) =>
+      Object.assign(new Error(`status ${status}`), { status });
+    create
+      .mockRejectedValueOnce(failing(400))
+      .mockRejectedValueOnce(failing(503))
+      .mockResolvedValueOnce(reply('{"name":"x","count":1}'));
+    const result = await generateStructured(
+      { schema: Schema, schemaName: "S", instructions: "i", input: "u" },
+      environment,
+    );
+    // One model throughout: 400 asks it plainly, then a 503 asks again.
+    expect(result.modelId).toBe("gemini-3.5-flash");
+    expect(
+      create.mock.calls.map((call) => [
+        call[0].model,
+        call[0].reasoning_effort ?? null,
+      ]),
+    ).toEqual([
+      ["gemini-3.5-flash", "none"],
+      ["gemini-3.5-flash", null],
+      ["gemini-3.5-flash", null],
+    ]);
   });
 
   it("does not hide authentication failures behind fallbacks", async () => {
