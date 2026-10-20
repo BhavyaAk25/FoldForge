@@ -37,9 +37,11 @@
 }
 
 .canvas {
-  height: clamp(300px, 52vh, 560px);
+  /* On a phone the view stays about square instead of a tall empty box. */
+  height: clamp(300px, min(52vh, 95vw), 560px);
   cursor: grab;
-  touch-action: none;
+  /* A vertical swipe still scrolls the page; a sideways drag turns the model. */
+  touch-action: pan-y;
 }
 
 .timeline {
