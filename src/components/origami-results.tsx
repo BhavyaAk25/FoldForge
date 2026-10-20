@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import {
   useEffect,
   useMemo,
@@ -109,17 +109,38 @@ function FoldedPaper({
     },
     [geometry, outline],
   );
-  // Frame the flat sheet at the start and the finished model at the end,
-  // blending between them as the folding goes on.
-  const [start, end] = useMemo(
-    () => [frame(poseAt(input, 0)), frame(poseAt(input, stepCount(input)))],
-    [input],
+  // Frame each step's flat state, and blend between the two around the
+  // current moment, so every intermediate shape fits (a bird base is longer
+  // than the crane it becomes).
+  const frames = useMemo(() => {
+    const flat = Array.from({ length: stepCount(input) + 1 }, (_, i) =>
+      frame(poseAt(input, i)),
+    );
+    // A step's scale also fits its neighbours, so a flap swinging between
+    // two states always fits and the zoom never jumps at a step boundary.
+    return flat.map((f, i) => ({
+      ...f,
+      scale: Math.min(
+        f.scale,
+        flat[i - 1]?.scale ?? f.scale,
+        flat[i + 1]?.scale ?? f.scale,
+      ),
+    }));
+  }, [input]);
+  const step = Math.max(0, Math.min(frames.length - 1, at));
+  const [a, b] = [
+    frames[Math.floor(step)]!,
+    frames[Math.min(frames.length - 1, Math.floor(step) + 1)]!,
+  ];
+  const t = step - Math.floor(step);
+  // A tall, narrow canvas (a phone) fits the model by its width instead.
+  const narrow = useThree((state) =>
+    Math.min(1, state.size.width / state.size.height),
   );
-  const t = Math.min(1, at / Math.max(1, stepCount(input)));
   const view = {
-    x: start.x + (end.x - start.x) * t,
-    y: start.y + (end.y - start.y) * t,
-    scale: start.scale + (end.scale - start.scale) * t,
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    scale: (a.scale + (b.scale - a.scale) * t) * narrow,
   };
   const positions = poseAt(input, at).map((value, i) =>
     i % 3 === 0 ? value - view.x : i % 3 === 1 ? value - view.y : value,

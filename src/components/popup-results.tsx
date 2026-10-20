@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import earcut from "earcut";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BufferGeometry, DoubleSide, Float32BufferAttribute } from "three";
@@ -79,7 +79,12 @@ function Card({
       ].forEach((g) => g.dispose()),
     [geometries],
   );
-  const s = 1.4 / card.pageHeightMm;
+  // Opened flat the card is about 1.45 times as wide as tall; a narrow
+  // canvas (a phone) shrinks it to fit across through the whole swing.
+  const narrow = useThree((state) =>
+    Math.min(1, state.size.width / state.size.height / 1.45),
+  );
+  const s = (1.4 * narrow) / card.pageHeightMm;
   return (
     <group scale={s} position={[0, -card.pageHeightMm * s * 0.5, 0]}>
       {geometries.pages.map((g, i) => (

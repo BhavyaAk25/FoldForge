@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   useEffect,
   useMemo,
@@ -105,7 +105,7 @@ function Model({
   // Centre on the model and fill the wide view: the footprint's diagonal
   // (what it sweeps as it turns) across, the height (z) up, whichever is
   // tighter.
-  const { centre, scale } = useMemo(() => {
+  const { centre, ...extent } = useMemo(() => {
     // Sliding parts count at both ends of their travel.
     const all = payload.parts.flatMap((p) => [
       ...p.vertices,
@@ -118,11 +118,14 @@ function Model({
     const [x, y, z] = [0, 1, 2].map(
       (i) => Math.max(...axis(i)) - Math.min(...axis(i)),
     ) as [number, number, number];
-    return {
-      centre: toScene(...mid),
-      scale: Math.min(1.9 / Math.hypot(x, y), 1.45 / z),
-    };
+    return { centre: toScene(...mid), across: Math.hypot(x, y), up: z };
   }, [payload]);
+  // The width it may fill shrinks with the canvas on a phone (tall, narrow).
+  const aspect = useThree((state) => state.size.width / state.size.height);
+  const scale = Math.min(
+    (1.9 * Math.min(1, aspect / 1.3)) / extent.across,
+    1.45 / extent.up,
+  );
   useFrame((_, delta) => {
     // A slow swing about the three-quarter view keeps the face in sight;
     // dragging turns the model any way round.
