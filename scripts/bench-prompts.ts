@@ -7,7 +7,7 @@
 
 export interface BenchPrompt {
   readonly text: string;
-  readonly expect: "origami" | "figure" | "papercraft" | "none";
+  readonly expect: "origami" | "figure" | "popup" | "papercraft" | "none";
   readonly photo?: string;
 }
 
@@ -19,12 +19,12 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   },
   {
     text: "a birthday card where a flower pops up",
-    expect: "papercraft",
+    expect: "popup",
     photo: "pop-up-flower-card.jpg",
   },
   {
     text: "a box for a deck of playing cards with a slide-out tray",
-    expect: "papercraft",
+    expect: "figure",
     photo: "playing-card-box.jpg",
   },
   { text: "a paper rat", expect: "figure" },

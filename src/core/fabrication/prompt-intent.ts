@@ -11,8 +11,7 @@ import type { FabricationIntentV1, SemanticConstraintV1 } from "./types";
  * returns null so the caller can say honestly that the prompt needs AI.
  */
 
-export type PromptTemplateClass =
-  "cutout" | "pop_up_card" | "stand" | "enclosure";
+export type PromptTemplateClass = "cutout" | "stand" | "enclosure";
 
 interface ClassProfile {
   readonly keywords: readonly string[];
@@ -46,24 +45,6 @@ const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
     visualDescription: "A base with an upright back and a front lip.",
     landmarks: [],
   },
-  pop_up_card: {
-    keywords: [
-      "pop-up",
-      "pop up",
-      "popup",
-      "greeting card",
-      "birthday card",
-      "flower card",
-      "card that opens",
-    ],
-    title: "Pop-up card",
-    behavior: "open_close",
-    defaultSizeMm: [105, 148, 30],
-    functionalGoal:
-      "A card that raises a panel as it opens and folds flat when closed.",
-    visualDescription: "A folded card with a rising pop-up panel.",
-    landmarks: ["card", "flower"],
-  },
   enclosure: {
     keywords: [
       "box",
@@ -92,7 +73,6 @@ const PROFILES: Readonly<Record<PromptTemplateClass, ClassProfile>> = {
 // a "phone stand" is a stand even though "holder" also names a box.
 const CLASS_ORDER: readonly PromptTemplateClass[] = [
   "cutout",
-  "pop_up_card",
   "stand",
   "enclosure",
 ];
@@ -124,15 +104,6 @@ const profileFor = (
   prompt: string,
 ): ClassProfile => {
   const profile = PROFILES[templateClass];
-  if (templateClass === "pop_up_card") {
-    // Matches the template: the rising panel takes the named shape.
-    const shape = cutoutShapeForText(prompt) ?? "flower";
-    return {
-      ...profile,
-      title: `Pop-up ${shape} card`,
-      landmarks: ["card", shape],
-    };
-  }
   if (templateClass === "cutout") {
     const shape = cutoutShapeForText(prompt);
     return shape ? { ...profile, title: `${shape} cut-out` } : profile;
@@ -278,12 +249,7 @@ export const intentFromPromptKeywords = (
     requestedSize: {
       widthMm: parsed?.widthMm ?? defaultWidth,
       heightMm: parsed?.heightMm ?? defaultHeight,
-      depthMm:
-        parsed?.depthMm ??
-        (templateClass === "pop_up_card"
-          ? // A pop-up rises about half the card height when no depth is given.
-            Math.round((parsed?.heightMm ?? defaultHeight) / 2)
-          : defaultDepth),
+      depthMm: parsed?.depthMm ?? defaultDepth,
     },
     stockOptions: [
       {

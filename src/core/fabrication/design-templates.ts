@@ -214,117 +214,6 @@ export const enclosureTemplateSpec = (
 const requestText = (intent: FabricationIntentV1): string =>
   `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`;
 
-const POPUP_KEYWORDS = [
-  "pop-up",
-  "pop up",
-  "popup",
-  "flower",
-  "petal",
-  "vertical-lift",
-  "vertical lift",
-  "greeting card",
-  "birthday card",
-];
-
-const looksLikePopUp = (intent: FabricationIntentV1): boolean => {
-  const haystack =
-    `${intent.objectLabel} ${intent.functionalGoal} ${intent.title} ${intent.sourcePrompt}`.toLowerCase();
-  return POPUP_KEYWORDS.some((word) => haystack.includes(word));
-};
-
-/**
- * A pop-up card: a flat card panel with a "flower" panel that rises from it as
- * the card opens and folds flat when it closes — the proven one-driver open/
- * close mechanism. The open (home) pose spans width x height x depth so it
- * satisfies the requested-size check.
- */
-const capitalized = (text: string): string =>
-  text.charAt(0).toUpperCase() + text.slice(1);
-
-export const popUpCardTemplateSpec = (
-  widthMm: number,
-  heightMm: number,
-  depthMm: number,
-  popUpShape: PanelSilhouette = "flower",
-): FabricationDesignSpecV3 => {
-  const w = Math.max(40, Math.round(widthMm));
-  const h = Math.max(40, Math.round(heightMm));
-  const d = Math.max(12, Math.round(depthMm));
-  return FabricationDesignSpecV3Schema.parse({
-    version: "3",
-    label: `Pop-up ${popUpShape} card`,
-    summary: `A one-sheet card with a ${popUpShape} panel that rises as the card opens and folds flat when it closes.`,
-    parts: [
-      {
-        key: "card",
-        label: "Card",
-        role: "support",
-        width: exactMm(w),
-        height: exactMm(h),
-        shapePreference: "rectangle",
-      },
-      {
-        key: popUpShape,
-        label: capitalized(popUpShape),
-        role: "moving",
-        width: exactMm(w),
-        // The pop-up's height is the requested pop-up depth, which keeps the
-        // assembled envelope equal to the requested size.
-        height: exactMm(d),
-        shapePreference: "rectangle",
-        silhouette: popUpShape,
-      },
-    ],
-    relations: [
-      {
-        key: "open",
-        kind: "open_close",
-        partAKey: "card",
-        partBKey: popUpShape,
-        angleRangeDeg: { minimum: 0, home: 90, maximum: 90 },
-      },
-    ],
-    materialConstraints: {
-      materialLabel: "Cardstock",
-      thickness: { minimumMm: 0.2, preferredMm: 0.3, maximumMm: 0.5 },
-    },
-    sheetConstraints: { minimumSheets: 1, maximumSheets: 1 },
-    glueAllowed: false,
-    driver: {
-      relationKey: "open",
-      label: "Open or close the card",
-      control: "fold",
-    },
-    outputs: [
-      {
-        key: `${popUpShape}-rise`,
-        relationKey: "open",
-        partKey: popUpShape,
-        label: `${capitalized(popUpShape)} rises as the card opens`,
-      },
-    ],
-    visibleLandmarks: [
-      {
-        key: "card-landmark",
-        label: "card",
-        partKeys: ["card"],
-        importance: "required",
-      },
-      {
-        key: `${popUpShape}-landmark`,
-        label: popUpShape,
-        partKeys: [popUpShape],
-        importance: "required",
-      },
-    ],
-    aestheticPreferences: [
-      `a card that opens with a rising ${popUpShape} panel`,
-    ],
-    priorities: ["mechanical_simplicity", "fabrication_efficiency"],
-    tolerances: { dimensionMm: 2, clearanceMm: 0.5, angleDeg: 2 },
-  });
-};
-
 // Deeper than this, a request is a 3D object, not a flat cut-out.
 const MAXIMUM_FLAT_DEPTH_MM = 5;
 
@@ -478,12 +367,7 @@ export const standTemplateSpec = (
 };
 
 /** The ready-made design families a request can fall back to. */
-export const TEMPLATE_ARCHETYPES = [
-  "enclosure",
-  "stand",
-  "cutout",
-  "popup_card",
-] as const;
+export const TEMPLATE_ARCHETYPES = ["enclosure", "stand", "cutout"] as const;
 
 export type TemplateArchetype = (typeof TEMPLATE_ARCHETYPES)[number];
 
@@ -510,13 +394,6 @@ const specFromHint = (
       return standTemplateSpec(widthMm, heightMm, depthMm);
     case "cutout":
       return cutoutTemplateSpec(widthMm, heightMm, hint.silhouette ?? "arch");
-    case "popup_card":
-      return popUpCardTemplateSpec(
-        widthMm,
-        heightMm,
-        depthMm,
-        hint.silhouette ?? "flower",
-      );
   }
 };
 
@@ -545,18 +422,6 @@ const TEMPLATE_DESCRIPTORS: readonly TemplateDescriptor[] = [
         w,
         h,
         cutoutShapeForText(requestText(intent)) ?? "arch",
-      ),
-  },
-  {
-    matches: looksLikePopUp,
-    // The rising panel takes the shape the request names (a heart, a star),
-    // a flower otherwise.
-    build: (w, h, d, intent) =>
-      popUpCardTemplateSpec(
-        w,
-        h,
-        d,
-        cutoutShapeForText(requestText(intent)) ?? "flower",
       ),
   },
   // Before enclosures, so "phone stand holder" is a stand, not a box.

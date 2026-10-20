@@ -45,8 +45,10 @@ import {
 } from "@/lib/origami-contract";
 import {
   PapercraftPayloadSchema,
+  PopupPayloadSchema,
   RouteResponseSchema,
   type PapercraftPayload,
+  type PopupPayload,
 } from "@/lib/papercraft-contract";
 import {
   forgePromptHash,
@@ -62,6 +64,12 @@ import styles from "./foldforge-app.module.css";
 const loadResultsPanel = () => import("./foldforge-results");
 const FoldForgeResults = dynamic(
   () => loadResultsPanel().then((module) => module.FoldForgeResults),
+  { ssr: false },
+);
+
+const loadPopupPanel = () => import("./popup-results");
+const PopupResults = dynamic(
+  () => loadPopupPanel().then((module) => module.PopupResults),
   { ssr: false },
 );
 
@@ -161,6 +169,10 @@ export function FoldForgeApp() {
     readonly payload: OrigamiPayloadResponse;
     readonly paperMm: number;
     /** Why the AI picked this model, when the prompt named none. */
+    readonly aiReason: string | null;
+  } | null>(null);
+  const [popup, setPopup] = useState<{
+    readonly payload: PopupPayload;
     readonly aiReason: string | null;
   } | null>(null);
   const [papercraft, setPapercraft] = useState<{
@@ -304,6 +316,7 @@ export function FoldForgeApp() {
     resultBindingRef.current = null;
     setOrigami(null);
     setPapercraft(null);
+    setPopup(null);
     setPhase("intent");
     setStatusMessage("Understanding your request…");
 
@@ -332,6 +345,21 @@ export function FoldForgeApp() {
         });
         setPhase("ready");
         setStatusMessage(`${payload.name}: folding sequence ready.`);
+        return;
+      }
+      if (route.engine === "popup") {
+        void loadPopupPanel();
+        setPhase("programs");
+        setStatusMessage(`Building the ${route.card.title.toLowerCase()}…`);
+        const payload = await postJson(
+          "/api/popup",
+          { card: route.card },
+          PopupPayloadSchema,
+        );
+        if (!current()) return;
+        setPopup({ payload, aiReason: route.reason });
+        setPhase("ready");
+        setStatusMessage(`${payload.card.title}: printable card ready.`);
         return;
       }
       if (route.engine === "figure") {
@@ -466,6 +494,7 @@ export function FoldForgeApp() {
   const applyExamplePrompt = (example: ExamplePrompt) => {
     setOrigami(null);
     setPapercraft(null);
+    setPopup(null);
     setPrompt(example.prompt);
     latestPromptRef.current = example.prompt;
     setIntent(null);
@@ -500,6 +529,7 @@ export function FoldForgeApp() {
     const { candidate } = example;
     setOrigami(null);
     setPapercraft(null);
+    setPopup(null);
     const savedBinding: ForgeResultBinding = {
       attemptId: newForgeAttemptId(),
       promptHash: forgePromptHash(example.prompt),
@@ -632,9 +662,10 @@ export function FoldForgeApp() {
           onPromptChange={(nextPrompt) => {
             latestPromptRef.current = nextPrompt;
             setPrompt(nextPrompt);
-            if (origami || papercraft) {
+            if (origami || papercraft || popup) {
               setOrigami(null);
               setPapercraft(null);
+              setPopup(null);
               setPhase("idle");
             }
             if (candidates.length > 0) {
@@ -668,6 +699,10 @@ export function FoldForgeApp() {
               Dismiss
             </button>
           </div>
+        ) : null}
+
+        {popup ? (
+          <PopupResults payload={popup.payload} aiReason={popup.aiReason} />
         ) : null}
 
         {papercraft ? (

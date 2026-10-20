@@ -7,6 +7,8 @@ import { homeMotionState } from "../src/core/fabrication/kinematics";
 import { intentFromPromptKeywords } from "../src/core/fabrication/prompt-intent";
 import { buildPapercraft } from "../src/core/mesh/model";
 import { rigSpec } from "../src/core/mesh/rigs";
+import { popupCard } from "../src/core/popup/cards";
+import { halfTriangles, pagePoint, piecePoint } from "../src/core/popup/popup";
 import { poseAt, stepCount } from "../src/core/origami/pose";
 import { templateFallback } from "../src/server/fabrication-ai/plan-response";
 import { routePrompt } from "../src/server/fabrication-ai/router";
@@ -22,7 +24,7 @@ import { BENCH_PROMPTS, type BenchPrompt } from "./bench-prompts";
  *   tsx scripts/bench.ts --check  also fails if a prompt misses its engine
  */
 
-type Engine = "origami" | "figure" | "papercraft" | "none";
+type Engine = "origami" | "figure" | "popup" | "papercraft" | "none";
 
 interface Face {
   readonly points: readonly (readonly [number, number, number])[];
@@ -69,6 +71,43 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
       `${route.figure.title}, ${built.value.pages.length} pages`,
       faces,
     );
+  }
+  if (route.engine === "popup") {
+    // The card standing open at 110 degrees: spine up, opening toward the viewer.
+    const card = popupCard(
+      route.card.design,
+      route.card.colors,
+      route.card.title,
+    );
+    const theta = 110;
+    const toBench = ([x, y, z]: readonly [number, number, number]) =>
+      [x, -z, y] as const;
+    const faces: Face[] = ([1, -1] as const).map((side) => ({
+      color: card.cardColor,
+      points: [
+        [0, 0],
+        [card.pageWidthMm, 0],
+        [card.pageWidthMm, card.pageHeightMm],
+        [0, card.pageHeightMm],
+      ].map(([r, y]) => toBench(pagePoint(theta, side, r!, y!))),
+    }));
+    for (const piece of card.pieces) {
+      for (const side of [1, -1] as const) {
+        for (const tri of halfTriangles(piece))
+          faces.push({
+            color: piece.color,
+            points: tri.map((p) => toBench(piecePoint(piece, theta, side, p))),
+          });
+        for (const print of piece.prints)
+          faces.push({
+            color: print.color,
+            points: print.points.map((p) =>
+              toBench(piecePoint(piece, theta, side, p)),
+            ),
+          });
+      }
+    }
+    return done("popup", `${card.title}, 1 page`, faces);
   }
   if (route.engine === "origami") {
     const payload = origamiPayload(
