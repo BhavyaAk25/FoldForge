@@ -11,6 +11,7 @@ import {
   type Mesh,
   type Vec3,
 } from "./geometry";
+import { decalOutline, type DecalShape } from "./decals";
 import { box, ellipsoid, frustum } from "./primitives";
 import {
   unfold,
@@ -33,9 +34,21 @@ export type Shape =
       readonly segments?: number;
       readonly rings?: number;
     }
-  | { readonly kind: "box" }
+  /** A box; listed sides are left open (a tray has no top, a sleeve no ends). */
+  | { readonly kind: "box"; readonly open?: readonly BoxSide[] }
   /** n-sided cross-section; `top` scales the top end (0 = cone, 1 = prism). */
   | { readonly kind: "taper"; readonly sides: number; readonly top: number };
+
+export type BoxSide = "bottom" | "top" | "front" | "right" | "back" | "left";
+/** The order box() lists its faces in. */
+const BOX_SIDES: readonly BoxSide[] = [
+  "bottom",
+  "top",
+  "front",
+  "right",
+  "back",
+  "left",
+];
 
 export interface PartSpec {
   readonly id: string;
@@ -47,14 +60,17 @@ export interface PartSpec {
   /** Degrees about x, then y, then z. */
   readonly rotation?: Vec3;
   readonly color: string;
+  /** For a part that moves (a tray): the travel, mm, shown by the preview's slider. */
+  readonly slide?: Vec3;
 }
 
-/** A printed circle (an eye, a nostril) where a ray from the part centre leaves it. */
+/** A printed shape (an eye, a window, a card suit) where a ray from the part centre leaves it. */
 export interface DecalSpec {
   readonly part: string;
   readonly direction: Vec3;
   readonly radiusMm: number;
   readonly color: string;
+  readonly shape?: DecalShape;
 }
 
 export interface PapercraftSpec {
@@ -82,8 +98,7 @@ export interface PlacedIsland {
   readonly folds: readonly Fold[];
   readonly cuts: readonly Cut[];
   readonly decals: readonly {
-    readonly centre: Vec2;
-    readonly radiusMm: number;
+    readonly points: readonly Vec2[];
     readonly color: string;
   }[];
 }
@@ -95,12 +110,15 @@ export interface PapercraftModel {
     readonly name: string;
     readonly color: string;
     readonly mesh: Mesh;
+    /** An open part (a tray, a sleeve) has raw edges instead of closing seams. */
+    readonly open: boolean;
+    readonly slide: Vec3 | null;
   }[];
-  /** Decals in 3D for the preview: centre, outward normal, radius. */
+  /** Decals in 3D for the preview: outline on the face, outward normal, which part. */
   readonly decals: readonly {
-    readonly centre: Vec3;
+    readonly part: string;
+    readonly points: readonly Vec3[];
     readonly normal: Vec3;
-    readonly radiusMm: number;
     readonly color: string;
   }[];
   readonly sheet: Sheet;
@@ -111,11 +129,16 @@ export type PapercraftError =
   | { readonly kind: "unknown_part"; readonly part: string }
   | { readonly kind: "too_large"; readonly part: string };
 
+const openSides = (mesh: Mesh, open: readonly BoxSide[]): Mesh => ({
+  vertices: mesh.vertices,
+  faces: mesh.faces.filter((_, i) => !open.includes(BOX_SIDES[i]!)),
+});
+
 const meshOf = (part: PartSpec): Mesh => {
   const [w, d, h] = part.size;
   const local =
     part.shape.kind === "box"
-      ? box(w, d, h)
+      ? openSides(box(w, d, h), part.shape.open ?? [])
       : part.shape.kind === "ellipsoid"
         ? ellipsoid(w / 2, d / 2, h / 2, part.shape.segments, part.shape.rings)
         : frustum(part.shape.sides, w / 2, d / 2, part.shape.top, h);
@@ -202,7 +225,7 @@ const moveIsland = (
     to: f(cut.to),
     tab: cut.tab ? cut.tab.map(f) : null,
   })),
-  decals: island.decals.map((d) => ({ ...d, centre: f(d.centre) })),
+  decals: island.decals.map((d) => ({ ...d, points: d.points.map(f) })),
 });
 
 /** Turn each island to its smallest upright bounding box, then pack shelves onto pages. */
@@ -285,7 +308,7 @@ export const buildPapercraft = (
       faces: island.faces,
       folds: island.folds,
       cuts: island.cuts,
-      decals: [] as { centre: Vec2; radiusMm: number; color: string }[],
+      decals: [] as { points: Vec2[]; color: string }[],
     }));
     for (const decal of (spec.decals ?? []).filter((d) => d.part === part.id)) {
       const direction = normalize(
@@ -293,10 +316,33 @@ export const buildPapercraft = (
       );
       const hit = exitPoint(mesh, part.position, direction);
       if (!hit) continue;
+      // Lay the outline on the face, its "up" as close to world up (or, on
+      // a level face, to the part's length) as the face allows.
+      const n = faceNormal(mesh, hit.face);
+      const prefer: Vec3 =
+        Math.abs(n[2]) > 0.9
+          ? rotate([1, 0, 0], part.rotation ?? [0, 0, 0])
+          : [0, 0, 1];
+      const up = normalize(
+        sub(prefer, [
+          n[0] * dot(n, prefer),
+          n[1] * dot(n, prefer),
+          n[2] * dot(n, prefer),
+        ]),
+      );
+      const right = cross(up, n);
+      const outline = decalOutline(decal.shape ?? "circle").map(
+        ([x, y]): Vec3 =>
+          add(hit.point, [
+            decal.radiusMm * (x * right[0] + y * up[0]),
+            decal.radiusMm * (x * right[1] + y * up[1]),
+            decal.radiusMm * (x * right[2] + y * up[2]),
+          ]),
+      );
       decals3d.push({
-        centre: hit.point,
-        normal: faceNormal(mesh, hit.face),
-        radiusMm: decal.radiusMm,
+        part: part.id,
+        points: outline,
+        normal: n,
         color: decal.color,
       });
       const island = placed.find((i) =>
@@ -304,8 +350,7 @@ export const buildPapercraft = (
       )!;
       const flat = island.faces.find((f) => f.face === hit.face)!.points;
       island.decals.push({
-        centre: paperPoint(mesh, hit.face, flat, hit.point),
-        radiusMm: decal.radiusMm,
+        points: outline.map((p) => paperPoint(mesh, hit.face, flat, p)),
         color: decal.color,
       });
     }
@@ -328,6 +373,8 @@ export const buildPapercraft = (
       name: part.name,
       color: part.color,
       mesh,
+      open: part.shape.kind === "box" && (part.shape.open?.length ?? 0) > 0,
+      slide: part.slide ?? null,
     })),
     decals: decals3d,
     sheet,

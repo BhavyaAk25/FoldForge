@@ -34,6 +34,21 @@ const col = (primary: string, secondary: string, accent: string): Colors => ({
 
 export const FIGURE_PRESETS: readonly FigurePreset[] = [
   {
+    id: "cardbox",
+    name: "Playing-card box",
+    words: [
+      "playing cards",
+      "playing card",
+      "deck of cards",
+      "card deck",
+      "deck box",
+      "card box",
+    ],
+    sizeMm: 88,
+    colors: col("#f6f1e7", "#e3d5bb", "#1d1d1d"),
+    params: { rig: "cardbox" },
+  },
+  {
     id: "duck",
     name: "Duck",
     words: ["duck", "duckling"],
@@ -332,10 +347,16 @@ const COLOR_WORDS: Readonly<Record<string, string>> = {
   silver: "#c3c7cc",
 };
 
-/** A preset recoloured by the first colour word in the prompt ("a blue cat"). */
-export const recolor = (figure: FigureSpec, prompt: string): FigureSpec => {
+/** The first colour word in a prompt, as #rrggbb ("a blue cat"). */
+export const colorWord = (prompt: string): string | null => {
   const word = Object.keys(COLOR_WORDS).find((name) => mentions(prompt, name));
-  return word
-    ? { ...figure, colors: { ...figure.colors, primary: COLOR_WORDS[word]! } }
+  return word ? COLOR_WORDS[word]! : null;
+};
+
+/** A preset recoloured by the prompt's colour word. */
+export const recolor = (figure: FigureSpec, prompt: string): FigureSpec => {
+  const primary = colorWord(prompt);
+  return primary
+    ? { ...figure, colors: { ...figure.colors, primary } }
     : figure;
 };

@@ -8,10 +8,12 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import earcut from "earcut";
 import {
   BufferGeometry,
-  CircleGeometry,
+  DoubleSide,
   Float32BufferAttribute,
+  FrontSide,
   Vector3,
   type Group,
 } from "three";
@@ -44,17 +46,46 @@ const partGeometry = (
   return geometry;
 };
 
+/** A decal outline as a flat mesh lifted just off its face. */
+const decalGeometry = (
+  decal: PapercraftPayload["decals"][number],
+): BufferGeometry => {
+  const [nx, ny, nz] = decal.normal;
+  const lift = (p: readonly number[]) =>
+    toScene(p[0]! + nx * 0.4, p[1]! + ny * 0.4, p[2]! + nz * 0.4);
+  // Triangulate in the face's own plane.
+  const o = decal.points[0]!;
+  const u = new Vector3(...decal.points[1]!).sub(new Vector3(...o)).normalize();
+  const w = new Vector3(nx, ny, nz).cross(u);
+  const flat = decal.points.flatMap((p) => {
+    const d = new Vector3(...p).sub(new Vector3(...o));
+    return [d.dot(u), d.dot(w)];
+  });
+  const positions = [...earcut(flat)].flatMap((i) => lift(decal.points[i]!));
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+};
+
 function Model({
   payload,
   turn,
+  slide,
 }: {
   readonly payload: PapercraftPayload;
   readonly turn: { yaw: number; pitch: number };
+  /** 0 to 1 along each moving part's travel. */
+  readonly slide: number;
 }) {
   const group = useRef<Group>(null);
   const spin = useRef(0);
   const geometries = useMemo(() => payload.parts.map(partGeometry), [payload]);
-  useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries]);
+  const decals = useMemo(() => payload.decals.map(decalGeometry), [payload]);
+  useEffect(
+    () => () => [...geometries, ...decals].forEach((g) => g.dispose()),
+    [geometries, decals],
+  );
   // Centre on the model and scale it to about one unit.
   const { centre, scale } = useMemo(() => {
     const all = payload.parts.flatMap((p) => p.vertices);
@@ -78,31 +109,34 @@ function Model({
         scale={scale}
         position={[-centre[0] * scale, -centre[1] * scale, -centre[2] * scale]}
       >
-        {payload.parts.map((part, i) => (
-          <mesh key={i} geometry={geometries[i]!} castShadow>
-            <meshStandardMaterial
-              color={part.color}
-              roughness={0.85}
-              flatShading
-            />
-          </mesh>
-        ))}
-        {payload.decals.map((decal, i) => {
-          const position = new Vector3(...toScene(...decal.centre)).add(
-            new Vector3(...toScene(...decal.normal)).multiplyScalar(0.4),
-          );
-          const target = position
-            .clone()
-            .add(new Vector3(...toScene(...decal.normal)));
+        {payload.parts.map((part, i) => {
+          const offset = part.slide
+            ? toScene(
+                ...(part.slide.map((v) => v * slide) as [
+                  number,
+                  number,
+                  number,
+                ]),
+              )
+            : [0, 0, 0];
           return (
-            <mesh
-              key={`d${i}`}
-              position={position}
-              onUpdate={(m) => m.lookAt(target)}
-              geometry={new CircleGeometry(decal.radiusMm, 20)}
-            >
-              <meshStandardMaterial color={decal.color} roughness={0.6} />
-            </mesh>
+            <group key={part.id} position={offset as [number, number, number]}>
+              <mesh geometry={geometries[i]!} castShadow>
+                <meshStandardMaterial
+                  color={part.color}
+                  roughness={0.85}
+                  flatShading
+                  side={part.open ? DoubleSide : FrontSide}
+                />
+              </mesh>
+              {payload.decals.map((decal, k) =>
+                decal.part === part.id ? (
+                  <mesh key={k} geometry={decals[k]!}>
+                    <meshStandardMaterial color={decal.color} roughness={0.6} />
+                  </mesh>
+                ) : null,
+              )}
+            </group>
           );
         })}
       </group>
@@ -142,6 +176,8 @@ export function PapercraftResults({
   readonly aiReason: string | null;
 }) {
   const [turn, setTurn] = useState({ yaw: -0.6, pitch: 0.25 });
+  const [slide, setSlide] = useState(0.45);
+  const moving = payload.parts.find((p) => p.slide);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const section = useRef<HTMLElement>(null);
   const slug = payload.title.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
@@ -212,9 +248,23 @@ export function PapercraftResults({
             <hemisphereLight args={["#fffaf0", "#b9a88f", 0.9]} />
             <directionalLight position={[2, 3, 2]} intensity={1.4} castShadow />
             <directionalLight position={[-2, 1, -2]} intensity={0.35} />
-            <Model payload={payload} turn={turn} />
+            <Model payload={payload} turn={turn} slide={slide} />
           </Canvas>
         </div>
+        {moving ? (
+          <div className={styles.timeline}>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={slide}
+              aria-label={`Slide the ${moving.name.toLowerCase()} out`}
+              onChange={(event) => setSlide(Number(event.target.value))}
+            />
+            <span>Slide the {moving.name.toLowerCase()}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className={styles.columns}>

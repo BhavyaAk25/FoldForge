@@ -42,7 +42,10 @@ export interface Fold {
 export interface Cut {
   readonly from: Vec2;
   readonly to: Vec2;
-  /** Shared by the two sides of a cut, so the edges can be matched. */
+  /**
+   * Shared by the two sides of a cut, so the edges can be matched; 0 for a
+   * raw edge of an open part (a tray's rim), which has no partner or tab.
+   */
   readonly label: number;
   readonly tab: readonly Vec2[] | null;
 }
@@ -322,8 +325,12 @@ const unfoldOnce = (
     corners.forEach((v, i) => {
       const key = edgeKey(v, corners[(i + 1) % corners.length]!);
       if (islands[island]!.joined.has(key)) return;
-      if (!labels.has(key)) labels.set(key, label++);
       const [A, B] = [points[i]!, points[(i + 1) % corners.length]!];
+      if ((uses.get(key)?.length ?? 0) < 2) {
+        cuts[island]!.push({ from: A, to: B, label: 0, tab: null });
+        return;
+      }
+      if (!labels.has(key)) labels.set(key, label++);
       // The first side that can hold a tab without covering paper gets it.
       let tab: Vec2[] | null = null;
       if (!tabbed.has(key)) {
