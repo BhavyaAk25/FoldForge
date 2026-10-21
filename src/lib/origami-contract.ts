@@ -52,6 +52,16 @@ export const OrigamiPayloadSchema = z.object({
     ),
     formed: z.boolean(),
   }),
+  assembly: z
+    .object({
+      secondId: z.string(),
+      label: z.string(),
+      secondLabel: z.string(),
+      scale: z.number(),
+      dx: z.number(),
+      dy: z.number(),
+    })
+    .nullable(),
   verification: z.object({
     stepsChecked: z.number().int(),
     mountains: z.number().int(),

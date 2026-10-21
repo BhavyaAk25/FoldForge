@@ -90,6 +90,15 @@ export const RouteChoiceSchema = z
       .object({ frontDeg: z.number(), hindDeg: z.number() })
       .strict()
       .nullable(),
+    standingDesign: z
+      .object({
+        neckAt: z.number(),
+        leanDeg: z.number(),
+        headAt: z.number(),
+        headDeg: z.number(),
+      })
+      .strict()
+      .nullable(),
     /** The subject's name for a new design ("Giraffe"). */
     title: z.string().trim().min(1).max(40).nullable(),
     reason: z.string().trim().min(1).max(240),
@@ -103,6 +112,7 @@ const ROUTER_PROMPT = `You choose what FoldForge makes for a request. FoldForge 
   - birdDesign, for birds with wings (eagle, owl, parrot, crane-like birds): neckDeg 55-70 and tailDeg 55-70 (higher stands them more upright), headTurnDeg -150 to -60 (how sharply the head bends down), wingDeg 30-170 (wings open: 170 spread flat, 30 folded down).
   - fishDesign, for fish and other swimmers (fish, koi, whale, dolphin): tailAt 0.25-0.4 (where the tail turns; higher is a longer tail), tailUpDeg 60-110 (how far the tail flicks up).
   - legsDesign, for low four-legged animals seen from above (turtle, lizard, gecko, newt, crocodile, toad): frontDeg 160-170 (front legs out to the side; 170 is straight out), hindDeg 200-250 (hind legs back; 250 is close to the body).
+  - standingDesign, for animals standing on four legs seen from the side (horse, deer, cow, goat, sheep, donkey, zebra): folded from two squares, a body with four legs and a neck sheet tucked into it. Same values as neckDesign, for the neck and head.
   Set paperSizeMm (the square's side, or null) and colors.primary to the paper colour if one is named. Also set presetId to the closest figure preset, offered as a cut-and-glue alternative, or null.
 - "figure": only when the request asks for 3D papercraft, or the subject cannot be folded by either family. Set presetId, colors (#rrggbb, or null), and sizeMm (or null).
 - "popup": a card that opens with something rising from it. Set cardDesign to "flower" or "heart", and colors.primary to the shape's colour if named.
@@ -258,7 +268,9 @@ const aiDesign = (value: z.infer<typeof RouteChoiceSchema>): Design | null => {
         ? { family: "fish", ...value.fishDesign }
         : value.legsDesign
           ? { family: "legs", ...value.legsDesign }
-          : null;
+          : value.standingDesign
+            ? { family: "standing", ...value.standingDesign }
+            : null;
   return requested ? foldableDesign(requested) : null;
 };
 
