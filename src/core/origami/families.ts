@@ -371,3 +371,156 @@ export const fishOnKite = (d: FishDesign, summary: string): ModelShape => {
     },
   };
 };
+
+/**
+ * Square base with all four flaps squashed and petal-folded (the frog
+ * base), and the folds the lily and the four-legged family share. In the
+ * folded frame the base lies folded along x = 0.5 with the sheet's centre
+ * (the closed point) at the top and the four corners (the open end) at the
+ * bottom. Paper regions name the layers: a quadrant is the side around one
+ * edge's midpoint, split at the line through it and the centre; a corner is
+ * the paper round one corner of the sheet.
+ */
+/** Quarter turn about the sheet centre. */
+const turn = (q: Point2, times: number): Point2 =>
+  times === 0 ? q : turn(p(1 - q.y, q.x), times - 1);
+
+/**
+ * Square base with all four flaps squashed and petal-folded. Each squash
+ * leaves a point S = (sqrt(2)/4, 1/2 - sqrt(2)/4) beside every edge midpoint,
+ * where 22.5-degree creases from the corner, the centre, and the midpoint
+ * meet. The centre has 16 creases, so one diagonal half is a mountain to
+ * keep Maekawa's 9 against 7; the layer solver confirms a stacking exists.
+ */
+const FROG_S = Math.SQRT2 / 4;
+export const FROG_BASE: readonly CreaseSegment[] = [
+  ...[0, 1, 2, 3].flatMap((t) => {
+    const [left, right] = [
+      p(FROG_S, 0.5 - FROG_S),
+      p(1 - FROG_S, 0.5 - FROG_S),
+    ];
+    return [
+      crease(turn(p(0, 0), t), turn(left, t), "M"),
+      crease(turn(p(1, 0), t), turn(right, t), "M"),
+      crease(turn(p(0.5, 0), t), turn(left, t), "M"),
+      crease(turn(p(0.5, 0), t), turn(right, t), "M"),
+      crease(CENTRE, turn(left, t), "M"),
+      crease(CENTRE, turn(right, t), "M"),
+      crease(turn(left, t), turn(p(FROG_S, 0), t), "V"),
+      crease(turn(right, t), turn(p(1 - FROG_S, 0), t), "V"),
+      crease(turn(p(0.5, 0), t), CENTRE, "V"),
+      crease(turn(p(0, 0), t), CENTRE, t === 0 ? "M" : "V"),
+    ];
+  }),
+];
+
+export const frogQuadrant =
+  (q: number, half: 1 | -1) =>
+  ({ paper }: FaceSample): boolean => {
+    const [u, v] = [paper.x - 0.5, paper.y - 0.5];
+    const side = Math.abs(u) > Math.abs(v) ? (u > 0 ? 1 : 3) : v > 0 ? 2 : 0;
+    return side === q && Math.sign(q % 2 === 0 ? u : v) === half;
+  };
+export const frogCorner =
+  (corner: number) =>
+  ({ paper }: FaceSample): boolean =>
+    paper.x - 0.5 < 0 === (corner === 0 || corner === 3) &&
+    paper.y - 0.5 < 0 === (corner === 0 || corner === 1);
+const NARROW_ORDER: readonly (readonly [number, 1 | -1])[] = [
+  [0, -1],
+  [0, 1],
+  [1, -1],
+  [1, 1],
+  [2, 1],
+  [2, -1],
+  [3, 1],
+  [3, -1],
+];
+export const FROG_NARROW_STEPS: readonly FoldStep[] = NARROW_ORDER.map(
+  ([q, half], i): FoldStep => ({
+    kind: "valley",
+    instruction:
+      i === 0
+        ? "Fold the lower edge of the top layer to the centre crease, narrowing it toward the closed point."
+        : i % 2 === 1
+          ? "Fold the other lower edge of this flap to the centre crease too."
+          : "Turn the flaps like pages to bring the next side to the front, and fold its lower edge to the centre.",
+    line: ray(p(0.5, 0.5), -79.1, 0.8),
+    toward: p(0.64, 0.15),
+    layers: frogQuadrant(q, half),
+  }),
+);
+
+/**
+ * Four legs seen from above, on the frog base: the base narrowed, two
+ * quadrants turned like pages so two flaps lie each side of the axis, and
+ * each flap inside-reverse-folded out as a leg just below the body. The
+ * front legs come out level or a little forward, the hind legs back.
+ */
+export interface FourLegsDesign {
+  /** The left front leg's direction (the right mirrors it): 180 is straight out. */
+  readonly frontDeg: number;
+  /** The left hind leg's direction: 270 would be straight back. */
+  readonly hindDeg: number;
+}
+
+/** A flap points straight back (270); a reverse fold through a point just below the body turns it to dirDeg. */
+const legLine = (dirDeg: number): FoldLine =>
+  across(p(0.5, -0.02), (270 + dirDeg) / 2, 0.2);
+
+export const fourLegs = (d: FourLegsDesign, summary: string): ModelShape => ({
+  summary,
+  viewDeg: 0,
+  sequence: {
+    anchor: p(0.5, 0.06),
+    steps: [
+      {
+        kind: "creases",
+        instruction:
+          "Fold a frog base, closed point up: a square base with every flap squashed and petal-folded.",
+        segments: FROG_BASE,
+      },
+      ...FROG_NARROW_STEPS,
+      {
+        kind: "turn",
+        instruction:
+          "Turn two flaps over like pages, so two lie on each side of the centre.",
+        line: { from: p(0.5, -0.5), to: p(0.5, 1) },
+        layers: (f) =>
+          [0, 1].some((q) =>
+            ([1, -1] as const).some((half) => frogQuadrant(q, half)(f)),
+          ),
+      },
+      ...(
+        [
+          [
+            0,
+            d.frontDeg,
+            "Inside-reverse-fold one lower point out to the left for a front leg.",
+          ],
+          [
+            2,
+            180 - d.frontDeg,
+            "Do the same on the right for the other front leg.",
+          ],
+          [
+            3,
+            d.hindDeg,
+            "Inside-reverse-fold the next point out and back for a hind leg.",
+          ],
+          [
+            1,
+            540 - d.hindDeg,
+            "And the last point on the right for the other hind leg.",
+          ],
+        ] as const
+      ).map(([corner, dirDeg, instruction]): FoldStep => ({
+        kind: "inside-reverse",
+        instruction,
+        line: legLine(dirDeg),
+        toward: p(0.5, -0.19),
+        layers: frogCorner(corner),
+      })),
+    ],
+  },
+});

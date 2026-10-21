@@ -152,6 +152,38 @@ export const SUBJECTS: readonly Subject[] = [
     color,
     answer: { design: { family: "fish", tailAt: 0.25, tailUpDeg } },
   })),
+  {
+    words: ["frog"],
+    title: "Frog",
+    color: "#4f9d55",
+    answer: { library: "frog" },
+  },
+  {
+    words: ["lily", "lilies"],
+    title: "Lily",
+    color: "#f2a9b4",
+    answer: { library: "lily" },
+  },
+  // Low four-legged animals seen from above: the frog base with four legs.
+  ...(
+    [
+      [["toad"], "Toad", "#8a6a4f", 165, 230],
+      [["turtle", "tortoise"], "Turtle", "#4f7f4f", 170, 205],
+      [
+        ["lizard", "gecko", "newt", "salamander"],
+        "Lizard",
+        "#6fa35a",
+        160,
+        245,
+      ],
+      [["crocodile", "alligator"], "Crocodile", "#4f6f3f", 170, 240],
+    ] as const
+  ).map(([words, title, color, frontDeg, hindDeg]): Subject => ({
+    words,
+    title,
+    color,
+    answer: { design: { family: "legs", frontDeg, hindDeg } },
+  })),
   // Birds in flight or perched with wings: the winged bird.
   {
     words: ["eagle", "hawk", "falcon"],

@@ -1,9 +1,11 @@
 import {
   fishOnKite,
+  fourLegs,
   neckCreature,
   wingedBird,
   type BirdDesign,
   type FishDesign,
+  type FourLegsDesign,
   type ModelShape,
   type NeckDesign,
 } from "./families";
@@ -21,7 +23,8 @@ import { deriveSequence } from "./sequence";
 export type Design =
   | ({ readonly family: "neck" } & NeckDesign)
   | ({ readonly family: "bird" } & BirdDesign)
-  | ({ readonly family: "fish" } & FishDesign);
+  | ({ readonly family: "fish" } & FishDesign)
+  | ({ readonly family: "legs" } & FourLegsDesign);
 
 export type Family = Design["family"];
 
@@ -53,6 +56,11 @@ const FIELDS: {
     ["tailAt", 0.2, 0.3],
     ["tailUpDeg", 50, 120],
   ],
+  // Front legs further forward than 160 degrees cross the body's layers.
+  legs: [
+    ["frontDeg", 160, 170],
+    ["hindDeg", 200, 250],
+  ],
 };
 
 /** A family's values in id order. */
@@ -64,6 +72,8 @@ const valuesOf = (d: Design): number[] => {
       return [d.neckDeg, d.tailDeg, d.headAt, d.headTurnDeg, d.wingDeg];
     case "fish":
       return [d.tailAt, d.tailUpDeg];
+    case "legs":
+      return [d.frontDeg, d.hindDeg];
   }
 };
 
@@ -88,6 +98,8 @@ const designOf = (family: Family, raw: readonly number[]): Design => {
       };
     case "fish":
       return { family, tailAt: a, tailUpDeg: b };
+    case "legs":
+      return { family, frontDeg: a, hindDeg: b };
   }
 };
 
@@ -124,6 +136,8 @@ export const designShape = (d: Design, summary: string): ModelShape => {
       return wingedBird(d, summary);
     case "fish":
       return fishOnKite(d, summary);
+    case "legs":
+      return fourLegs(d, summary);
   }
 };
 
