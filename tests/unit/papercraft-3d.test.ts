@@ -268,6 +268,10 @@ describe("figures", () => {
     ],
     ["an origami teapot", { engine: "origami", modelId: "crane", noted: true }],
     ["a teapot", { engine: "mechanism" }],
+    [
+      "a goldfish",
+      { engine: "origami", modelId: "fish_0.3_80", preset: "Fish" },
+    ],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
   ] as const)("routes %j without AI", async (prompt, expected) => {
     vi.stubEnv("AI_API_KEY", "");
@@ -310,6 +314,7 @@ describe("figures", () => {
       paperSizeMm: null,
       neckDesign: null,
       birdDesign: null,
+      fishDesign: null,
       title: null,
       reason: "A giraffe is closest to the horse.",
     };

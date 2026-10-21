@@ -216,6 +216,36 @@ export const wingedBird = (d: BirdDesign, summary: string): ModelShape => {
   };
 };
 
+/** A kite from the corner (0, 0), narrowed into a long point. */
+const kiteSteps: readonly FoldStep[] = [
+  {
+    kind: "valley",
+    instruction:
+      "Start coloured side down, crease the diagonal, and fold one edge to it.",
+    line: ray(p(0, 0), 22.5, 1.6),
+    toward: p(0.9, 0.05),
+  },
+  {
+    kind: "valley",
+    instruction: "Fold the other edge to the diagonal too, making a kite.",
+    line: ray(p(0, 0), 67.5, 1.6),
+    toward: p(0.05, 0.9),
+  },
+  {
+    kind: "mountain",
+    instruction:
+      "Turn over and fold one long edge to the centre, narrowing the point.",
+    line: ray(p(0, 0), 33.75, 1.6),
+    toward: p(0.9, 0.3),
+  },
+  {
+    kind: "mountain",
+    instruction: "Fold the other long edge to the centre.",
+    line: ray(p(0, 0), 56.25, 1.6),
+    toward: p(0.3, 0.9),
+  },
+];
+
 /**
  * Neck creature on the kite (the swan's family): a kite narrowed into a long
  * point, the point folded up over the body, the body folded in half, the
@@ -256,33 +286,7 @@ export const neckCreature = (d: NeckDesign, summary: string): ModelShape => {
     sequence: {
       anchor: p(0.8, 0.86),
       steps: [
-        {
-          kind: "valley",
-          instruction:
-            "Start coloured side down, crease the diagonal, and fold one edge to it.",
-          line: ray(p(0, 0), 22.5, 1.6),
-          toward: p(0.9, 0.05),
-        },
-        {
-          kind: "valley",
-          instruction:
-            "Fold the other edge to the diagonal too, making a kite.",
-          line: ray(p(0, 0), 67.5, 1.6),
-          toward: p(0.05, 0.9),
-        },
-        {
-          kind: "mountain",
-          instruction:
-            "Turn over and fold one long edge to the centre, narrowing the point.",
-          line: ray(p(0, 0), 33.75, 1.6),
-          toward: p(0.9, 0.3),
-        },
-        {
-          kind: "mountain",
-          instruction: "Fold the other long edge to the centre.",
-          line: ray(p(0, 0), 56.25, 1.6),
-          toward: p(0.3, 0.9),
-        },
+        ...kiteSteps,
         {
           kind: "valley",
           instruction:
@@ -315,6 +319,53 @@ export const neckCreature = (d: NeckDesign, summary: string): ModelShape => {
           ),
           toward: along(neckBase, neckDir, 1.05 * neckLength),
           layers: isNeck,
+        },
+      ],
+    },
+  };
+};
+
+/**
+ * Fish on the kite: the kite narrowed, folded in half along its length (the
+ * fold is the belly, the wide end the head), and the long point turned up
+ * as the tail by an outside reverse fold. Same frame and view as the neck
+ * creature: the belly level, the head to the right, the tail to the left.
+ */
+export interface FishDesign {
+  /** Where the tail turns along the diagonal, from the tip: smaller is a shorter tail. */
+  readonly tailAt: number;
+  /** How far the tail flicks up from straight back, in degrees. */
+  readonly tailUpDeg: number;
+}
+
+export const fishOnKite = (d: FishDesign, summary: string): ModelShape => {
+  const tailBase = p(d.tailAt, d.tailAt);
+  // The tail points back along the diagonal (frame 225); up on screen is
+  // frame 135, so turning it up lowers the angle.
+  const tailLine = turnLine(225, 225 - d.tailUpDeg);
+  return {
+    summary,
+    viewDeg: -45,
+    colorDown: true,
+    sequence: {
+      anchor: p(0.8, 0.86),
+      steps: [
+        // Only the kite itself: narrowing it would make the body too thin
+        // and the tail a spike rather than a fin.
+        ...kiteSteps.slice(0, 2),
+        {
+          kind: "valley",
+          instruction:
+            "Fold the kite in half along its length: the fold is the belly.",
+          line: { from: p(-0.05, -0.05), to: p(1.1, 1.1) },
+          toward: p(0.3, 0.7),
+        },
+        {
+          kind: "inside-reverse",
+          instruction:
+            "Push the long point up between its layers (inside reverse fold) for the tail.",
+          line: across(along(tailBase, tailLine, 0.1), tailLine, 0.15),
+          toward: along(tailBase, 225, 0.2),
         },
       ],
     },

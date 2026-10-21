@@ -330,6 +330,7 @@ describe("generated designs", () => {
   it.each([
     ["neck_0.53_0_0.78_25", true],
     ["bird_67.5_67.5_0.8_-105_90", true],
+    ["fish_0.3_80", true],
     // Out of bounds, not canonical, or not a family: no design.
     ["neck_0.9_0_0.78_25", false],
     ["neck_0.530_0_0.78_25", false],
