@@ -235,9 +235,12 @@ export function OrigamiResults({
   paperColor,
   aiReason,
   title,
+  note = null,
   children,
 }: {
   readonly payload: OrigamiPayloadResponse;
+  /** Why this is not the design asked for, shown plainly (not as an AI choice). */
+  readonly note?: string | null;
   /** Shown under the heading: the cut-and-glue offer, when there is one. */
   readonly children?: React.ReactNode;
   /** The subject a generated design was made for; null for library models. */
@@ -344,6 +347,11 @@ export function OrigamiResults({
         </p>
         <h2 id="origami-title">{name}</h2>
         <p>{payload.summary}</p>
+        {note ? (
+          <p className={styles.aiChoice}>
+            <strong>Note:</strong> {note}
+          </p>
+        ) : null}
         {aiReason ? (
           <p className={styles.aiChoice}>
             <strong>AI choice:</strong> {aiReason} The folds and checks below

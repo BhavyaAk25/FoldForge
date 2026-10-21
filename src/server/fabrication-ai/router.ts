@@ -188,6 +188,7 @@ const origamiRoute = (
     readonly paperSizeMm?: number | null;
     readonly paperColor?: string | null;
     readonly reason?: string | null;
+    readonly note?: string | null;
     readonly alternative: Alternative | null;
   },
 ): RouteResponse => ({
@@ -199,8 +200,43 @@ const origamiRoute = (
   ),
   paperColor: options.paperColor ?? colorWord(prompt) ?? ORIGAMI_RED,
   reason: options.reason ?? null,
+  note: options.note ?? null,
   alternative: options.alternative,
 });
+
+/** Words that make an unrecognised subject a bird. */
+const BIRD_WORDS =
+  /\b(?:bird|birds|gull|seagull|wing|wings|wingspan|fly|flying|feather|feathers|hawk|owl|crow|raven|sparrow|finch|robin|swallow|pelican|albatross|stork|kingfisher|hummingbird|phoenix)\b/iu;
+
+/**
+ * Origami for an origami request the AI could not answer (busy or not
+ * configured): a general winged bird for a bird, otherwise the classic
+ * crane, with a note saying so. A real fold beats an error, and the note
+ * keeps it from passing as a design made for the subject.
+ */
+const origamiWithoutAi = (prompt: string): RouteResponse | null => {
+  if (!asksForOrigami(prompt) && !BIRD_WORDS.test(prompt)) return null;
+  const bird = BIRD_WORDS.test(prompt);
+  const design = foldableDesign({
+    family: "bird",
+    neckDeg: 65,
+    tailDeg: 65,
+    headAt: 0.8,
+    headTurnDeg: -105,
+    wingDeg: 120,
+  });
+  return origamiRoute(
+    prompt,
+    bird && design ? designId(design) : "crane",
+    null,
+    {
+      note: bird
+        ? "The AI that shapes new designs is unavailable right now, so this is a general winged bird. Try again in a minute for one shaped to your subject."
+        : "The AI that shapes new designs is unavailable right now, and FoldForge has no fold for this subject yet, so here is the classic crane. Try again in a minute.",
+      alternative: null,
+    },
+  );
+};
 
 /** The design the AI described, moved to the nearest one that folds. */
 const aiDesign = (value: z.infer<typeof RouteChoiceSchema>): Design | null => {
@@ -264,7 +300,7 @@ export const routePrompt = async (prompt: string): Promise<RouteResult> => {
   if (!isLlmConfigured())
     return alternative
       ? { ...alternative, reason: null }
-      : { engine: "mechanism" };
+      : (origamiWithoutAi(prompt) ?? { engine: "mechanism" });
   try {
     const { value } = await generateStructured({
       schema: RouteChoiceSchema,
@@ -313,6 +349,6 @@ export const routePrompt = async (prompt: string): Promise<RouteResult> => {
     if (figure) return { engine: "figure", figure, reason: value.reason };
     return { engine: "mechanism" };
   } catch (error) {
-    return { engine: "error", error };
+    return origamiWithoutAi(prompt) ?? { engine: "error", error };
   }
 };

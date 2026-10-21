@@ -141,6 +141,8 @@ export const RouteResponseSchema = z.discriminatedUnion("engine", [
     /** The paper's coloured side, #rrggbb. */
     paperColor: Hex,
     reason: z.string().nullable(),
+    /** Why this is not the design asked for (the AI was unavailable), shown as is. */
+    note: z.string().nullable(),
     /** The same subject as cut-and-glue papercraft, when there is one. */
     alternative: AlternativeSchema.nullable(),
   }),
