@@ -143,11 +143,34 @@ export const popupChoice = (
   };
 };
 
+/** A box or tray, unless it is a part of something else ("a box-shaped lamp"). */
+const BOX_WORDS = /\b(?:box|boxes|tray|trays|masu)\b(?![\s-]*shaped)/iu;
+
+/**
+ * The square a folded box needs: its base is 0.6 of the square, so the
+ * longer side of "120 x 80 x 40 mm" sets it; a plain size is the square.
+ */
+const boxPaperMm = (prompt: string): number | null => {
+  const sides = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/iu.exec(prompt);
+  if (!sides) return paperSizeFromPrompt(prompt);
+  const unit = /\bcm\b/iu.test(prompt)
+    ? 10
+    : /\bin(?:ch(?:es)?)?\b|"/iu.test(prompt)
+      ? 25.4
+      : 1;
+  const longest = Math.max(Number(sides[1]), Number(sides[2])) * unit;
+  return Math.round(
+    Math.min(PAPER_MM.maximum, Math.max(PAPER_MM.minimum, longest / 0.6)),
+  );
+};
+
 /** Formats that are not origami: the request names how it is to be made. */
 const PAPERCRAFT_FORMAT =
-  /\b(?:paper\s?craft|faceted|low[\s-]?poly|3d\s+(?:model|paper)|cut[\s-]and[\s-]glue)\b/iu;
+  /\b(?:paper\s?craft|faceted|low[\s-]?poly|3d\s+(?:model|paper)|cut[\s-]and[\s-]glue|card\s?stock|slide[\s-]out|sliding\s+tray|sleeve)\b/iu;
 
-const figureFor = (prompt: string): Alternative | null => {
+const figureFor = (
+  prompt: string,
+): Extract<Alternative, { readonly engine: "figure" }> | null => {
   const preset = matchFigurePreset(prompt);
   if (!preset || preset.id === "cardbox") return null;
   const figure = recolor(figureFromPreset(preset), prompt);
@@ -198,14 +221,28 @@ export const routePrompt = async (prompt: string): Promise<RouteResult> => {
     });
   if (POPUP_WORDS.test(prompt))
     return { engine: "popup", card: popupChoice(prompt), reason: null };
-  // A deck box is a figure (a sleeve and a sliding tray), not a generic box.
+  // A box is origami first (the folded box); beside it, a deck gets the
+  // sliding card box and any other box the cut-and-fold engine, which can
+  // match exact measurements.
   const preset = matchFigurePreset(prompt);
-  if (preset?.id === "cardbox") {
+  if (preset?.id === "cardbox" && PAPERCRAFT_FORMAT.test(prompt)) {
     return {
       engine: "figure",
       figure: recolor(figureFromPreset(preset), prompt),
       reason: null,
     };
+  }
+  if (preset?.id === "cardbox" || BOX_WORDS.test(prompt)) {
+    return origamiRoute(prompt, "box", null, {
+      paperSizeMm: boxPaperMm(prompt),
+      alternative:
+        preset?.id === "cardbox"
+          ? {
+              engine: "figure",
+              figure: recolor(figureFromPreset(preset), prompt),
+            }
+          : { engine: "mechanism" },
+    });
   }
   if (namesMechanism(prompt)) return { engine: "mechanism" };
   const alternative = figureFor(prompt);

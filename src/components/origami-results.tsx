@@ -150,7 +150,12 @@ function FoldedPaper({
   geometry.computeVertexNormals();
   outline.setAttribute("position", position);
   return (
-    <group rotation={[0, 0, (viewDeg * Math.PI) / 180]} scale={view.scale}>
+    <group
+      // A 3D form (a box) is laid back so its walls stand up toward the
+      // top of the view, seen from the front and above like on a table.
+      rotation={[input.formed ? 1.05 : 0, 0, (viewDeg * Math.PI) / 180]}
+      scale={view.scale}
+    >
       {/* Paper faces are wound counter-clockwise from the front, so FrontSide is the paper's starting face up. */}
       <mesh geometry={geometry}>
         <meshStandardMaterial
@@ -254,6 +259,7 @@ export function OrigamiResults({
       collapse: payload.animation.collapse,
       keyframes: payload.animation.keyframes,
       moves: payload.animation.moves,
+      formed: payload.animation.formed,
     }),
     [payload],
   );
@@ -347,17 +353,29 @@ export function OrigamiResults({
         <p>Fold it from a {paperMm} mm square of paper.</p>
         {children}
         <p className={styles.checks}>
-          Checked at every one of {payload.verification.stepsChecked} steps:
-          Maekawa and Kawasaki at all {payload.verification.interiorVertices}{" "}
-          inner vertices, every face lands in one consistent flat-folded place,
-          and the layers stack with no paper passing through paper.{" "}
-          {payload.verification.mountains} mountain and{" "}
-          {payload.verification.valleys} valley creases.
-          {payload.animation.collapseStrain !== null
-            ? ` The base was collapsed in a bar-and-hinge simulation and lands within ${(payload.animation.collapseStrain * 100).toFixed(2)}% stretch of flat paper.`
-            : payload.animation.collapse
-              ? " The base collapse animation turns faces about their creases to show the order; only its end state is checked."
-              : ""}
+          {payload.animation.formed ? (
+            <>
+              Checked in 3D: every crease reaches its angle and every loop of
+              faces closes, so rigid paper holds this shape with nothing
+              stretched or cut. {payload.verification.mountains} mountain and{" "}
+              {payload.verification.valleys} valley creases.
+            </>
+          ) : (
+            <>
+              Checked at every one of {payload.verification.stepsChecked} steps:
+              Maekawa and Kawasaki at all{" "}
+              {payload.verification.interiorVertices} inner vertices, every face
+              lands in one consistent flat-folded place, and the layers stack
+              with no paper passing through paper.{" "}
+              {payload.verification.mountains} mountain and{" "}
+              {payload.verification.valleys} valley creases.
+              {payload.animation.collapseStrain !== null
+                ? ` The base was collapsed in a bar-and-hinge simulation and lands within ${(payload.animation.collapseStrain * 100).toFixed(2)}% stretch of flat paper.`
+                : payload.animation.collapse
+                  ? " The base collapse animation turns faces about their creases to show the order; only its end state is checked."
+                  : ""}
+            </>
+          )}
         </p>
       </header>
 

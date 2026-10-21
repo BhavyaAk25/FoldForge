@@ -52,6 +52,11 @@ export const ORIGAMI_CATALOG = [
     keywords: ["origami heart", "paper heart", "folded heart"],
   },
   {
+    id: "box",
+    name: "Box",
+    keywords: ["origami box", "masu box", "folded box", "origami tray"],
+  },
+  {
     id: "tulip",
     name: "Tulip",
     keywords: ["tulip", "origami flower", "paper flower", "folded flower"],

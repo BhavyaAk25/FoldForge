@@ -104,10 +104,15 @@ describe("pop-up cards", () => {
 });
 
 describe("the playing-card box", () => {
-  it("routes a deck of cards to a sleeve with a sliding tray, ahead of plain boxes", async () => {
+  it("folds a deck's box first, with the sleeve and sliding tray beside it", async () => {
     const route = await routePrompt("a box for a deck of playing cards");
+    expect(route.engine === "origami" ? route.modelId : route.engine).toBe(
+      "box",
+    );
     expect(
-      route.engine === "figure" ? route.figure.params.rig : route.engine,
+      route.engine === "origami" && route.alternative?.engine === "figure"
+        ? route.alternative.figure.params.rig
+        : null,
     ).toBe("cardbox");
   });
 

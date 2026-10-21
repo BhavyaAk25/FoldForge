@@ -50,6 +50,7 @@ export const OrigamiPayloadSchema = z.object({
         endDeg: z.number(),
       }),
     ),
+    formed: z.boolean(),
   }),
   verification: z.object({
     stepsChecked: z.number().int(),

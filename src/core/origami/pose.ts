@@ -14,6 +14,8 @@ export interface PoseInput {
   readonly collapse: readonly (readonly number[])[] | null;
   readonly keyframes: readonly FoldKeyframe[];
   readonly moves: readonly FoldMove[];
+  /** The collapse ends as a 3D form: it stays as folded instead of settling flat. */
+  readonly formed?: boolean;
 }
 
 /** Separation between stacked layers, in sheet widths. */
@@ -113,6 +115,7 @@ export const poseAt = (input: PoseInput, at: number): number[] => {
   const u = clamped - step;
   if (total === 0) return keyframePose(input, input.keyframes[0]!);
   if (input.collapse && step === 0) {
+    if (input.formed) return collapsePose(input.collapse, u);
     if (u <= 1 - SETTLE) return collapsePose(input.collapse, u / (1 - SETTLE));
     return lerp(
       collapsePose(input.collapse, 1),

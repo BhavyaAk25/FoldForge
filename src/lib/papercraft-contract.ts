@@ -124,6 +124,8 @@ export type PopupChoice = z.infer<typeof PopupChoiceSchema>;
 export const AlternativeSchema = z.discriminatedUnion("engine", [
   z.object({ engine: z.literal("figure"), figure: FigureSpecSchema }),
   z.object({ engine: z.literal("popup"), card: PopupChoiceSchema }),
+  /** The cut-and-fold mechanism engine: boxes made to exact measurements. */
+  z.object({ engine: z.literal("mechanism") }),
 ]);
 export type Alternative = z.infer<typeof AlternativeSchema>;
 

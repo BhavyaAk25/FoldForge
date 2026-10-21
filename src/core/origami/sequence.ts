@@ -17,6 +17,7 @@ import {
   type FoldRuleFailure,
   type Isometry,
 } from "./fold-rules";
+import { closure, facePlacements, type FormAngle } from "./form";
 import { solveLayerOrder, type LayerOrder } from "./layers";
 
 /**
@@ -49,6 +50,12 @@ export type FoldStep =
       readonly kind: "creases";
       readonly instruction: string;
       readonly segments: readonly CreaseSegment[];
+      /**
+       * A 3D form instead of a flat collapse: each crease's final angle (a
+       * box's walls stand at 90 degrees). It must be the only step; it is
+       * proven by closing every loop of faces, not by flat-folding rules.
+       */
+      readonly form?: FormAngle;
     }
   | {
       /** valley: the flap comes toward the viewer. mountain: it goes behind. */
@@ -103,6 +110,10 @@ export type SequenceError =
   | { readonly kind: "layers_cross"; readonly step: number }
   /** A pattern of creases folded all at once can only start a sequence. */
   | { readonly kind: "base_not_first"; readonly step: number }
+  /** A 3D form must be a sequence's only step: nothing folds flat after it. */
+  | { readonly kind: "form_not_alone"; readonly step: number }
+  /** The 3D form's faces do not meet: rigid paper cannot hold it. */
+  | { readonly kind: "form_open"; readonly step: number }
   | {
       readonly kind: "not_flat_foldable";
       readonly step: number;
@@ -437,6 +448,29 @@ const reverseSpine = (
   });
 };
 
+/**
+ * Closure tolerance for a 3D form, in sheet widths: 1e-6 is 0.15 micrometres
+ * on a 150 mm square, so only rounding is forgiven.
+ */
+const FORM_CLOSURE = 1e-6;
+
+/** A 3D form's pattern, checked: every loop of faces closes at the final angles. */
+const formedPattern = (
+  segments: readonly CreaseSegment[],
+  anchor: Point2,
+  form: FormAngle,
+  step: number,
+): Result<CreasePatternV1, SequenceError> => {
+  const built = buildCreasePattern(segments);
+  if (!built.ok) return err({ kind: "pattern", step, error: built.error });
+  const root = faceAt(built.value, anchor);
+  if (root < 0) return err({ kind: "anchor_lost", step });
+  const placements = facePlacements(built.value, root, 1, form);
+  return closure(built.value, placements) <= FORM_CLOSURE
+    ? ok(built.value)
+    : err({ kind: "form_open", step });
+};
+
 /** A step's pattern, checked: flat-foldable and with a non-crossing layer order. */
 const checkedPattern = (
   segments: readonly CreaseSegment[],
@@ -473,7 +507,12 @@ export const deriveSequence = (
     let added: readonly CreaseSegment[] =
       step.kind === "creases" ? step.segments : [];
     let result: Result<CreasePatternV1, SequenceError>;
-    if (step.kind === "creases") {
+    if (step.kind === "creases" && step.form) {
+      if (sequence.steps.length > 1)
+        return err({ kind: "form_not_alone", step: index });
+      segments = [...step.segments];
+      result = formedPattern(segments, sequence.anchor, step.form, index);
+    } else if (step.kind === "creases") {
       segments = [...step.segments];
       result = checkedPattern(segments, sequence.anchor, index);
     } else {

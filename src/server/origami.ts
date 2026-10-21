@@ -4,7 +4,9 @@ import type { CreasePatternV1 } from "@/core/origami/crease-pattern";
 import {
   creasePatternSvg,
   foldFile,
+  formDiagram,
   instructionsSvg,
+  stepDiagram,
   type InstructionStep,
 } from "@/core/origami/export";
 import type { ModelShape } from "@/core/origami/families";
@@ -128,6 +130,7 @@ const build = (id: string): Built | null => {
         collapseStrain: animation.collapseStrain,
         keyframes: animation.keyframes,
         moves: animation.moves,
+        formed: animation.formed,
       },
       verification: {
         stepsChecked: derived.value.length,
@@ -195,7 +198,14 @@ export const origamiExport = (
           pattern,
           name,
           instructions,
-          payload.animation.keyframes.at(-1)!,
+          payload.animation.formed && payload.animation.collapse
+            ? formDiagram(pattern.faces, payload.animation.collapse.at(-1)!)
+            : stepDiagram(
+                pattern,
+                payload.animation.keyframes.at(-1)!,
+                null,
+                payload.viewDeg,
+              ),
           payload.viewDeg,
           paperMm,
         ),
