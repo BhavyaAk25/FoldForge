@@ -63,7 +63,7 @@ Done: the light page; the crease-pattern core; fold-rule checks; a layer-order s
 
 Next, in order:
 
-1. Standing four-legged animals (dog, horse, deer) seen from the side: a base with four leg flaps below a body plus a neck and tail, which the current families do not give.
+1. Standing four-legged animals (dog, horse, deer) seen from the side: a base with four leg flaps below a body plus a neck and tail, which the current families do not give. Until then these prompts get the standing papercraft figure. Tried and ruled out: the folded triangle (each corner must be both a leg and the neck or tail, so the neck is no longer than a leg), the double boat (pig) base (four stubby legs, but its closed corners leave no paper for a head), the bird base's wings folded down (they reach barely below the body), and the frog base side-on (every leg flap hangs from the rear). Likely routes: a base with five or more flaps (a blintzed bird base) or a two-sheet head and body.
 2. Curled and shaped finishes (the lily's curled petals) as checked 3D forms after a flat sequence.
 3. A physical simulator for collapses the bar-and-hinge solver cannot settle (the frog base is animated face by face).
 
