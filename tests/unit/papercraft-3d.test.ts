@@ -248,7 +248,17 @@ describe("figures", () => {
     ["an origami flower", { engine: "origami", modelId: "tulip" }],
     ["a pop-up heart card", { engine: "popup" }],
     ["a swan", { engine: "origami", modelId: "swan", preset: "Swan" }],
-    ["a gift box 120 x 80 x 40 mm", { engine: "mechanism" }],
+    // A box is folded first; its base (0.6 of the square) fits 120 mm.
+    [
+      "a gift box 120 x 80 x 40 mm",
+      { engine: "origami", modelId: "box", paperMm: 200 },
+    ],
+    ["a phone stand", { engine: "mechanism" }],
+    // The sliding sleeve-and-tray design is papercraft by name.
+    [
+      "a deck of cards box with a slide-out tray",
+      { engine: "figure", preset: "Playing-card box" },
+    ],
     ["a duck bookmark", { engine: "mechanism" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
   ] as const)("routes %j without AI", async (prompt, expected) => {
@@ -261,6 +271,8 @@ describe("figures", () => {
       expect(route.modelId).toBe(expected.modelId);
       expect(route.paperColor).toMatch(/^#[0-9a-f]{6}$/u);
       if ("paper" in expected) expect(route.paperColor).toBe(expected.paper);
+      if ("paperMm" in expected)
+        expect(route.paperSizeMm).toBe(expected.paperMm);
     }
     // The figure is the answer, or the alternative beside the origami.
     const figure =

@@ -38,7 +38,7 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "a tree", expect: "figure" },
   { text: "a robot", expect: "figure" },
   { text: "a phone stand", expect: "papercraft" },
-  { text: "a gift box 120 x 80 x 40 mm", expect: "papercraft" },
+  { text: "a gift box 120 x 80 x 40 mm", expect: "origami" },
   { text: "a bookmark", expect: "papercraft" },
   { text: "fold a paper crane", expect: "origami" },
   { text: "a paper airplane", expect: "origami" },
@@ -52,4 +52,5 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "a yellow giraffe", expect: "origami" },
   { text: "a flamingo", expect: "origami" },
   { text: "an eagle", expect: "origami" },
+  { text: "a box for my playing cards", expect: "origami" },
 ];

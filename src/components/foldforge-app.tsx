@@ -295,7 +295,7 @@ export function FoldForgeApp() {
 
   /** Builds a pop-up card or 3D papercraft figure: a route's answer or an origami result's alternative. */
   const buildPapercraft = async (
-    choice: Alternative,
+    choice: Exclude<Alternative, { readonly engine: "mechanism" }>,
     aiReason: string | null,
     current: () => boolean,
   ): Promise<void> => {
@@ -327,7 +327,11 @@ export function FoldForgeApp() {
     setStatusMessage(`${payload.title}: printable 3D papercraft ready.`);
   };
 
-  const forge = async () => {
+  /**
+   * Runs a prompt. `mechanismOnly` skips routing and keeps the origami on
+   * screen: the cut-and-fold version offered beside an origami box.
+   */
+  const forge = async (options: { readonly mechanismOnly?: boolean } = {}) => {
     if (busy || forgeInFlightRef.current || prompt.trim().length === 0) {
       return;
     }
@@ -354,7 +358,7 @@ export function FoldForgeApp() {
     setNarrative(null);
     setResultBinding(null);
     resultBindingRef.current = null;
-    setOrigami(null);
+    if (!options.mechanismOnly) setOrigami(null);
     setPapercraft(null);
     setPopup(null);
     setPhase("intent");
@@ -364,11 +368,13 @@ export function FoldForgeApp() {
       // The server routes the prompt: origami, a 3D papercraft figure, or
       // the mechanism engine below (boxes, cards, stands). Words decide
       // first; only an unrecognised prompt costs an AI call.
-      const route = await postJson(
-        "/api/choose",
-        { prompt: requestedPrompt },
-        RouteResponseSchema,
-      );
+      const route = options.mechanismOnly
+        ? ({ engine: "mechanism" } as const)
+        : await postJson(
+            "/api/choose",
+            { prompt: requestedPrompt },
+            RouteResponseSchema,
+          );
       const current = () =>
         sameForgeResultBinding(activeForgeBindingRef.current, forgeBinding);
       if (route.engine === "origami") {
@@ -728,19 +734,32 @@ export function FoldForgeApp() {
             aiReason={origami.aiReason}
             title={origami.title}
           >
-            {origami.alternative && !papercraft && !popup ? (
+            {origami.alternative &&
+            !papercraft &&
+            !popup &&
+            candidates.length === 0 ? (
               <aside
                 className={styles.alternative}
                 aria-label="Cut-and-glue version"
               >
                 <p>
-                  <strong>Prefer cut and glue?</strong> The{" "}
-                  {(origami.alternative.engine === "figure"
-                    ? origami.alternative.figure.title
-                    : origami.alternative.card.title
-                  ).toLowerCase()}{" "}
-                  also comes as 3D papercraft: printed pages, numbered glue
-                  tabs, and a 3D preview.
+                  {origami.alternative.engine === "mechanism" ? (
+                    <>
+                      <strong>Need exact measurements?</strong> A cut-and-fold
+                      box can be made to your sizes from one sheet of card, with
+                      its pattern to print and cut.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Prefer cut and glue?</strong> The{" "}
+                      {(origami.alternative.engine === "figure"
+                        ? origami.alternative.figure.title
+                        : origami.alternative.card.title
+                      ).toLowerCase()}{" "}
+                      also comes as 3D papercraft: printed pages, numbered glue
+                      tabs, and a 3D preview.
+                    </>
+                  )}
                 </p>
                 <button
                   type="button"
@@ -748,6 +767,10 @@ export function FoldForgeApp() {
                   onClick={() => {
                     const choice = origami.alternative;
                     if (!choice) return;
+                    if (choice.engine === "mechanism") {
+                      void forge({ mechanismOnly: true });
+                      return;
+                    }
                     // Still current if the prompt has not changed since the click.
                     const asked = latestPromptRef.current;
                     void buildPapercraft(
@@ -764,7 +787,9 @@ export function FoldForgeApp() {
                     });
                   }}
                 >
-                  Make the cut-and-glue version
+                  {origami.alternative.engine === "mechanism"
+                    ? "Make the cut-and-fold version"
+                    : "Make the cut-and-glue version"}
                 </button>
               </aside>
             ) : null}

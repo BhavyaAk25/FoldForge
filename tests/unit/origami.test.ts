@@ -13,6 +13,7 @@ import {
   buildCreasePattern,
   type CreaseSegment,
 } from "@/core/origami/crease-pattern";
+import type { Point2 } from "@/core/origami/crease-pattern";
 import { applyIsometry, checkFoldRules } from "@/core/origami/fold-rules";
 import {
   designId,
@@ -55,14 +56,18 @@ describe("origami library", () => {
   });
 
   it.each(ORIGAMI_MODELS.map((m) => [m.id, m] as const))(
-    "%s derives, checks flat-foldable at every step, and animates",
+    "%s derives, checks every step, and animates",
     (_, model) => {
       const derived = deriveSequence(model.sequence);
       expect(derived.ok).toBe(true);
       if (!derived.ok) return;
-      for (const step of derived.value)
-        expect(checkFoldRules(step.pattern).flatFoldable).toBe(true);
       const animation = animateSequence(derived.value, model.sequence.anchor);
+      // A flat model folds flat at every step; a 3D form (the box) is proven
+      // by closing instead, and stands up off the sheet.
+      for (const step of derived.value)
+        expect(checkFoldRules(step.pattern).flatFoldable).toBe(
+          !animation.formed,
+        );
       expect(animation.keyframes).toHaveLength(animation.moves.length + 1);
       // A collapsed base lands within 1% of rigid paper.
       if (animation.collapseStrain !== null)
@@ -283,6 +288,32 @@ describe("deriveSequence", () => {
       sequence as Parameters<typeof deriveSequence>[0],
     );
     expect(derived.ok ? null : derived.error.kind).toBe(kind);
+  });
+});
+
+describe("the origami box", () => {
+  const model = ORIGAMI_MODELS.find((m) => m.id === "box")!;
+  const first = model.sequence.steps[0]!;
+  const form = first.kind === "creases" ? first.form! : () => 180;
+
+  it("stands its walls up and closes every loop of faces", () => {
+    const derived = deriveSequence(model.sequence);
+    if (!derived.ok) throw new Error(derived.error.kind);
+    const animation = animateSequence(derived.value, model.sequence.anchor);
+    const heights = animation.collapse!.at(-1)!.filter((_, i) => i % 3 === 2);
+    expect([Math.min(...heights), Math.max(...heights)]).toEqual([0, 0.2]);
+  });
+
+  it("refuses a form whose corners do not meet", () => {
+    // Every corner edge at 90 degrees leaves the corner flaps apart.
+    const open = {
+      ...model.sequence,
+      steps: [
+        { ...first, form: (a: Point2, b: Point2) => Math.min(90, form(a, b)) },
+      ],
+    };
+    const derived = deriveSequence(open as typeof model.sequence);
+    expect(derived.ok ? null : derived.error.kind).toBe("form_open");
   });
 });
 

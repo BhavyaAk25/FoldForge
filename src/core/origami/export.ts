@@ -138,6 +138,54 @@ export const stepDiagram = (
   };
 };
 
+/**
+ * A 3D form (a box) seen from above and in front: its final face corners
+ * (x, y, z per corner, faces in pattern order) projected at an angle and
+ * painted back to front, fitted to a unit cell.
+ */
+export const formDiagram = (
+  faces: readonly (readonly number[])[],
+  positions: readonly number[],
+): StepDiagram => {
+  let k = 0;
+  const projected = faces
+    .map((face) => {
+      const corners = face.map(() => {
+        const [x, y, z] = [positions[k]!, positions[k + 1]!, positions[k + 2]!];
+        k += 3;
+        // Looking down at 35 degrees from the front (from -y).
+        return { x, y: z * 0.82 + y * 0.57, depth: y * 0.82 - z * 0.57 };
+      });
+      return {
+        points: corners,
+        depth: corners.reduce((sum, c) => sum + c.depth, 0) / corners.length,
+      };
+    })
+    .sort((a, b) => b.depth - a.depth);
+  const all = projected.flatMap((face) => face.points);
+  const [minX, maxX] = [
+    Math.min(...all.map((p) => p.x)),
+    Math.max(...all.map((p) => p.x)),
+  ];
+  const [minY, maxY] = [
+    Math.min(...all.map((p) => p.y)),
+    Math.max(...all.map((p) => p.y)),
+  ];
+  const scale = 0.84 / Math.max(maxX - minX, maxY - minY, 1e-6);
+  return {
+    polygons: projected.map((face) => ({
+      points: face.points
+        .map(
+          (q) =>
+            `${n(0.5 + (q.x - (minX + maxX) / 2) * scale)},${n(0.5 - (q.y - (minY + maxY) / 2) * scale)}`,
+        )
+        .join(" "),
+      front: true,
+    })),
+    line: null,
+  };
+};
+
 const stepDiagramSvg = (diagram: StepDiagram): string =>
   diagram.polygons
     .map(
@@ -161,7 +209,8 @@ export const instructionsSvg = (
   cp: CreasePatternV1,
   title: string,
   steps: readonly InstructionStep[],
-  finished: FoldKeyframe,
+  /** The finished model, drawn by `stepDiagram` or, for a 3D form, `formDiagram`. */
+  finished: StepDiagram,
   viewDeg: number,
   paperMm: number,
 ): string => {
@@ -185,7 +234,7 @@ export const instructionsSvg = (
     })),
     {
       caption: `${steps.length + 1}. Done: ${title}.`,
-      body: stepDiagramSvg(stepDiagram(cp, finished, null, viewDeg)),
+      body: stepDiagramSvg(finished),
     },
   ];
   const rows = Math.ceil(cells.length / columns);

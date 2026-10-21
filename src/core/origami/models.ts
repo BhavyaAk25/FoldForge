@@ -485,6 +485,75 @@ const SWAN: OrigamiModel = {
   ),
 };
 
+/**
+ * Box (an open tray) from one square: lines a fifth of the way in from each
+ * edge are the walls' hinges, the walls stand at 90 degrees, and each corner
+ * square folds in half along its diagonal and lies against the outside of a
+ * wall (one of its edges folds 180 degrees, the other 90, turning the same
+ * way round the box). It ends as a 3D form, proven by every loop of faces
+ * closing; a second square 5% larger folded the same way is its lid.
+ */
+const BOX_WALL = 0.2;
+const boxForm = (from: Point2, to: Point2): number => {
+  const [lo, hi] = [BOX_WALL, 1 - BOX_WALL];
+  if (Math.abs(from.x - to.x) > 1e-9 && Math.abs(from.y - to.y) > 1e-9)
+    return 180; // a corner's diagonal
+  const [mx, my] = [(from.x + to.x) / 2, (from.y + to.y) / 2];
+  const outside = (v: number) => v < lo - 1e-6 || v > hi + 1e-6;
+  // A crease inside a corner square continues a hinge line past the base.
+  if (!outside(mx) && !outside(my)) return 90;
+  const vertical = Math.abs(from.x - to.x) < 1e-9;
+  // Corners alternate which edge folds flat, so the flaps all wrap one way.
+  const left = mx < 0.5;
+  const bottom = my < 0.5;
+  const flat = left === bottom ? vertical : !vertical;
+  return flat ? 180 : 90;
+};
+const BOX_SEGMENTS: readonly CreaseSegment[] = (() => {
+  const [w, W] = [BOX_WALL, 1 - BOX_WALL];
+  const flat = (from: Point2, to: Point2) =>
+    crease(from, to, boxForm(from, to) === 180 ? "M" : "V");
+  return [
+    // The base's edges: walls fold up.
+    crease(p(w, w), p(W, w), "V"),
+    crease(p(W, w), p(W, W), "V"),
+    crease(p(W, W), p(w, W), "V"),
+    crease(p(w, W), p(w, w), "V"),
+    // The hinge lines continued through each corner square.
+    flat(p(w, 0), p(w, w)),
+    flat(p(0, w), p(w, w)),
+    flat(p(W, 0), p(W, w)),
+    flat(p(W, w), p(1, w)),
+    flat(p(W, W), p(W, 1)),
+    flat(p(W, W), p(1, W)),
+    flat(p(0, W), p(w, W)),
+    flat(p(w, W), p(w, 1)),
+    // Each corner square folds in half.
+    crease(p(0, 0), p(w, w), "V"),
+    crease(p(1, 0), p(W, w), "V"),
+    crease(p(1, 1), p(W, W), "V"),
+    crease(p(0, 1), p(w, W), "V"),
+  ];
+})();
+const BOX: OrigamiModel = {
+  id: "box",
+  summary:
+    "An open box from one square, no cuts or glue; fold a second square 5% larger the same way for its lid.",
+  viewDeg: 0,
+  sequence: {
+    anchor: p(0.5, 0.5),
+    steps: [
+      {
+        kind: "creases",
+        instruction:
+          "Crease lines a fifth of the way in from each edge, both ways, and each corner square's diagonal. Stand the four walls up, fold each corner square in half, and lay it against the outside of the next wall.",
+        segments: BOX_SEGMENTS,
+        form: boxForm,
+      },
+    ],
+  },
+};
+
 export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   CRANE,
   FLAPPING_BIRD,
@@ -494,6 +563,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   CAT_FACE,
   HEART,
   TULIP,
+  BOX,
   SWAN,
   base(
     "bird-base",
