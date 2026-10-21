@@ -4,21 +4,20 @@ import {
   buildFabricationCandidate,
   finalizeFabricationCandidate,
 } from "@/core/fabrication/candidate";
-import {
-  createFacetedDuckGiftBoxShowcase,
-  createPullTabPopUpFlowerShowcase,
-} from "@/core/fabrication/examples";
+import { createPullTabPopUpFlowerShowcase } from "@/core/fabrication/examples";
 import type { FabricationExportArtifact } from "@/core/fabrication/export";
 import { sha256HexBytes } from "@/core/sha256";
 import {
   validateFinalizedConsumerArtifacts,
   type ConsumerValidationInput,
 } from "../../scripts/lib/consumer-validation";
+import { foldOnlyStand } from "../fixtures/fold-only";
 
 const finalizedShowcase = (
-  showcase:
-    | ReturnType<typeof createFacetedDuckGiftBoxShowcase>
-    | ReturnType<typeof createPullTabPopUpFlowerShowcase>,
+  showcase: Pick<
+    ReturnType<typeof createPullTabPopUpFlowerShowcase>,
+    "intent" | "program"
+  >,
   candidateId: string,
 ) => {
   const candidate = buildFabricationCandidate({
@@ -118,8 +117,8 @@ const replaceJsonSourceHash = (
 describe("finalized consumer artifact validation", () => {
   it("binds every fold-only artifact and consumer result to the selected IR", async () => {
     const finalized = finalizedShowcase(
-      createFacetedDuckGiftBoxShowcase(),
-      "consumer-validator-duck",
+      foldOnlyStand(),
+      "consumer-validator-stand",
     );
     const result = await validateFinalizedConsumerArtifacts(
       validationInput(finalized),
@@ -132,7 +131,8 @@ describe("finalized consumer artifact validation", () => {
       svg: { calibrationLengthMm: 50, layerCount: 4 },
       dxf: { calibrationLengthMm: 50 },
       glb: { errors: 0, warnings: 0 },
-      fold: { edgeCount: 15, faceCount: 3 },
+      // Three panels in a row share two edges: 3 x 4 - 2.
+      fold: { edgeCount: 10, faceCount: 3 },
       foldOmissionCode: null,
     });
     expect(result.svg.sourcePathCount).toBe(result.json.sourcePathCount);
@@ -171,7 +171,7 @@ describe("finalized consumer artifact validation", () => {
 
   it("rejects binding, scale, unit, JSON, GLB, and omission corruption", async () => {
     const finalized = finalizedShowcase(
-      createFacetedDuckGiftBoxShowcase(),
+      foldOnlyStand(),
       "consumer-validator-corruption",
     );
     const base = validationInput(finalized);
@@ -212,10 +212,13 @@ describe("finalized consumer artifact validation", () => {
       }),
     ).rejects.toMatchObject({ code: "svg_invalid" });
 
+    // Move the start of the first drawn path by 1 mm.
+    const firstPath = /d="M ([\d.]+) /u.exec(svg.text ?? "");
+    if (!firstPath) throw new Error("The SVG has no path to alter.");
     const geometricallyAlteredSvg = replaceText(
       svg,
-      'd="M 112 30 L 128.5 8"',
-      'd="M 113 30 L 128.5 8"',
+      firstPath[0],
+      `d="M ${Number(firstPath[1]) + 1} `,
     );
     await expect(
       validateFinalizedConsumerArtifacts({

@@ -11,7 +11,6 @@ import {
   connectorPairFit,
 } from "@/core/fabrication/connector-geometry";
 import {
-  createFacetedDuckGiftBoxShowcase,
   createModularCableOrganizerShowcase,
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
@@ -28,6 +27,7 @@ import type {
 } from "@/core/fabrication/types";
 import { verifyFabricationIr } from "@/core/fabrication/verification";
 import { fixtureIntent, fixtureProgram } from "../../fixtures/fabrication";
+import { foldOnlyStand } from "../../fixtures/fold-only";
 
 const compile = (
   intent = fixtureIntent(),
@@ -1075,16 +1075,16 @@ describe("fabrication verifier packing, motion, and semantic stages", () => {
       );
     }
 
-    const duckShowcase = createFacetedDuckGiftBoxShowcase();
-    const duck = compile(duckShowcase.intent, duckShowcase.program);
+    const stand = foldOnlyStand();
+    const compiledStand = compile(stand.intent, stand.program);
     const staticReport = verifyFabricationIr(
       {
-        ...duck,
+        ...compiledStand,
         outputs: [
           {
             outputId: "output-static-lid",
-            jointId: "joint-duck-lid",
-            bodyId: "body-duck-lid",
+            jointId: "joint-base-back",
+            bodyId: "body-back",
             label: "Static lid angle",
             minimumValue: 0,
             maximumValue: 100,

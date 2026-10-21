@@ -76,13 +76,11 @@ for (const [index, showcase] of showcases.entries()) {
   });
 }
 
-const foldShowcase = results.find((result) => result.fold !== null);
-if (
-  generatedFoldCount !== 1 ||
-  foldShowcase?.showcaseId !== "faceted-duck-gift-box"
-) {
+// The showcases both move, so neither is lossless as FOLD; a fold-only
+// template (the phone stand) must be.
+if (generatedFoldCount !== 0) {
   throw new Error(
-    "Exactly the fold-only duck showcase must produce the lossless FOLD profile.",
+    "A moving showcase must not produce the lossless FOLD profile.",
   );
 }
 

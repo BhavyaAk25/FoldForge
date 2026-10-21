@@ -4,7 +4,6 @@ import { z } from "zod";
 import { canonicalSerialize } from "@/core/canonical";
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
 import {
-  createFacetedDuckGiftBoxShowcase,
   createModularCableOrganizerShowcase,
   createPullTabPopUpFlowerShowcase,
 } from "@/core/fabrication/examples";
@@ -27,6 +26,7 @@ import {
   type VerifiedFabricationExportSource,
 } from "@/core/fabrication/export";
 import { homeMotionState } from "@/core/fabrication/kinematics";
+import { foldOnlyStand } from "../../fixtures/fold-only";
 import {
   decomposeRigidMatrix4,
   inverseRigidMatrix4,
@@ -1527,7 +1527,7 @@ describe("fabrication exporters", () => {
   });
 
   it("omits FOLD when zero-angle and explicit-angle creases are mixed", () => {
-    const showcase = createFacetedDuckGiftBoxShowcase();
+    const showcase = foldOnlyStand();
     const compiled = compileFabricationProgram(
       showcase.intent,
       showcase.program,
@@ -1536,8 +1536,8 @@ describe("fabrication exporters", () => {
     const mixedAngleIr: FabricationIRV1 = {
       ...compiled.value,
       joints: compiled.value.joints.map((joint) =>
-        joint.kind === "fold" && joint.jointId === "joint-duck-lid"
-          ? { ...joint, homeAngleDeg: 45 }
+        joint.kind === "fold" && joint.jointId === "joint-base-back"
+          ? { ...joint, homeAngleDeg: 0 }
           : joint,
       ),
     };
@@ -1554,7 +1554,7 @@ describe("fabrication exporters", () => {
       status: "omitted",
       reason: {
         code: "mixed_fold_angle_semantics",
-        geometryIds: ["joint-duck-lid", "joint-duck-beak"],
+        geometryIds: ["joint-base-back", "joint-base-lip"],
       },
     });
     expect(exportFabricationFold(source)).toMatchObject({
