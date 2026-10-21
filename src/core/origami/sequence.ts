@@ -71,6 +71,17 @@ export type FoldStep =
     }
   | {
       /**
+       * A page turn: the flap (the faces `layers` picks) swings over the axis
+       * `line`, which runs along creases joining it to the rest. Those hinge
+       * creases change between folded and flat; no new crease is made.
+       */
+      readonly kind: "turn";
+      readonly instruction: string;
+      readonly line: FoldLine;
+      readonly layers: (face: FaceSample) => boolean;
+    }
+  | {
+      /**
        * The moving part of a flap turns inside out: pushed in between the
        * flap's own layers (inside) or wrapped around them (outside).
        */
@@ -337,7 +348,7 @@ interface AppliedFold {
  */
 const applyFold = (
   state: FoldedState,
-  step: Extract<FoldStep, { line: FoldLine }>,
+  step: Extract<FoldStep, { toward: Point2 }>,
   split: number,
 ): AppliedFold | null => {
   const { cp, transforms } = state;
@@ -471,6 +482,66 @@ const formedPattern = (
     : err({ kind: "form_open", step });
 };
 
+/**
+ * The segments after a page turn: every crease along the axis that joins a
+ * flap face to a face that stays toggles between folded and flat. Flat ones
+ * fold the way that brings the flap over the front (or the back). Null if no
+ * crease lies along the axis between the flap and the rest.
+ */
+const turnSegments = (
+  state: FoldedState,
+  step: Extract<FoldStep, { kind: "turn" }>,
+  overFront: boolean,
+): CreaseSegment[] | null => {
+  const { cp, transforms } = state;
+  const inFlap = cp.faces.map((face, index) => {
+    const paper = centroid(polygon(cp, face));
+    return step.layers({
+      paper,
+      folded: applyIsometry(transforms[index]!, paper),
+    });
+  });
+  const facesOf = new Map<string, number[]>();
+  cp.faces.forEach((face, f) =>
+    face.forEach((v, i) => {
+      const w = face[(i + 1) % face.length]!;
+      const key = v < w ? `${v}-${w}` : `${w}-${v}`;
+      facesOf.set(key, [...(facesOf.get(key) ?? []), f]);
+    }),
+  );
+  const direction = sub(step.line.to, step.line.from);
+  const length = Math.hypot(direction.x, direction.y);
+  const onAxis = (p: Point2) =>
+    Math.abs(cross(direction, sub(p, step.line.from))) / length < 1e-6;
+  let toggled = 0;
+  const segments = cp.edges.flatMap((edge): CreaseSegment[] => {
+    if (edge.assignment === "B") return [];
+    const [from, to] = [cp.vertices[edge.a]!, cp.vertices[edge.b]!];
+    const pair =
+      facesOf.get(
+        edge.a < edge.b ? `${edge.a}-${edge.b}` : `${edge.b}-${edge.a}`,
+      ) ?? [];
+    const hinge =
+      pair.length === 2 &&
+      inFlap[pair[0]!] !== inFlap[pair[1]!] &&
+      onAxis(applyIsometry(transforms[pair[0]!]!, from)) &&
+      onAxis(applyIsometry(transforms[pair[0]!]!, to));
+    if (!hinge) return [{ from, to, assignment: edge.assignment }];
+    toggled += 1;
+    const staying = inFlap[pair[0]!] ? pair[1]! : pair[0]!;
+    return [
+      {
+        from,
+        to,
+        assignment: isFolded(edge.assignment)
+          ? "F"
+          : senseFor(overFront, transforms[staying]!),
+      },
+    ];
+  });
+  return toggled > 0 ? segments : null;
+};
+
 /** A step's pattern, checked: flat-foldable and with a non-crossing layer order. */
 const checkedPattern = (
   segments: readonly CreaseSegment[],
@@ -515,6 +586,23 @@ export const deriveSequence = (
     } else if (step.kind === "creases") {
       segments = [...step.segments];
       result = checkedPattern(segments, sequence.anchor, index);
+    } else if (step.kind === "turn") {
+      const current = buildCreasePattern(segments);
+      if (!current.ok)
+        return err({ kind: "pattern", step: index, error: current.error });
+      const state = foldedState(current.value, sequence.anchor);
+      if (!state) return err({ kind: "anchor_lost", step: index });
+      result = err({ kind: "fold_misses", step: index });
+      // Over the front first; a flap that cannot pass there goes round the back.
+      for (const overFront of [true, false]) {
+        const next = turnSegments(state, step, overFront);
+        if (!next) break;
+        result = checkedPattern(next, sequence.anchor, index);
+        if (result.ok) {
+          segments = next;
+          break;
+        }
+      }
     } else {
       const current = buildCreasePattern(segments);
       if (!current.ok)
