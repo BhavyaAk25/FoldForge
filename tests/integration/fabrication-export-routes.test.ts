@@ -9,7 +9,7 @@ import {
   buildFabricationCandidate,
   type CandidateProvenanceInput,
 } from "@/core/fabrication/candidate";
-import { createFacetedDuckGiftBoxShowcase } from "@/core/fabrication/examples";
+import { foldOnlyStand } from "../fixtures/fold-only";
 import { FOLD_EXTENSION_KEYS } from "@/core/fabrication/export";
 import { CandidateV2Schema } from "@/core/fabrication/schemas";
 import type { CandidateV2 } from "@/core/fabrication/types";
@@ -157,8 +157,8 @@ describe("fabrication export routes", () => {
     });
   });
 
-  it("downloads a parseable FOLD file for the fold-only duck showcase", async () => {
-    const showcase = createFacetedDuckGiftBoxShowcase();
+  it("downloads a parseable FOLD file for a fold-only design", async () => {
+    const showcase = foldOnlyStand();
     const built = buildFabricationCandidate({
       candidateId: "candidate-duck-fold-route",
       intent: showcase.intent,

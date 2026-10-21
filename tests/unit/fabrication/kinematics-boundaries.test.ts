@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { compileFabricationProgram } from "@/core/fabrication/compiler";
-import { createFacetedDuckGiftBoxShowcase } from "@/core/fabrication/examples";
+import { foldOnlyStand } from "../../fixtures/fold-only";
 import { evaluateMotionState } from "@/core/fabrication/kinematics";
 import type {
   CouplingV1,
@@ -239,7 +239,7 @@ describe("fabrication kinematic boundary cases", () => {
       },
     });
 
-    const showcase = createFacetedDuckGiftBoxShowcase();
+    const showcase = foldOnlyStand();
     const compiled = compileFabricationProgram(
       showcase.intent,
       showcase.program,
