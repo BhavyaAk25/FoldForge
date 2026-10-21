@@ -58,6 +58,7 @@ const CACHE_LIMIT = 128;
 const FAMILY_NAMES = {
   neck: "Long-necked figure",
   bird: "Winged bird",
+  fish: "Fish",
 } as const;
 
 /** The model an id names: a library entry or a design, with its display name. */

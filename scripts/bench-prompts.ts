@@ -32,7 +32,7 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "a rabbit", expect: "figure" },
   { text: "a fox", expect: "figure" },
   { text: "a penguin", expect: "figure" },
-  { text: "a fish", expect: "figure" },
+  { text: "a fish", expect: "origami" },
   { text: "a car", expect: "figure" },
   { text: "a house", expect: "figure" },
   { text: "a tree", expect: "figure" },

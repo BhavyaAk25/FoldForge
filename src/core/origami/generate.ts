@@ -1,7 +1,9 @@
 import {
+  fishOnKite,
   neckCreature,
   wingedBird,
   type BirdDesign,
+  type FishDesign,
   type ModelShape,
   type NeckDesign,
 } from "./families";
@@ -18,100 +20,112 @@ import { deriveSequence } from "./sequence";
 
 export type Design =
   | ({ readonly family: "neck" } & NeckDesign)
-  | ({ readonly family: "bird" } & BirdDesign);
+  | ({ readonly family: "bird" } & BirdDesign)
+  | ({ readonly family: "fish" } & FishDesign);
 
-type Bounds<T> = { readonly [K in keyof T]: readonly [number, number] };
+export type Family = Design["family"];
 
 /**
- * What each family can fold, found by deriving a grid of designs: past these
- * the neck crosses the body (lean beyond 14 degrees), the base fold reaches
- * the kite's side flaps (neckAt beyond 0.55), a low head turns up too far, or a bird's point turns too
- * far to fold flat (beyond 70 degrees). Outside them a design is clamped.
+ * Each family's values in id order with the range that folds, found by
+ * deriving a grid of designs: past these the neck crosses the body (lean
+ * beyond 14 degrees), the base fold reaches the kite's side flaps (neckAt
+ * beyond 0.55), a low head turns up too far, or a bird's point turns too far
+ * to fold flat (beyond 70 degrees), or a longer fish tail needs a steeper
+ * turn to clear the kite's flaps. Outside them a design is clamped.
  */
-const NECK_BOUNDS: Bounds<NeckDesign> = {
-  neckAt: [0.45, 0.55],
-  leanDeg: [-20, 14],
-  headAt: [0.65, 0.9],
-  headDeg: [-60, 30],
+const FIELDS: {
+  readonly [F in Family]: readonly (readonly [string, number, number])[];
+} = {
+  neck: [
+    ["neckAt", 0.45, 0.55],
+    ["leanDeg", -20, 14],
+    ["headAt", 0.65, 0.9],
+    ["headDeg", -60, 30],
+  ],
+  bird: [
+    ["neckDeg", 55, 70],
+    ["tailDeg", 55, 70],
+    ["headAt", 0.6, 0.9],
+    ["headTurnDeg", -150, -60],
+    ["wingDeg", 30, 170],
+  ],
+  fish: [
+    ["tailAt", 0.2, 0.3],
+    ["tailUpDeg", 50, 120],
+  ],
 };
-const BIRD_BOUNDS: Bounds<BirdDesign> = {
-  neckDeg: [55, 70],
-  tailDeg: [55, 70],
-  headAt: [0.6, 0.9],
-  headTurnDeg: [-150, -60],
-  wingDeg: [30, 170],
-};
-/** Field order in a design id. */
-const NECK_FIELDS = ["neckAt", "leanDeg", "headAt", "headDeg"] as const;
-const BIRD_FIELDS = [
-  "neckDeg",
-  "tailDeg",
-  "headAt",
-  "headTurnDeg",
-  "wingDeg",
-] as const;
 
-const clamp = (v: number, [lo, hi]: readonly [number, number]) =>
-  Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100;
-
-/** The design with every value inside its family's bounds, rounded for a stable id. */
-export const clampDesign = (d: Design): Design => {
-  if (d.family === "neck") {
-    const b = NECK_BOUNDS;
-    return {
-      family: "neck",
-      neckAt: clamp(d.neckAt, b.neckAt),
-      leanDeg: clamp(d.leanDeg, b.leanDeg),
-      headAt: clamp(d.headAt, b.headAt),
-      headDeg: clamp(d.headDeg, b.headDeg),
-    };
+/** A family's values in id order. */
+const valuesOf = (d: Design): number[] => {
+  switch (d.family) {
+    case "neck":
+      return [d.neckAt, d.leanDeg, d.headAt, d.headDeg];
+    case "bird":
+      return [d.neckDeg, d.tailDeg, d.headAt, d.headTurnDeg, d.wingDeg];
+    case "fish":
+      return [d.tailAt, d.tailUpDeg];
   }
-  const b = BIRD_BOUNDS;
-  return {
-    family: "bird",
-    neckDeg: clamp(d.neckDeg, b.neckDeg),
-    tailDeg: clamp(d.tailDeg, b.tailDeg),
-    headAt: clamp(d.headAt, b.headAt),
-    headTurnDeg: clamp(d.headTurnDeg, b.headTurnDeg),
-    wingDeg: clamp(d.wingDeg, b.wingDeg),
-  };
 };
 
-/** "neck_0.53_0_0.78_25": the family, then its values in field order. */
+/** The design with these values, each clamped to its range and rounded for a stable id. */
+const designOf = (family: Family, raw: readonly number[]): Design => {
+  const v = FIELDS[family].map(
+    ([, lo, hi], i) =>
+      Math.round(Math.min(hi, Math.max(lo, raw[i] ?? lo)) * 100) / 100,
+  );
+  const [a = 0, b = 0, c = 0, d = 0, e = 0] = v;
+  switch (family) {
+    case "neck":
+      return { family, neckAt: a, leanDeg: b, headAt: c, headDeg: d };
+    case "bird":
+      return {
+        family,
+        neckDeg: a,
+        tailDeg: b,
+        headAt: c,
+        headTurnDeg: d,
+        wingDeg: e,
+      };
+    case "fish":
+      return { family, tailAt: a, tailUpDeg: b };
+  }
+};
+
+/** The design with every value inside its family's range. */
+export const clampDesign = (d: Design): Design =>
+  designOf(d.family, valuesOf(d));
+
+/** "neck_0.53_0_0.78_25": the family, then its values in id order. */
 export const designId = (d: Design): string =>
-  [
-    d.family,
-    ...(d.family === "neck"
-      ? NECK_FIELDS.map((k) => d[k])
-      : BIRD_FIELDS.map((k) => d[k])),
-  ].join("_");
+  [d.family, ...valuesOf(d)].join("_");
+
+const isFamily = (value: string): value is Family =>
+  Object.hasOwn(FIELDS, value);
 
 export const parseDesignId = (id: string): Design | null => {
-  const [family, ...rest] = id.split("_");
-  const v = rest.map(Number);
-  if (v.some((x) => !Number.isFinite(x))) return null;
-  const [a = 0, b = 0, c = 0, d = 0, e = 0] = v;
-  const design: Design | null =
-    family === "neck" && v.length === NECK_FIELDS.length
-      ? { family, neckAt: a, leanDeg: b, headAt: c, headDeg: d }
-      : family === "bird" && v.length === BIRD_FIELDS.length
-        ? {
-            family,
-            neckDeg: a,
-            tailDeg: b,
-            headAt: c,
-            headTurnDeg: d,
-            wingDeg: e,
-          }
-        : null;
+  const [family = "", ...rest] = id.split("_");
+  const values = rest.map(Number);
+  if (
+    !isFamily(family) ||
+    values.length !== FIELDS[family].length ||
+    values.some((x) => !Number.isFinite(x))
+  )
+    return null;
+  const design = designOf(family, values);
   // Only canonical ids name a design, so one design has one URL.
-  return design && designId(clampDesign(design)) === id
-    ? clampDesign(design)
-    : null;
+  return designId(design) === id ? design : null;
 };
 
-export const designShape = (d: Design, summary: string): ModelShape =>
-  d.family === "neck" ? neckCreature(d, summary) : wingedBird(d, summary);
+export const designShape = (d: Design, summary: string): ModelShape => {
+  switch (d.family) {
+    case "neck":
+      return neckCreature(d, summary);
+    case "bird":
+      return wingedBird(d, summary);
+    case "fish":
+      return fishOnKite(d, summary);
+  }
+};
 
 const folds = (d: Design): boolean =>
   deriveSequence(designShape(d, "").sequence).ok;
@@ -123,22 +137,17 @@ const folds = (d: Design): boolean =>
 export const foldableDesign = (requested: Design): Design | null => {
   const start = clampDesign(requested);
   if (folds(start)) return start;
+  const values = valuesOf(start);
+  const fields = FIELDS[start.family];
   // Steps of a tenth of each value's range, one then two either way.
-  const nudged = (k: number): Design[] => {
-    if (start.family === "neck") {
-      return NECK_FIELDS.map((f) => {
-        const [lo, hi] = NECK_BOUNDS[f];
-        return clampDesign({ ...start, [f]: start[f] + (k * (hi - lo)) / 10 });
-      });
-    }
-    return BIRD_FIELDS.map((f) => {
-      const [lo, hi] = BIRD_BOUNDS[f];
-      return clampDesign({ ...start, [f]: start[f] + (k * (hi - lo)) / 10 });
-    });
-  };
   for (const k of [1, -1, 2, -2]) {
-    const found = nudged(k).find(folds);
-    if (found) return found;
+    for (const [i, [, lo, hi]] of fields.entries()) {
+      const nudged = values.map((v, j) =>
+        j === i ? v + (k * (hi - lo)) / 10 : v,
+      );
+      const candidate = designOf(start.family, nudged);
+      if (folds(candidate)) return candidate;
+    }
   }
   return null;
 };

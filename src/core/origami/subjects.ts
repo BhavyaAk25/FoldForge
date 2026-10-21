@@ -133,6 +133,25 @@ export const SUBJECTS: readonly Subject[] = [
     color: "#9fb3c3",
     answer: neck(0.53, 12, 0.75, -40),
   },
+  // Swimmers: the fish on the kite, its tail flicked up.
+  {
+    words: ["fish", "goldfish", "koi", "carp", "trout", "salmon"],
+    title: "Fish",
+    color: "#ec8a2f",
+    answer: { design: { family: "fish", tailAt: 0.3, tailUpDeg: 80 } },
+  },
+  ...(
+    [
+      ["whale", "Whale", "#4f6f8f", 100],
+      ["dolphin", "Dolphin", "#7f9fb8", 95],
+      ["shark", "Shark", "#8a9399", 70],
+    ] as const
+  ).map(([word, title, color, tailUpDeg]): Subject => ({
+    words: [word],
+    title,
+    color,
+    answer: { design: { family: "fish", tailAt: 0.25, tailUpDeg } },
+  })),
   // Birds in flight or perched with wings: the winged bird.
   {
     words: ["eagle", "hawk", "falcon"],
