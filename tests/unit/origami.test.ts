@@ -317,6 +317,41 @@ describe("the origami box", () => {
   });
 });
 
+describe("page turns", () => {
+  const frog = ORIGAMI_MODELS.find((m) => m.id === "frog-base")!;
+  const axis = { from: p(0.5, -0.5), to: p(0.5, 1) };
+  // The front flap of the frog base: the paper round one edge's midpoint.
+  const frontFlap = ({ paper }: { readonly paper: Point2 }) =>
+    Math.abs(paper.x - 0.5) <= Math.abs(paper.y - 0.5) && paper.y < 0.5;
+  const turn = (line: typeof axis) =>
+    deriveSequence({
+      anchor: frog.sequence.anchor,
+      steps: [
+        frog.sequence.steps[0]!,
+        {
+          kind: "turn",
+          instruction: "Turn the front flap.",
+          line,
+          layers: frontFlap,
+        },
+      ],
+    });
+
+  it("swings a flap over the axis, checked like any fold", () => {
+    const turned = turn(axis);
+    if (!turned.ok) throw new Error(turned.error.kind);
+    const animation = animateSequence(turned.value, frog.sequence.anchor);
+    // The flap moved; the rest did not.
+    expect(animation.moves[0]!.moving.some(Boolean)).toBe(true);
+    expect(animation.moves[0]!.moving.every(Boolean)).toBe(false);
+  });
+
+  it("refuses a turn about a line with no hinge on it", () => {
+    const missed = turn({ from: p(0.6, -0.5), to: p(0.6, 1) });
+    expect(missed.ok ? null : missed.error.kind).toBe("fold_misses");
+  });
+});
+
 describe("generated designs", () => {
   it.each(
     SUBJECTS.flatMap((s) =>

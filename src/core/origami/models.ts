@@ -1,11 +1,14 @@
 import type { OrigamiModelId } from "./catalog";
 import type { CreaseSegment, Point2 } from "./crease-pattern";
 import {
+  FROG_BASE,
+  FROG_NARROW_STEPS,
+  fourLegs,
+  frogCorner,
   across,
   BIRD_ANCHOR,
   BIRD_BASE,
   BIRD_BASE_STEP,
-  CENTRE,
   crease,
   neckCreature,
   p,
@@ -39,39 +42,6 @@ const WATERBOMB_BASE: readonly CreaseSegment[] = [
   crease(p(0, 0), p(1, 1), "V"),
   crease(p(1, 0), p(0, 1), "V"),
   crease(p(0, 0.5), p(1, 0.5), "M"),
-];
-
-/** Quarter turn about the sheet centre. */
-const turn = (q: Point2, times: number): Point2 =>
-  times === 0 ? q : turn(p(1 - q.y, q.x), times - 1);
-
-/**
- * Square base with all four flaps squashed and petal-folded. Each squash
- * leaves a point S = (sqrt(2)/4, 1/2 - sqrt(2)/4) beside every edge midpoint,
- * where 22.5-degree creases from the corner, the centre, and the midpoint
- * meet. The centre has 16 creases, so one diagonal half is a mountain to
- * keep Maekawa's 9 against 7; the layer solver confirms a stacking exists.
- */
-const FROG_S = Math.SQRT2 / 4;
-const FROG_BASE: readonly CreaseSegment[] = [
-  ...[0, 1, 2, 3].flatMap((t) => {
-    const [left, right] = [
-      p(FROG_S, 0.5 - FROG_S),
-      p(1 - FROG_S, 0.5 - FROG_S),
-    ];
-    return [
-      crease(turn(p(0, 0), t), turn(left, t), "M"),
-      crease(turn(p(1, 0), t), turn(right, t), "M"),
-      crease(turn(p(0.5, 0), t), turn(left, t), "M"),
-      crease(turn(p(0.5, 0), t), turn(right, t), "M"),
-      crease(CENTRE, turn(left, t), "M"),
-      crease(CENTRE, turn(right, t), "M"),
-      crease(turn(left, t), turn(p(FROG_S, 0), t), "V"),
-      crease(turn(right, t), turn(p(1 - FROG_S, 0), t), "V"),
-      crease(turn(p(0.5, 0), t), CENTRE, "V"),
-      crease(turn(p(0, 0), t), CENTRE, t === 0 ? "M" : "V"),
-    ];
-  }),
 ];
 
 /** Kite folds from two opposite corners, then the side corners rabbit-eared. */
@@ -554,6 +524,60 @@ const BOX: OrigamiModel = {
   },
 };
 
+/**
+ * Lily from the frog base. In the folded frame the base lies folded along
+ * x = 0.5 with the sheet's centre (the closed point, the stem) at the top
+ * and the four corners (the open end, the petals) at the bottom. Each side
+ * of each flap is narrowed to the centre: a crease from the closed point
+ * bisecting the edge and the axis (about 79 degrees below level). Paper
+ * regions name the layers: a quadrant is the side around one edge's
+ * midpoint, split at the line through it and the centre; a petal is the
+ * paper round one corner. A folder turns the flaps like pages to reach
+ * each side; the states between are the ones checked. Then each petal folds
+ * out across the widest part and stays part-open, so the flower stands.
+ */
+const LILY: OrigamiModel = {
+  id: "lily",
+  summary:
+    "The traditional lily from the frog base: a slender stem and four petals folded open. Curl each petal over a pencil to finish it.",
+  viewDeg: 180,
+  sequence: {
+    anchor: p(0.5, 0.06),
+    steps: [
+      {
+        kind: "creases",
+        instruction:
+          "Fold a frog base, closed point down: a square base with every flap squashed and petal-folded.",
+        segments: FROG_BASE,
+      },
+      ...FROG_NARROW_STEPS,
+      // Petals alternate toward and away from you, so the lily opens all round.
+      ...[1, 2, 3, 0].map((corner, i): FoldStep => ({
+        kind: i % 2 === 0 ? "valley" : "mountain",
+        instruction:
+          i === 0
+            ? "Fold the front petal out and down across the widest part, and leave it standing open."
+            : i % 2 === 1
+              ? "Open the petal behind it the same way, toward the back."
+              : "Turn to the next petal and open it toward you.",
+        line: { from: p(0.3, 0), to: p(0.8, 0) },
+        toward: p(0.52, -0.2),
+        layers: frogCorner(corner),
+        openDeg: 115,
+      })),
+    ],
+  },
+};
+
+/** The frog: the four-legged family's original design. */
+const FROG: OrigamiModel = {
+  id: "frog",
+  ...fourLegs(
+    { frontDeg: 160, hindDeg: 210 },
+    "A frog from the frog base, seen from above: a pointed body with its front legs out and its hind legs back.",
+  ),
+};
+
 export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   CRANE,
   FLAPPING_BIRD,
@@ -564,6 +588,8 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   HEART,
   TULIP,
   BOX,
+  LILY,
+  FROG,
   SWAN,
   base(
     "bird-base",

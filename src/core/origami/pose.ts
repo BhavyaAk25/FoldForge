@@ -18,8 +18,25 @@ export interface PoseInput {
   readonly formed?: boolean;
 }
 
-/** Separation between stacked layers, in sheet widths. */
+/**
+ * Separation between stacked layers, in sheet widths: enough to tell layers
+ * apart, but a thick model (a frog base holds dozens) stays at most
+ * MAX_STACK thick so it still looks like folded paper.
+ */
 const LAYER_GAP = 0.004;
+const MAX_STACK = 0.03;
+const gaps = new WeakMap<readonly FoldKeyframe[], number>();
+const gapFor = (input: PoseInput): number => {
+  const known = gaps.get(input.keyframes);
+  if (known !== undefined) return known;
+  const deepest = Math.max(
+    1,
+    ...input.keyframes.flatMap((k) => k.layers.map(Math.abs)),
+  );
+  const gap = Math.min(LAYER_GAP, MAX_STACK / deepest);
+  gaps.set(input.keyframes, gap);
+  return gap;
+};
 /** Share of the collapse step spent settling from the simulated pose to the exact flat one. */
 const SETTLE = 0.2;
 
@@ -29,7 +46,7 @@ const keyframePose = (input: PoseInput, keyframe: FoldKeyframe): number[] =>
   input.faces.flatMap((face, f) =>
     face.flatMap((v) => {
       const p = applyIsometry(keyframe.transforms[f]!, input.vertices[v]!);
-      return [p.x, p.y, (keyframe.layers[f] ?? 0) * LAYER_GAP];
+      return [p.x, p.y, (keyframe.layers[f] ?? 0) * gapFor(input)];
     }),
   );
 
@@ -72,7 +89,7 @@ const turnedFace = (
   const z =
     ((before.layers[face] ?? 0) +
       ((after.layers[face] ?? 0) - (before.layers[face] ?? 0)) * ease(u)) *
-    LAYER_GAP;
+    gapFor(input);
   return input.faces[face]!.flatMap((v) => {
     const p = applyIsometry(before.transforms[face]!, input.vertices[v]!);
     const offset = { x: p.x - origin.x, y: p.y - origin.y };
@@ -101,7 +118,7 @@ const movePose = (input: PoseInput, index: number, u: number): number[] =>
     const keyframe = input.keyframes[index]!;
     return face.flatMap((v) => {
       const p = applyIsometry(keyframe.transforms[f]!, input.vertices[v]!);
-      return [p.x, p.y, (keyframe.layers[f] ?? 0) * LAYER_GAP];
+      return [p.x, p.y, (keyframe.layers[f] ?? 0) * gapFor(input)];
     });
   });
 
