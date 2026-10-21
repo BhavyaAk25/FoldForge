@@ -1,5 +1,5 @@
 import { animateSequence, type FoldAnimation } from "@/core/origami/animate";
-import { ORIGAMI_CATALOG, type OrigamiModelId } from "@/core/origami/catalog";
+import { isOrigamiModelId, ORIGAMI_CATALOG } from "@/core/origami/catalog";
 import type { CreasePatternV1 } from "@/core/origami/crease-pattern";
 import {
   creasePatternSvg,
@@ -7,6 +7,8 @@ import {
   instructionsSvg,
   type InstructionStep,
 } from "@/core/origami/export";
+import type { ModelShape } from "@/core/origami/families";
+import { designShape, parseDesignId } from "@/core/origami/generate";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
 import {
   deriveSequence,
@@ -15,12 +17,13 @@ import {
 } from "@/core/origami/sequence";
 
 /**
- * A library model, derived and checked on the server. Derivation fails only if
- * the library itself is broken (the tests derive every model), so a failure is
- * an invariant violation, not a user error.
+ * A library model or a generated design, derived and checked on the server.
+ * A library model that fails to derive is a broken library (the tests derive
+ * every one), an invariant violation; a design id that fails is not found.
  */
 export interface OrigamiPayload {
-  readonly id: OrigamiModelId;
+  /** A library id ("crane") or a design id ("neck_0.53_0_0.78_25"). */
+  readonly id: string;
   readonly name: string;
   readonly summary: string;
   readonly viewDeg: number;
@@ -46,20 +49,56 @@ interface Built {
   readonly instructions: readonly InstructionStep[];
 }
 
-const cache = new Map<OrigamiModelId, Built>();
+// Library models are few; generated designs are bounded by evicting the oldest.
+const cache = new Map<string, Built>();
+const CACHE_LIMIT = 128;
 
-const build = (id: OrigamiModelId): Built => {
+const FAMILY_NAMES = {
+  neck: "Long-necked figure",
+  bird: "Winged bird",
+} as const;
+
+/** The model an id names: a library entry or a design, with its display name. */
+const resolve = (
+  id: string,
+): {
+  readonly model: ModelShape;
+  readonly name: string;
+  readonly library: boolean;
+} | null => {
+  if (isOrigamiModelId(id)) {
+    const model = ORIGAMI_MODELS.find((m) => m.id === id);
+    const entry = ORIGAMI_CATALOG.find((e) => e.id === id);
+    if (!model || !entry)
+      throw new Error(`Origami model ${id} is missing from the library.`);
+    return { model, name: entry.name, library: true };
+  }
+  const design = parseDesignId(id);
+  return design
+    ? {
+        model: designShape(
+          design,
+          "A design shaped for this subject from one of the model families, folded from one square and checked at every step.",
+        ),
+        name: FAMILY_NAMES[design.family],
+        library: false,
+      }
+    : null;
+};
+
+const build = (id: string): Built | null => {
   const cached = cache.get(id);
   if (cached) return cached;
-  const model = ORIGAMI_MODELS.find((m) => m.id === id);
-  const entry = ORIGAMI_CATALOG.find((e) => e.id === id);
-  if (!model || !entry)
-    throw new Error(`Origami model ${id} is missing from the library.`);
+  const resolved = resolve(id);
+  if (!resolved) return null;
+  const { model } = resolved;
   const derived = deriveSequence(model.sequence);
-  if (!derived.ok)
+  if (!derived.ok) {
+    if (!resolved.library) return null;
     throw new Error(
       `Origami model ${id} does not derive: ${derived.error.kind} at step ${derived.error.step}.`,
     );
+  }
   const animation = animateSequence(derived.value, model.sequence.anchor);
   const pattern = derived.value.at(-1)!.pattern;
   const hasBase = derived.value[0]!.step.kind === "creases";
@@ -74,7 +113,7 @@ const build = (id: OrigamiModelId): Built => {
   const built: Built = {
     payload: {
       id,
-      name: entry.name,
+      name: resolved.name,
       summary: model.summary,
       viewDeg: model.viewDeg,
       colorDown: model.colorDown ?? false,
@@ -101,40 +140,53 @@ const build = (id: OrigamiModelId): Built => {
     },
     instructions,
   };
+  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!);
   cache.set(id, built);
   return built;
 };
 
-export const origamiPayload = (id: OrigamiModelId): OrigamiPayload =>
-  build(id).payload;
+/** The payload for a library or design id, or null if it names nothing that folds. */
+export const origamiPayload = (id: string): OrigamiPayload | null =>
+  build(id)?.payload ?? null;
 
 export type OrigamiExportFormat = "svg" | "fold" | "instructions";
 
+/**
+ * A download for a library or design id, or null if the id names nothing.
+ * `title` (already cleaned by the route) names a generated design after its
+ * subject, such as "Giraffe", on the sheet and in the file name.
+ */
 export const origamiExport = (
-  id: OrigamiModelId,
+  id: string,
   format: OrigamiExportFormat,
   paperMm: number,
+  title: string | null,
 ): {
   readonly body: string;
   readonly contentType: string;
   readonly filename: string;
-} => {
-  const { payload, instructions } = build(id);
-  const { pattern, name } = payload;
+} | null => {
+  const built = build(id);
+  const resolved = resolve(id);
+  if (!built || !resolved) return null;
+  const { payload, instructions } = built;
+  const { pattern } = payload;
+  const name = resolved.library ? payload.name : (title ?? payload.name);
+  const file = name.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
   switch (format) {
     case "svg":
       return {
         body: creasePatternSvg(pattern, name, paperMm),
         contentType: "image/svg+xml",
-        filename: `${id}-crease-pattern.svg`,
+        filename: `${file}-crease-pattern.svg`,
       };
     case "fold": {
-      const model = ORIGAMI_MODELS.find((m) => m.id === id)!;
-      const transforms = foldedTransforms(pattern, model.sequence.anchor) ?? [];
+      const transforms =
+        foldedTransforms(pattern, resolved.model.sequence.anchor) ?? [];
       return {
         body: foldFile(pattern, name, transforms),
         contentType: "application/json",
-        filename: `${id}.fold`,
+        filename: `${file}.fold`,
       };
     }
     case "instructions":
@@ -148,7 +200,7 @@ export const origamiExport = (
           paperMm,
         ),
         contentType: "image/svg+xml",
-        filename: `${id}-instructions.svg`,
+        filename: `${file}-instructions.svg`,
       };
   }
 };

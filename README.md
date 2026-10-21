@@ -1,8 +1,18 @@
 # FoldForge
 
-Describe something made of paper or card, such as "a red fox", "a gift box 120 x 80 x 40 mm", or "fold a paper crane". FoldForge builds a checked paper model with a 3D preview you can turn and the print-scale pages to make it.
+Describe what you want to fold, such as "a yellow giraffe", "a flamingo", or "fold a paper crane". FoldForge folds it from one square in 3D, step by step, checks that every fold is real, and gives you printable diagrams and the crease pattern to fold it yourself. Many subjects also come as cut-and-glue papercraft, and cards, boxes, and stands have their own engines.
 
 ![FoldForge Describe screen](./docs/images/foldforge-describe.png)
+
+## Origami from a prompt
+
+Every origami result is a square that folds itself in 3D, one step at a time with a written instruction for each, ending in the finished model you can turn. Beside it: step-by-step diagrams, the crease pattern, and downloads (printable instructions, the crease pattern as SVG with red dash-dot mountains and blue dashed valleys, and a FOLD file for Origami Simulator). Code derives the crease pattern from the folds and checks every intermediate state: Maekawa and Kawasaki at every vertex, one consistent flat-folded place for every face, and a layer order in which no paper passes through paper. Nothing that fails is shown.
+
+- **Library models**, designed by hand with beginner-friendly steps: the crane, the swan, a dog face, a cat face, a heart, a tulip, the flapping bird, a dart paper plane, a paper cup, and the bird, square, waterbomb, fish, and frog bases.
+- **New designs** for subjects the library does not have. Models come in families, each a checked base shaped by reverse folds whose positions and angles are parameters: long-necked creatures on the kite (giraffe, dinosaur, ostrich, flamingo, llama, camel, duck, chicken, heron) and winged birds on the bird base (eagle, dove, parrot, and other birds). Common subjects are tuned by hand; with an AI key, anything else gets parameters chosen for it, labelled as the AI's choice. A design that would not fold is moved to the nearest one that does. These families show a subject by its neck, head, and body or its wings; separate legs are not modelled yet.
+- **Paper**: a colour word sets the paper ("a blue crane"), otherwise each subject has a natural colour (a pink flamingo, a white swan); "from a 20 cm square" sets the size; the back of the paper stays white.
+
+When a subject also exists as papercraft, the page offers it: "Prefer cut and glue?" builds the printed, glued version beside the origami.
 
 ## 3D papercraft
 
@@ -12,13 +22,9 @@ Animals, vehicles, buildings, trees, robots, snowmen, and people come out as low
 
 "A birthday card where a flower pops up" or "a valentine card" gives a real V-fold pop-up: one A4 page with the card, glue guides, and a layered flower (or heart) on its stem, and a 3D view that opens and closes it. Code solves the fold exactly and checks the piece folds flat inside the closed card and never touches a page or itself as it opens. "A box for a deck of playing cards" gives a sleeve printed with card suits and a tray that slides out of it.
 
-## Real origami
+Boxes, stands, and anything that opens or slides go to the cut-and-fold engine below.
 
-Ask for a library model, such as "fold a paper crane", and FoldForge answers with real origami from one uncut square: the crane, the swan, a dog face, a cat face, a heart, a tulip, the flapping bird, a dart paper plane, a paper cup, and the bird, square, waterbomb, fish, and frog bases. A colour word sets the paper colour ("a blue origami crane"); the back stays white. A prompt that asks for origami without naming one, such as "an origami tulip from a 20 cm square", lets the AI pick the closest library model and the paper size; the page labels that choice as the AI's. Each model is written as the folds a person makes; code derives the crease pattern from those folds and checks every intermediate state: Maekawa and Kawasaki at every vertex, one consistent flat-folded place for every face, and a layer order in which no paper passes through paper. The page plays the folding in 3D, step by step, next to diagrams and the crease pattern. Downloads: printable instructions (SVG), the crease pattern (SVG, red dash-dot mountain, blue dashed valley), and a FOLD file for Origami Simulator.
-
-Boxes, cards, stands, and anything that opens or slides go to the cut-and-fold engine below.
-
-## How it works
+## Cut-and-fold mechanisms: how they are made
 
 1. **Understand the prompt.** An AI model (or, with no key, a built-in keyword reader) turns your text into a structured fabrication intent: object, size, motion, and stock.
 2. **Design it.** The model proposes the parts and how they connect. Deterministic code synthesizes the actual panels, folds, tabs, and slots. If that fails, a parametric template fitted to your dimensions is used, and the result is labelled as a template.

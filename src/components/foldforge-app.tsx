@@ -45,6 +45,7 @@ import {
 } from "@/lib/origami-contract";
 import {
   PapercraftPayloadSchema,
+  type Alternative,
   PopupPayloadSchema,
   RouteResponseSchema,
   type PapercraftPayload,
@@ -171,6 +172,10 @@ export function FoldForgeApp() {
     readonly paperColor: string;
     /** Why the AI picked this model, when the prompt named none. */
     readonly aiReason: string | null;
+    /** The subject a generated design was made for. */
+    readonly title: string | null;
+    /** The same subject as cut-and-glue papercraft, built on request. */
+    readonly alternative: Alternative | null;
   } | null>(null);
   const [popup, setPopup] = useState<{
     readonly payload: PopupPayload;
@@ -288,6 +293,40 @@ export function FoldForgeApp() {
     selectedId,
   ]);
 
+  /** Builds a pop-up card or 3D papercraft figure: a route's answer or an origami result's alternative. */
+  const buildPapercraft = async (
+    choice: Alternative,
+    aiReason: string | null,
+    current: () => boolean,
+  ): Promise<void> => {
+    setPhase("programs");
+    if (choice.engine === "popup") {
+      void loadPopupPanel();
+      setStatusMessage(`Building the ${choice.card.title.toLowerCase()}…`);
+      const payload = await postJson(
+        "/api/popup",
+        { card: choice.card },
+        PopupPayloadSchema,
+      );
+      if (!current()) return;
+      setPopup({ payload, aiReason });
+      setPhase("ready");
+      setStatusMessage(`${payload.card.title}: printable card ready.`);
+      return;
+    }
+    void loadPapercraftPanel();
+    setStatusMessage(`Building the ${choice.figure.title.toLowerCase()}…`);
+    const payload = await postJson(
+      "/api/papercraft",
+      { figure: choice.figure },
+      PapercraftPayloadSchema,
+    );
+    if (!current()) return;
+    setPapercraft({ payload, aiReason });
+    setPhase("ready");
+    setStatusMessage(`${payload.title}: printable 3D papercraft ready.`);
+  };
+
   const forge = async () => {
     if (busy || forgeInFlightRef.current || prompt.trim().length === 0) {
       return;
@@ -344,39 +383,17 @@ export function FoldForgeApp() {
           paperMm: route.paperSizeMm,
           paperColor: route.paperColor,
           aiReason: route.reason,
+          title: route.title,
+          alternative: route.alternative,
         });
         setPhase("ready");
-        setStatusMessage(`${payload.name}: folding sequence ready.`);
+        setStatusMessage(
+          `${route.title ?? payload.name}: folding sequence ready.`,
+        );
         return;
       }
-      if (route.engine === "popup") {
-        void loadPopupPanel();
-        setPhase("programs");
-        setStatusMessage(`Building the ${route.card.title.toLowerCase()}…`);
-        const payload = await postJson(
-          "/api/popup",
-          { card: route.card },
-          PopupPayloadSchema,
-        );
-        if (!current()) return;
-        setPopup({ payload, aiReason: route.reason });
-        setPhase("ready");
-        setStatusMessage(`${payload.card.title}: printable card ready.`);
-        return;
-      }
-      if (route.engine === "figure") {
-        void loadPapercraftPanel();
-        setPhase("programs");
-        setStatusMessage(`Building the ${route.figure.title.toLowerCase()}…`);
-        const payload = await postJson(
-          "/api/papercraft",
-          { figure: route.figure },
-          PapercraftPayloadSchema,
-        );
-        if (!current()) return;
-        setPapercraft({ payload, aiReason: route.reason });
-        setPhase("ready");
-        setStatusMessage(`${payload.title}: printable 3D papercraft ready.`);
+      if (route.engine === "popup" || route.engine === "figure") {
+        await buildPapercraft(route, route.reason, current);
         return;
       }
 
@@ -703,6 +720,57 @@ export function FoldForgeApp() {
           </div>
         ) : null}
 
+        {origami ? (
+          <OrigamiResults
+            payload={origami.payload}
+            paperMm={origami.paperMm}
+            paperColor={origami.paperColor}
+            aiReason={origami.aiReason}
+            title={origami.title}
+          >
+            {origami.alternative && !papercraft && !popup ? (
+              <aside
+                className={styles.alternative}
+                aria-label="Cut-and-glue version"
+              >
+                <p>
+                  <strong>Prefer cut and glue?</strong> The{" "}
+                  {(origami.alternative.engine === "figure"
+                    ? origami.alternative.figure.title
+                    : origami.alternative.card.title
+                  ).toLowerCase()}{" "}
+                  also comes as 3D papercraft: printed pages, numbered glue
+                  tabs, and a 3D preview.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const choice = origami.alternative;
+                    if (!choice) return;
+                    // Still current if the prompt has not changed since the click.
+                    const asked = latestPromptRef.current;
+                    void buildPapercraft(
+                      choice,
+                      null,
+                      () => latestPromptRef.current === asked,
+                    ).catch((reason: unknown) => {
+                      setPhase("ready");
+                      setError(
+                        reason instanceof Error
+                          ? reason.message
+                          : "The papercraft version could not be built.",
+                      );
+                    });
+                  }}
+                >
+                  Make the cut-and-glue version
+                </button>
+              </aside>
+            ) : null}
+          </OrigamiResults>
+        ) : null}
+
         {popup ? (
           <PopupResults payload={popup.payload} aiReason={popup.aiReason} />
         ) : null}
@@ -711,15 +779,6 @@ export function FoldForgeApp() {
           <PapercraftResults
             payload={papercraft.payload}
             aiReason={papercraft.aiReason}
-          />
-        ) : null}
-
-        {origami ? (
-          <OrigamiResults
-            payload={origami.payload}
-            paperMm={origami.paperMm}
-            paperColor={origami.paperColor}
-            aiReason={origami.aiReason}
           />
         ) : null}
 

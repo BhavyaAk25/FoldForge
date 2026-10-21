@@ -622,7 +622,7 @@ test("fails safely on malformed strict API data", async ({ page }) => {
   ).toContainText("intent response did not satisfy its strict contract");
   await expect(
     page.getByRole("heading", {
-      name: "Turn an idea into a buildable paper design.",
+      name: "Describe it. Watch it fold. Make it.",
     }),
   ).toBeVisible();
   await expect(page.getByTestId("candidate-card")).toHaveCount(0);

@@ -28,7 +28,7 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
     photo: "playing-card-box.jpg",
   },
   { text: "a paper rat", expect: "figure" },
-  { text: "a cat", expect: "figure" },
+  { text: "a cat", expect: "origami" },
   { text: "a rabbit", expect: "figure" },
   { text: "a fox", expect: "figure" },
   { text: "a penguin", expect: "figure" },
@@ -49,4 +49,7 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "an origami cat", expect: "origami" },
   { text: "fold a heart", expect: "origami" },
   { text: "an origami flower", expect: "origami" },
+  { text: "a yellow giraffe", expect: "origami" },
+  { text: "a flamingo", expect: "origami" },
+  { text: "an eagle", expect: "origami" },
 ];
