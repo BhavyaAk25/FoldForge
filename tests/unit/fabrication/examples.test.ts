@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { foldOnlyStand } from "../../fixtures/fold-only";
 
 import { canonicalSerialize } from "@/core/canonical";
 import {
@@ -26,10 +27,9 @@ const compileShowcase = (showcase: OfflineFabricationShowcase) => {
 };
 
 describe("offline fabrication showcases", () => {
-  it("labels all three examples as offline-only instead of live prompt presets", () => {
+  it("labels both examples as offline-only instead of live prompt presets", () => {
     const showcases = createOfflineFabricationShowcases();
     expect(showcases.map((showcase) => showcase.showcaseId)).toEqual([
-      "faceted-duck-gift-box",
       "modular-cable-organizer",
       "pull-tab-pop-up-flower",
     ]);
@@ -43,7 +43,6 @@ describe("offline fabrication showcases", () => {
       ),
     ).toBe(true);
     expect(showcases.map((showcase) => showcase.prompt)).toEqual([
-      expect.stringContaining("faceted duck gift box"),
       expect.stringContaining("modular cable organizer"),
       expect.stringContaining("vertical tab"),
     ]);
@@ -57,7 +56,7 @@ describe("offline fabrication showcases", () => {
       new Set(
         first.map((showcase) => fabricationIrHash(compileShowcase(showcase))),
       ).size,
-    ).toBe(3);
+    ).toBe(2);
   });
 
   it("satisfies strict contracts, compiles, and passes every hard verifier stage", () => {
@@ -88,7 +87,7 @@ describe("offline fabrication showcases", () => {
   it("uses distinct normalized topology and mechanism structures", () => {
     const showcases = createOfflineFabricationShowcases();
     expect(new Set(showcases.map((item) => item.program.topologyId)).size).toBe(
-      3,
+      2,
     );
     const signatures = showcases.map((showcase) => {
       const blueprint = showcase.program.blueprint;
@@ -100,22 +99,18 @@ describe("offline fabrication showcases", () => {
         connectorKinds: blueprint.connectors.map((connector) => connector.kind),
       });
     });
-    expect(new Set(signatures).size).toBe(3);
+    expect(new Set(signatures).size).toBe(2);
     expect(showcases[0]?.program.blueprint).toMatchObject({
-      joints: [{ kind: "fold" }, { kind: "fold" }],
-      connectors: [],
-    });
-    expect(showcases[1]?.program.blueprint).toMatchObject({
       joints: [],
       connectors: [{ kind: "tab" }, { kind: "slot" }],
     });
-    expect(showcases[2]?.program.blueprint).toMatchObject({
+    expect(showcases[1]?.program.blueprint).toMatchObject({
       joints: [{ kind: "prismatic" }],
       connectors: [{ kind: "tab" }, { kind: "slot" }],
       driver: { control: "pull_tab" },
     });
     expect(
-      showcases[2]?.program.blueprint.panels.find(
+      showcases[1]?.program.blueprint.panels.find(
         (panel) => panel.panelId === "panel-flower-crown",
       )?.contour.vertices,
     ).toHaveLength(32);
@@ -149,37 +144,42 @@ describe("offline fabrication showcases", () => {
     }
   });
 
-  it("offers FOLD for the fold-only duck and explains the moving flower omission", () => {
-    const [duck, , flower] = createOfflineFabricationShowcases();
-    if (!duck || !flower) throw new Error("Showcase fixtures are incomplete.");
-    const duckIr = compileShowcase(duck);
+  it("offers FOLD for a fold-only design and explains the moving flower omission", () => {
+    const [, flower] = createOfflineFabricationShowcases();
+    if (!flower) throw new Error("Showcase fixtures are incomplete.");
+    const stand = foldOnlyStand();
+    const compiledStand = compileFabricationProgram(
+      stand.intent,
+      stand.program,
+    );
+    if (!compiledStand.ok) throw new Error(JSON.stringify(compiledStand.error));
+    const standIr = compiledStand.value;
     const flowerIr = compileShowcase(flower);
-    const duckCandidateId = "candidate-faceted-duck-gift-box";
+    const standCandidateId = "candidate-phone-stand";
     const flowerCandidateId = "candidate-pull-tab-pop-up-flower";
-    const duckReport = verifyFabricationIr(duckIr, duckCandidateId);
+    const standReport = verifyFabricationIr(standIr, standCandidateId);
     const flowerReport = verifyFabricationIr(flowerIr, flowerCandidateId);
 
     expect(
       inspectFabricationFoldCompatibility({
-        ir: duckIr,
-        sourceCandidateId: duckCandidateId,
-        sourceIrHash: duckReport.irHash,
+        ir: standIr,
+        sourceCandidateId: standCandidateId,
+        sourceIrHash: standReport.irHash,
       }),
     ).toMatchObject({ status: "available" });
-    const duckFold = exportFabricationFold({
-      ir: duckIr,
-      sourceCandidateId: duckCandidateId,
+    const standFold = exportFabricationFold({
+      ir: standIr,
+      sourceCandidateId: standCandidateId,
       selectionStatus: "selected",
-      verification: duckReport,
+      verification: standReport,
     });
-    expect(duckFold).toMatchObject({ status: "generated" });
-    if (duckFold.status !== "generated") {
-      throw new Error("The fold-only duck should produce a FOLD artifact.");
+    expect(standFold).toMatchObject({ status: "generated" });
+    if (standFold.status !== "generated") {
+      throw new Error("A fold-only design should produce a FOLD artifact.");
     }
-    const duckFoldDocument: unknown = JSON.parse(
-      new TextDecoder().decode(duckFold.artifact.bytes),
-    );
-    expect(duckFoldDocument).not.toHaveProperty("edges_foldAngle");
+    expect(
+      JSON.parse(new TextDecoder().decode(standFold.artifact.bytes)),
+    ).toHaveProperty("file_spec");
 
     const flowerCompatibility = inspectFabricationFoldCompatibility({
       ir: flowerIr,
