@@ -1,4 +1,5 @@
 import {
+  animalBody,
   fishOnKite,
   fourLegs,
   neckCreature,
@@ -24,7 +25,8 @@ export type Design =
   | ({ readonly family: "neck" } & NeckDesign)
   | ({ readonly family: "bird" } & BirdDesign)
   | ({ readonly family: "fish" } & FishDesign)
-  | ({ readonly family: "legs" } & FourLegsDesign);
+  | ({ readonly family: "legs" } & FourLegsDesign)
+  | ({ readonly family: "standing" } & NeckDesign);
 
 export type Family = Design["family"];
 
@@ -61,12 +63,20 @@ const FIELDS: {
     ["frontDeg", 160, 170],
     ["hindDeg", 200, 250],
   ],
+  // A standing animal's second sheet is a neck design.
+  standing: [
+    ["neckAt", 0.45, 0.55],
+    ["leanDeg", -20, 14],
+    ["headAt", 0.65, 0.9],
+    ["headDeg", -60, 30],
+  ],
 };
 
 /** A family's values in id order. */
 const valuesOf = (d: Design): number[] => {
   switch (d.family) {
     case "neck":
+    case "standing":
       return [d.neckAt, d.leanDeg, d.headAt, d.headDeg];
     case "bird":
       return [d.neckDeg, d.tailDeg, d.headAt, d.headTurnDeg, d.wingDeg];
@@ -86,6 +96,7 @@ const designOf = (family: Family, raw: readonly number[]): Design => {
   const [a = 0, b = 0, c = 0, d = 0, e = 0] = v;
   switch (family) {
     case "neck":
+    case "standing":
       return { family, neckAt: a, leanDeg: b, headAt: c, headDeg: d };
     case "bird":
       return {
@@ -128,21 +139,47 @@ export const parseDesignId = (id: string): Design | null => {
   return designId(design) === id ? design : null;
 };
 
-export const designShape = (d: Design, summary: string): ModelShape => {
+/** One square of a design: a whole model, or one part of a two-sheet one. */
+export interface Sheet {
+  readonly label: string;
+  readonly model: ModelShape;
+  /** Its square's side as a fraction of the first sheet's. */
+  readonly scale: number;
+}
+
+/**
+ * The neck sheet's side against the body's: the classic two-piece
+ * proportion, where the neck's kite tucks into the front of the body.
+ */
+export const NECK_SHEET_SCALE = 0.6;
+
+export const designSheets = (d: Design, summary: string): Sheet[] => {
   switch (d.family) {
     case "neck":
-      return neckCreature(d, summary);
+      return [{ label: "", model: neckCreature(d, summary), scale: 1 }];
     case "bird":
-      return wingedBird(d, summary);
+      return [{ label: "", model: wingedBird(d, summary), scale: 1 }];
     case "fish":
-      return fishOnKite(d, summary);
+      return [{ label: "", model: fishOnKite(d, summary), scale: 1 }];
     case "legs":
-      return fourLegs(d, summary);
+      return [{ label: "", model: fourLegs(d, summary), scale: 1 }];
+    case "standing":
+      return [
+        { label: "Body and legs", model: animalBody(summary), scale: 1 },
+        {
+          label: "Neck and head",
+          model: neckCreature(
+            d,
+            "The neck and head: its wide end tucks into the front of the body.",
+          ),
+          scale: NECK_SHEET_SCALE,
+        },
+      ];
   }
 };
 
 const folds = (d: Design): boolean =>
-  deriveSequence(designShape(d, "").sequence).ok;
+  designSheets(d, "").every((s) => deriveSequence(s.model.sequence).ok);
 
 /**
  * The nearest design that folds: the requested one, else neighbours a step

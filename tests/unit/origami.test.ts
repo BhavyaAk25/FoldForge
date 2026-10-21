@@ -395,6 +395,10 @@ describe("origami routes", () => {
     ["crane", 200],
     ["neck_0.55_10_0.86_-15", 200],
     ["neck_0.9_0_0.78_25", 404],
+    // A standing animal is two squares; only "~2" names the second.
+    ["standing_0.55_10_0.8_-30~2", 200],
+    ["standing_0.55_10_0.8_-30~3", 404],
+    ["neck_0.55_10_0.86_-15~2", 404],
   ] as const)("serves %s with status %i", async (id, status) => {
     const response = await modelGet(
       new Request(`http://localhost/api/origami/${id}`),
@@ -412,6 +416,27 @@ describe("origami routes", () => {
     const payload = OrigamiPayloadSchema.parse(await response.json());
     expect(payload.steps.length).toBe(payload.verification.stepsChecked);
     expect(payload.steps.every((step) => step.added.length > 0)).toBe(true);
+  });
+
+  it("serves a two-square animal: the body names the neck sheet tucked in front", async () => {
+    const id = "standing_0.55_10_0.8_-30";
+    const body = OrigamiPayloadSchema.parse(
+      await (
+        await modelGet(new Request("http://localhost"), params({ id }))
+      ).json(),
+    );
+    expect(body.assembly).toMatchObject({ secondId: `${id}~2`, scale: 0.6 });
+    const neck = OrigamiPayloadSchema.parse(
+      await (
+        await modelGet(
+          new Request("http://localhost"),
+          params({ id: body.assembly!.secondId }),
+        )
+      ).json(),
+    );
+    expect(neck.assembly).toBeNull();
+    // The neck's kite starts ahead of the body's front (its left edge).
+    expect(body.assembly!.dx).toBeLessThan(0.3);
   });
 
   it.each([

@@ -278,8 +278,23 @@ describe("figures", () => {
     ],
     ["a lily", { engine: "origami", modelId: "lily" }],
     ["a turtle", { engine: "origami", modelId: "legs_170_205" }],
-    // Standing four-legged animals have no fold yet: a standing figure.
-    ["a deer", { engine: "figure", preset: "Deer" }],
+    // Standing four-legged animals fold from two squares.
+    [
+      "a deer",
+      {
+        engine: "origami",
+        modelId: "standing_0.55_5_0.85_-10",
+        preset: "Deer",
+      },
+    ],
+    [
+      "a horse",
+      {
+        engine: "origami",
+        modelId: "standing_0.55_10_0.8_-30",
+        preset: "Horse",
+      },
+    ],
     ["an elephant", { engine: "figure", preset: "Elephant" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
   ] as const)("routes %j without AI", async (prompt, expected) => {
@@ -325,6 +340,7 @@ describe("figures", () => {
       birdDesign: null,
       fishDesign: null,
       legsDesign: null,
+      standingDesign: null,
       title: null,
       reason: "A giraffe is closest to the horse.",
     };

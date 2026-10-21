@@ -524,3 +524,49 @@ export const fourLegs = (d: FourLegsDesign, summary: string): ModelShape => ({
     ],
   },
 });
+
+/**
+ * A standing animal's body: every edge folds in to the centre with each
+ * corner squashed out as a point (the double boat, or pig, base), and the
+ * whole folds in half so the four points hang down as two pairs of legs.
+ * Written for the corner (0, 0) and mirrored to the others; the midline
+ * creases lie on both mirrors, so they are listed once.
+ */
+const BODY_CORNER: readonly CreaseSegment[] = [
+  crease(p(0, 0), p(0.125, 0.125), "V"),
+  crease(p(0.125, 0.125), p(0.25, 0.25), "M"),
+  crease(p(0.25, 0), p(0.125, 0.125), "M"),
+  crease(p(0.125, 0.125), p(0, 0.25), "M"),
+  crease(p(0.25, 0.25), p(0.5, 0), "M"),
+  crease(p(0.25, 0.25), p(0.25, 0.5), "M"),
+  crease(p(0.25, 0.25), p(0.5, 0.25), "V"),
+];
+const mirrored = (s: CreaseSegment, mx: boolean, my: boolean) => {
+  const m = ({ x, y }: Point2) => p(mx ? 1 - x : x, my ? 1 - y : y);
+  return crease(m(s.from), m(s.to), s.assignment as "M" | "V");
+};
+export const ANIMAL_BODY: readonly CreaseSegment[] = [
+  ...[false, true].flatMap((mx) =>
+    [false, true].flatMap((my) => BODY_CORNER.map((s) => mirrored(s, mx, my))),
+  ),
+  ...[false, true].flatMap((mx) => [
+    mirrored(crease(p(0, 0.5), p(0.25, 0.5), "V"), mx, false),
+    mirrored(crease(p(0.25, 0.5), p(0.5, 0.5), "M"), mx, false),
+  ]),
+];
+
+export const animalBody = (summary: string): ModelShape => ({
+  summary,
+  viewDeg: 0,
+  sequence: {
+    anchor: p(0.5, 0.45),
+    steps: [
+      {
+        kind: "creases",
+        instruction:
+          "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down as legs.",
+        segments: ANIMAL_BODY,
+      },
+    ],
+  },
+});

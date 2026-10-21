@@ -24,6 +24,15 @@ const neck = (
 ): { readonly design: Design } => ({
   design: { family: "neck", neckAt, leanDeg, headAt, headDeg },
 });
+/** A standing animal from two squares: the body, and a neck design tucked in. */
+const standing = (
+  neckAt: number,
+  leanDeg: number,
+  headAt: number,
+  headDeg: number,
+): { readonly design: Design } => ({
+  design: { family: "standing", neckAt, leanDeg, headAt, headDeg },
+});
 const bird = (
   neckDeg: number,
   tailDeg: number,
@@ -79,6 +88,48 @@ export const SUBJECTS: readonly Subject[] = [
   },
   // Long necks: the neck creature, the neck folded far in and leaning or
   // looking the way the animal does.
+  {
+    words: ["horse", "pony", "stallion", "mare", "foal", "unicorn"],
+    title: "Horse",
+    color: "#8a5a3b",
+    answer: standing(0.55, 10, 0.8, -30),
+  },
+  {
+    words: ["donkey", "mule"],
+    title: "Donkey",
+    color: "#9a948c",
+    answer: standing(0.55, 10, 0.8, -30),
+  },
+  {
+    words: ["zebra"],
+    title: "Zebra",
+    color: "#f4f1ea",
+    answer: standing(0.55, 10, 0.8, -30),
+  },
+  {
+    words: ["deer", "fawn", "reindeer", "elk", "moose", "antelope", "gazelle"],
+    title: "Deer",
+    color: "#a8713f",
+    answer: standing(0.55, 5, 0.85, -10),
+  },
+  {
+    words: ["goat"],
+    title: "Goat",
+    color: "#e9e2d5",
+    answer: standing(0.5, 8, 0.8, -20),
+  },
+  {
+    words: ["cow", "bull", "ox", "calf"],
+    title: "Cow",
+    color: "#f4f2ee",
+    answer: standing(0.45, 14, 0.7, -40),
+  },
+  {
+    words: ["sheep", "lamb"],
+    title: "Sheep",
+    color: "#f6f3ec",
+    answer: standing(0.48, 12, 0.72, -50),
+  },
   {
     words: ["giraffe"],
     title: "Giraffe",

@@ -168,6 +168,8 @@ export function FoldForgeApp() {
   const [resultsFocusRequest, setResultsFocusRequest] = useState(0);
   const [origami, setOrigami] = useState<{
     readonly payload: OrigamiPayloadResponse;
+    /** A two-sheet model's second sheet. */
+    readonly second: OrigamiPayloadResponse | null;
     readonly paperMm: number;
     readonly paperColor: string;
     /** Why the AI picked this model, when the prompt named none. */
@@ -385,9 +387,16 @@ export function FoldForgeApp() {
           `/api/origami/${route.modelId}`,
           OrigamiPayloadSchema,
         );
+        const second = payload.assembly
+          ? await getJson(
+              `/api/origami/${payload.assembly.secondId}`,
+              OrigamiPayloadSchema,
+            )
+          : null;
         if (!current()) return;
         setOrigami({
           payload,
+          second,
           paperMm: route.paperSizeMm,
           paperColor: route.paperColor,
           aiReason: route.reason,
@@ -732,6 +741,7 @@ export function FoldForgeApp() {
         {origami ? (
           <OrigamiResults
             payload={origami.payload}
+            second={origami.second}
             paperMm={origami.paperMm}
             paperColor={origami.paperColor}
             aiReason={origami.aiReason}
