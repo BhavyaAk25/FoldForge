@@ -174,6 +174,8 @@ export function FoldForgeApp() {
     readonly aiReason: string | null;
     /** The subject a generated design was made for. */
     readonly title: string | null;
+    /** Why this is not the design asked for (the AI was unavailable). */
+    readonly note: string | null;
     /** The same subject as cut-and-glue papercraft, built on request. */
     readonly alternative: Alternative | null;
   } | null>(null);
@@ -390,6 +392,7 @@ export function FoldForgeApp() {
           paperColor: route.paperColor,
           aiReason: route.reason,
           title: route.title,
+          note: route.note,
           alternative: route.alternative,
         });
         setPhase("ready");
@@ -733,6 +736,7 @@ export function FoldForgeApp() {
             paperColor={origami.paperColor}
             aiReason={origami.aiReason}
             title={origami.title}
+            note={origami.note}
           >
             {origami.alternative &&
             !papercraft &&

@@ -260,6 +260,14 @@ describe("figures", () => {
       { engine: "figure", preset: "Playing-card box" },
     ],
     ["a duck bookmark", { engine: "mechanism" }],
+    // With no AI, an origami request still folds: a general bird or the
+    // crane, with a note saying why.
+    [
+      "an origami seagull",
+      { engine: "origami", modelId: "bird_65_65_0.8_-105_120", noted: true },
+    ],
+    ["an origami teapot", { engine: "origami", modelId: "crane", noted: true }],
+    ["a teapot", { engine: "mechanism" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
   ] as const)("routes %j without AI", async (prompt, expected) => {
     vi.stubEnv("AI_API_KEY", "");
@@ -273,6 +281,7 @@ describe("figures", () => {
       if ("paper" in expected) expect(route.paperColor).toBe(expected.paper);
       if ("paperMm" in expected)
         expect(route.paperSizeMm).toBe(expected.paperMm);
+      expect(route.note !== null).toBe("noted" in expected);
     }
     // The figure is the answer, or the alternative beside the origami.
     const figure =
