@@ -278,6 +278,9 @@ describe("figures", () => {
     ],
     ["a lily", { engine: "origami", modelId: "lily" }],
     ["a turtle", { engine: "origami", modelId: "legs_170_205" }],
+    // Standing four-legged animals have no fold yet: a standing figure.
+    ["a deer", { engine: "figure", preset: "Deer" }],
+    ["an elephant", { engine: "figure", preset: "Elephant" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
   ] as const)("routes %j without AI", async (prompt, expected) => {
     vi.stubEnv("AI_API_KEY", "");

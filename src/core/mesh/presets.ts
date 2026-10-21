@@ -193,6 +193,22 @@ export const FIGURE_PRESETS: readonly FigurePreset[] = [
     params: quad("pointy", "long", "bushy", "long"),
   },
   {
+    id: "deer",
+    name: "Deer",
+    words: ["deer", "fawn", "reindeer", "moose", "elk", "antelope", "goat"],
+    sizeMm: 170,
+    colors: col("#a8713f", "#f1e2c8", "#2a2420"),
+    params: quad("pointy", "short", "short", "long"),
+  },
+  {
+    id: "elephant",
+    name: "Elephant",
+    words: ["elephant", "mammoth"],
+    sizeMm: 180,
+    colors: col("#9a9ea3", "#c9ccd0", "#2a2420"),
+    params: quad("floppy", "long", "thin", "long"),
+  },
+  {
     id: "lion",
     name: "Lion",
     words: ["lion", "tiger", "leopard"],
