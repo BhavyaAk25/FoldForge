@@ -107,33 +107,6 @@ export const PapercraftPayloadSchema = z.object({
 
 export type PapercraftPayload = z.infer<typeof PapercraftPayloadSchema>;
 
-/** What the router decided for a prompt. */
-export const RouteResponseSchema = z.discriminatedUnion("engine", [
-  z.object({
-    engine: z.literal("origami"),
-    modelId: z.string(),
-    paperSizeMm: z.number(),
-    /** The paper's coloured side, #rrggbb. */
-    paperColor: Hex,
-    reason: z.string().nullable(),
-  }),
-  z.object({
-    engine: z.literal("figure"),
-    figure: FigureSpecSchema,
-    reason: z.string().nullable(),
-  }),
-  z.object({
-    engine: z.literal("popup"),
-    card: z.lazy(() => PopupChoiceSchema),
-    reason: z.string().nullable(),
-  }),
-  z.object({ engine: z.literal("mechanism") }),
-]);
-
-export type RouteResponse = z.infer<typeof RouteResponseSchema>;
-
-const Point2 = z.tuple([z.number(), z.number()]);
-
 export const CARD_DESIGNS = ["flower", "heart"] as const;
 
 /** What the router picks for a pop-up card: a design, colours, and a title. */
@@ -146,6 +119,45 @@ export const PopupChoiceSchema = z
   .strict();
 
 export type PopupChoice = z.infer<typeof PopupChoiceSchema>;
+
+/** A cut-and-glue version offered beside an origami result. */
+export const AlternativeSchema = z.discriminatedUnion("engine", [
+  z.object({ engine: z.literal("figure"), figure: FigureSpecSchema }),
+  z.object({ engine: z.literal("popup"), card: PopupChoiceSchema }),
+]);
+export type Alternative = z.infer<typeof AlternativeSchema>;
+
+/** What the router decided for a prompt. */
+export const RouteResponseSchema = z.discriminatedUnion("engine", [
+  z.object({
+    engine: z.literal("origami"),
+    /** A library id, or a generated design id. */
+    modelId: z.string(),
+    /** The subject a generated design was made for ("Giraffe"); null for library models. */
+    title: z.string().nullable(),
+    paperSizeMm: z.number(),
+    /** The paper's coloured side, #rrggbb. */
+    paperColor: Hex,
+    reason: z.string().nullable(),
+    /** The same subject as cut-and-glue papercraft, when there is one. */
+    alternative: AlternativeSchema.nullable(),
+  }),
+  z.object({
+    engine: z.literal("figure"),
+    figure: FigureSpecSchema,
+    reason: z.string().nullable(),
+  }),
+  z.object({
+    engine: z.literal("popup"),
+    card: PopupChoiceSchema,
+    reason: z.string().nullable(),
+  }),
+  z.object({ engine: z.literal("mechanism") }),
+]);
+
+export type RouteResponse = z.infer<typeof RouteResponseSchema>;
+
+const Point2 = z.tuple([z.number(), z.number()]);
 
 export const PopupPayloadSchema = z.object({
   card: z.object({

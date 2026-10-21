@@ -1,56 +1,34 @@
 import type { OrigamiModelId } from "./catalog";
 import type { CreaseSegment, Point2 } from "./crease-pattern";
-import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
+import {
+  across,
+  BIRD_ANCHOR,
+  BIRD_BASE,
+  BIRD_BASE_STEP,
+  CENTRE,
+  crease,
+  neckCreature,
+  p,
+  ray,
+  wings,
+  wingedBird,
+  type ModelShape,
+} from "./families";
+import type { FoldLine, FoldStep } from "./sequence";
 
 /**
  * The origami library. Bases are crease patterns that collapse all at once;
  * models are bases (or a plain sheet) followed by the folds a person makes.
  * Coordinates are on the unit sheet; fold lines are in the folded frame,
- * where the face holding `anchor` never moves.
- *
- * Classic 22.5-degree geometry: a corner bisected toward a midline meets it
- * at K = tan(22.5) / 2 from the edge.
+ * where the face holding `anchor` never moves. The crane and the swan are
+ * designs in the families of `families.ts`, which generated models share.
  */
 
-export interface OrigamiModel {
+export interface OrigamiModel extends ModelShape {
   readonly id: OrigamiModelId;
-  readonly summary: string;
-  readonly sequence: FoldSequence;
-  /** Rotation that shows the finished model upright, in degrees. */
-  readonly viewDeg: number;
-  /** Folded starting coloured side down, so the colour ends up outside. */
-  readonly colorDown?: true;
 }
 
-const K = Math.tan(Math.PI / 8) / 2;
 const R = Math.SQRT1_2;
-const p = (x: number, y: number): Point2 => ({ x, y });
-const crease = (
-  from: Point2,
-  to: Point2,
-  assignment: "M" | "V",
-): CreaseSegment => ({ from, to, assignment });
-/** A fold line from a point, at an angle in degrees, of a given length. */
-const ray = (from: Point2, deg: number, length: number): FoldLine => {
-  const r = (deg * Math.PI) / 180;
-  return {
-    from,
-    to: p(from.x + length * Math.cos(r), from.y + length * Math.sin(r)),
-  };
-};
-/** A fold line centred on a point. */
-const across = (centre: Point2, deg: number, half: number): FoldLine => {
-  const r = (deg * Math.PI) / 180;
-  const d = p(half * Math.cos(r), half * Math.sin(r));
-  return {
-    from: p(centre.x - d.x, centre.y - d.y),
-    to: p(centre.x + d.x, centre.y + d.y),
-  };
-};
-
-const CENTRE = p(0.5, 0.5);
-const [D1, D2, D3, D4] = [p(0.5, K), p(1 - K, 0.5), p(0.5, 1 - K), p(K, 0.5)];
-
 const SQUARE_BASE: readonly CreaseSegment[] = [
   crease(p(0.5, 0), p(0.5, 1), "M"),
   crease(p(0, 0.5), p(1, 0.5), "M"),
@@ -61,27 +39,6 @@ const WATERBOMB_BASE: readonly CreaseSegment[] = [
   crease(p(0, 0), p(1, 1), "V"),
   crease(p(1, 0), p(0, 1), "V"),
   crease(p(0, 0.5), p(1, 0.5), "M"),
-];
-
-/** Square base, kite folds front and back, then petal folds; corners (0,0) and (1,1) become the petals. */
-const BIRD_BASE: readonly CreaseSegment[] = [
-  ...[
-    [p(0, 0), D1],
-    [p(0, 0), D4],
-    [p(1, 0), D1],
-    [p(1, 0), D2],
-    [p(1, 1), D2],
-    [p(1, 1), D3],
-    [p(0, 1), D3],
-    [p(0, 1), D4],
-    [CENTRE, D1],
-    [CENTRE, D2],
-    [CENTRE, D3],
-    [CENTRE, D4],
-  ].map(([a, b]) => crease(a!, b!, "M")),
-  crease(D1, D4, "V"),
-  crease(D2, D3, "V"),
-  crease(p(1, 0), p(0, 1), "V"),
 ];
 
 /** Quarter turn about the sheet centre. */
@@ -143,119 +100,19 @@ const base = (
   viewDeg: 0,
 });
 
-/**
- * Bird-base frame (anchor in the face (0,0)-D1-(1,0)): the petal tips sit at
- * (0, 0), the leg tips at (1, 0), and the sheet centre at (1 - sqrt(2)/2, 0),
- * all on the axis y = 0. Front layers come from the half x + y < 1.
- */
-const BIRD_ANCHOR = p(0.5, 0.05);
-const front = (f: FaceSample): boolean => f.paper.x + f.paper.y < 1;
-const back = (f: FaceSample): boolean => !front(f);
-
-const wings = (openDeg: number) => [
-  {
-    kind: "valley" as const,
-    instruction: "Fold the front wing down along the top of the body.",
-    line: { from: p(0.28, -0.16), to: p(0.28, 0.16) },
-    toward: p(0.1, 0),
-    layers: (f: FaceSample) =>
-      front(f) && Math.abs(f.folded.y) < 0.16 && f.folded.x < 0.5,
-    openDeg,
-  },
-  {
-    kind: "mountain" as const,
-    instruction: "Fold the back wing down to match.",
-    line: { from: p(0.28, -0.16), to: p(0.28, 0.16) },
-    toward: p(0.1, 0),
-    layers: (f: FaceSample) =>
-      back(f) && Math.abs(f.folded.y) < 0.16 && f.folded.x < 0.5,
-    openDeg,
-  },
-];
-
-const NARROW = 180 - 11.25;
-
+/** The traditional crane (orizuru): the winged bird's original design. */
 const CRANE: OrigamiModel = {
   id: "crane",
-  summary: "The traditional crane (orizuru), folded from a bird base.",
-  viewDeg: -90,
-  sequence: {
-    anchor: BIRD_ANCHOR,
-    steps: [
-      {
-        kind: "creases",
-        instruction:
-          "Fold a bird base: crease both diagonals and midlines, collapse into a square base, kite-fold the lower edges to the centre, then petal-fold the front and back.",
-        segments: BIRD_BASE,
-      },
-      {
-        kind: "valley",
-        instruction:
-          "Fold the lower right edge of the front layers to the centre line.",
-        line: ray(p(1, 0), NARROW, 0.75),
-        toward: p(0.5, 0.15),
-        layers: front,
-      },
-      {
-        kind: "valley",
-        instruction:
-          "Fold the lower left edge of the front layers to the centre line.",
-        line: ray(p(1, 0), -NARROW, 0.75),
-        toward: p(0.5, -0.15),
-        layers: front,
-      },
-      {
-        kind: "mountain",
-        instruction:
-          "Turn over and repeat on the right: lower edge to the centre line.",
-        line: ray(p(1, 0), NARROW, 0.75),
-        toward: p(0.5, 0.15),
-        layers: back,
-      },
-      {
-        kind: "mountain",
-        instruction: "Repeat on the left so both lower points are thin.",
-        line: ray(p(1, 0), -NARROW, 0.75),
-        toward: p(0.5, -0.15),
-        layers: back,
-      },
-      {
-        kind: "inside-reverse",
-        instruction:
-          "Inside-reverse-fold one thin point up between the wings to make the neck.",
-        line: ray(
-          p(0.5 - 0.02 / Math.tan((67.5 * Math.PI) / 180), -0.02),
-          67.5,
-          0.4,
-        ),
-        toward: p(0.9, 0.02),
-        layers: (f) => f.folded.y > 1e-6 && f.folded.x > 0.3,
-      },
-      {
-        kind: "inside-reverse",
-        instruction: "Inside-reverse-fold the other point up to make the tail.",
-        line: ray(
-          p(0.5 - 0.02 / Math.tan((67.5 * Math.PI) / 180), 0.02),
-          -67.5,
-          0.4,
-        ),
-        toward: p(0.9, -0.02),
-        layers: (f) => f.folded.y < -1e-6 && f.folded.x > 0.3,
-      },
-      {
-        // No layer order lets an inside reverse fold pass here (the solver
-        // proves it), so the head is an outside reverse fold, a common way to
-        // fold the crane's head.
-        kind: "outside-reverse",
-        instruction:
-          "Outside-reverse-fold the tip of the neck down to form the head.",
-        line: across(p(0.217, 0.283), 82.5, 0.06),
-        toward: p(0.15, 0.35),
-        layers: (f) => f.folded.y > 0.1,
-      },
-      ...wings(90),
-    ],
-  },
+  ...wingedBird(
+    {
+      neckDeg: 67.5,
+      tailDeg: 67.5,
+      headAt: 0.8,
+      headTurnDeg: -105,
+      wingDeg: 90,
+    },
+    "The traditional crane (orizuru), folded from a bird base.",
+  ),
 };
 
 const FLAPPING_BIRD: OrigamiModel = {
@@ -265,7 +122,7 @@ const FLAPPING_BIRD: OrigamiModel = {
   sequence: {
     anchor: BIRD_ANCHOR,
     steps: [
-      { ...CRANE.sequence.steps[0]! },
+      BIRD_BASE_STEP,
       {
         kind: "inside-reverse",
         instruction:
@@ -619,83 +476,13 @@ const TULIP: OrigamiModel = {
   },
 };
 
-/**
- * The kite folds keep each point's distance from the tip corner, so the
- * swan's neck is the paper nearer that corner than the neck's base fold; this
- * leaves out the kite's corner flaps, which lie in the body.
- */
-const NECK = (f: FaceSample) => Math.hypot(f.paper.x, f.paper.y) < 0.76;
-
-/**
- * Swan: a kite, narrowed behind into a long point, the point folded up as
- * the neck, the body folded in half, the neck inside-reverse-folded upright
- * between the body's halves, and its tip outside-reverse-folded forward.
- */
+/** The classic swan: the neck creature's original design. */
 const SWAN: OrigamiModel = {
   id: "swan",
-  summary: "The classic swan from a kite base: long neck, folded head.",
-  viewDeg: -45,
-  colorDown: true,
-  sequence: {
-    anchor: p(0.8, 0.86),
-    steps: [
-      {
-        kind: "valley",
-        instruction:
-          "Start coloured side down, crease the diagonal, and fold one edge to it.",
-        line: ray(p(0, 0), 22.5, 1.6),
-        toward: p(0.9, 0.05),
-      },
-      {
-        kind: "valley",
-        instruction: "Fold the other edge to the diagonal too, making a kite.",
-        line: ray(p(0, 0), 67.5, 1.6),
-        toward: p(0.05, 0.9),
-      },
-      {
-        kind: "mountain",
-        instruction:
-          "Turn over and fold one long edge to the centre, narrowing the point.",
-        line: ray(p(0, 0), 33.75, 1.6),
-        toward: p(0.9, 0.3),
-      },
-      {
-        kind: "mountain",
-        instruction: "Fold the other long edge to the centre.",
-        line: ray(p(0, 0), 56.25, 1.6),
-        toward: p(0.3, 0.9),
-      },
-      {
-        kind: "valley",
-        instruction: "Fold the narrow point up to the top: this is the neck.",
-        line: { from: p(0.2, 0.86), to: p(0.86, 0.2) },
-        toward: p(0.1, 0.1),
-      },
-      {
-        kind: "valley",
-        instruction: "Fold the body in half along the centre.",
-        line: { from: p(-0.05, -0.05), to: p(1.1, 1.1) },
-        toward: p(0.3, 0.7),
-      },
-      {
-        kind: "inside-reverse",
-        instruction:
-          "Pull the neck up between the body's halves (inside reverse fold) and flatten.",
-        line: { from: p(0.56, 0.51), to: p(0.56, 0.81) },
-        toward: p(0.85, 0.85),
-        layers: NECK,
-      },
-      {
-        kind: "outside-reverse",
-        instruction:
-          "Fold the top of the neck forward around itself (outside reverse fold) for the head.",
-        // The neck now runs from (0.56, 0.56) up to its tip near (0.07, 1.05).
-        line: across(p(0.168, 0.952), 167.5, 0.15),
-        toward: p(0.05, 1.07),
-        layers: NECK,
-      },
-    ],
-  },
+  ...neckCreature(
+    { neckAt: 0.53, leanDeg: 0, headAt: 0.78, headDeg: 25 },
+    "The classic swan from a kite base: long neck, folded head.",
+  ),
 };
 
 export const ORIGAMI_MODELS: readonly OrigamiModel[] = [

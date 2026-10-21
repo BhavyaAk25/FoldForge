@@ -209,28 +209,45 @@ describe("figures", () => {
   it.each([
     ["fold a paper crane", { engine: "origami", modelId: "crane" }],
     ["a red fox", { engine: "figure", preset: "Fox", primary: "#d6403a" }],
+    // A subject with a fold gets origami first and the figure beside it.
     [
       "a yellow duck with an orange beak",
-      { engine: "figure", preset: "Duck", primary: "#f2c230" },
+      {
+        engine: "origami",
+        modelId: "neck_0.45_8_0.65_0",
+        preset: "Duck",
+        primary: "#f2c230",
+      },
     ],
-    ["a 20 cm cat", { engine: "figure", preset: "Cat", sizeMm: 200 }],
+    [
+      "a 20 cm cat",
+      { engine: "origami", modelId: "cat-face", preset: "Cat", sizeMm: 200 },
+    ],
     // A recoloured figure's tail and snout take a lighter shade, not cream.
     [
       "a black cat",
       {
-        engine: "figure",
+        engine: "origami",
+        modelId: "cat-face",
         preset: "Cat",
         primary: "#2b2b2b",
         secondary: "#5a5a5a",
       },
     ],
+    ["a giraffe", { engine: "origami", modelId: "neck_0.55_10_0.86_-15" }],
+    // A subject's natural colour, unless the prompt names one.
+    [
+      "a flamingo",
+      { engine: "origami", modelId: "neck_0.53_-10_0.8_-55", paper: "#f08aa8" },
+    ],
+    ["a faceted paper duck", { engine: "figure", preset: "Duck" }],
     ["an origami swan", { engine: "origami", modelId: "swan" }],
     ["fold a dog", { engine: "origami", modelId: "dog-face" }],
     ["an origami cat", { engine: "origami", modelId: "cat-face" }],
     ["fold a heart", { engine: "origami", modelId: "heart" }],
     ["an origami flower", { engine: "origami", modelId: "tulip" }],
     ["a pop-up heart card", { engine: "popup" }],
-    ["a swan", { engine: "figure", preset: "Swan" }],
+    ["a swan", { engine: "origami", modelId: "swan", preset: "Swan" }],
     ["a gift box 120 x 80 x 40 mm", { engine: "mechanism" }],
     ["a duck bookmark", { engine: "mechanism" }],
     ["a paper mechanism nobody listed", { engine: "mechanism" }],
@@ -243,19 +260,26 @@ describe("figures", () => {
     if (route.engine === "origami" && "modelId" in expected) {
       expect(route.modelId).toBe(expected.modelId);
       expect(route.paperColor).toMatch(/^#[0-9a-f]{6}$/u);
+      if ("paper" in expected) expect(route.paperColor).toBe(expected.paper);
     }
-    if (route.engine === "figure" && "preset" in expected) {
-      expect(route.figure.title).toBe(expected.preset);
+    // The figure is the answer, or the alternative beside the origami.
+    const figure =
+      route.engine === "figure"
+        ? route.figure
+        : route.engine === "origami" && route.alternative?.engine === "figure"
+          ? route.alternative.figure
+          : null;
+    if ("preset" in expected) {
+      expect(figure?.title).toBe(expected.preset);
       if ("primary" in expected)
-        expect(route.figure.colors.primary).toBe(expected.primary);
+        expect(figure?.colors.primary).toBe(expected.primary);
       if ("secondary" in expected)
-        expect(route.figure.colors.secondary).toBe(expected.secondary);
-      if ("sizeMm" in expected)
-        expect(route.figure.sizeMm).toBe(expected.sizeMm);
+        expect(figure?.colors.secondary).toBe(expected.secondary);
+      if ("sizeMm" in expected) expect(figure?.sizeMm).toBe(expected.sizeMm);
     }
   });
 
-  it("lets the AI name only presets and library models", () => {
+  it("lets the AI name only presets, library models, and family parameters", () => {
     const base = {
       engine: "figure",
       cardDesign: null,
@@ -263,6 +287,9 @@ describe("figures", () => {
       colors: null,
       sizeMm: null,
       paperSizeMm: null,
+      neckDesign: null,
+      birdDesign: null,
+      title: null,
       reason: "A giraffe is closest to the horse.",
     };
     expect(

@@ -1040,3 +1040,30 @@
     grid-template-columns: 52px minmax(60px, 1fr) 42px;
   }
 }
+
+/* The cut-and-glue version offered under an origami result. */
+.alternative {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 20px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.alternative p {
+  flex: 1 1 280px;
+  margin: 0;
+}
+
+.alternative button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid currentcolor;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+}

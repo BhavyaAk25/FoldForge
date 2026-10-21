@@ -229,13 +229,20 @@ export function OrigamiResults({
   paperMm,
   paperColor,
   aiReason,
+  title,
+  children,
 }: {
   readonly payload: OrigamiPayloadResponse;
+  /** Shown under the heading: the cut-and-glue offer, when there is one. */
+  readonly children?: React.ReactNode;
+  /** The subject a generated design was made for; null for library models. */
+  readonly title: string | null;
   readonly paperMm: number;
   /** The paper's coloured side; the back is white. */
   readonly paperColor: string;
   readonly aiReason: string | null;
 }) {
+  const name = title ?? payload.name;
   // White origami paper's back is the face up when a model starts colour down.
   const colors: Sides = payload.colorDown
     ? { front: PAPER_BACK, back: paperColor }
@@ -324,8 +331,12 @@ export function OrigamiResults({
       aria-labelledby="origami-title"
     >
       <header className={styles.heading}>
-        <p className={styles.kicker}>Origami from one square</p>
-        <h2 id="origami-title">{payload.name}</h2>
+        <p className={styles.kicker}>
+          {title
+            ? `New origami design · ${payload.name.toLowerCase()}`
+            : "Origami from one square"}
+        </p>
+        <h2 id="origami-title">{name}</h2>
         <p>{payload.summary}</p>
         {aiReason ? (
           <p className={styles.aiChoice}>
@@ -334,6 +345,7 @@ export function OrigamiResults({
           </p>
         ) : null}
         <p>Fold it from a {paperMm} mm square of paper.</p>
+        {children}
         <p className={styles.checks}>
           Checked at every one of {payload.verification.stepsChecked} steps:
           Maekawa and Kawasaki at all {payload.verification.interiorVertices}{" "}
@@ -357,7 +369,7 @@ export function OrigamiResults({
           onPointerUp={() => (drag.current = null)}
           onPointerCancel={() => (drag.current = null)}
           role="img"
-          aria-label={`3D folding animation of the ${payload.name.toLowerCase()}. Drag to turn it.`}
+          aria-label={`3D folding animation of the ${name.toLowerCase()}. Drag to turn it.`}
         >
           <Canvas
             camera={{ position: [0, 0, 1.45], fov: 40, near: 0.05, far: 20 }}
@@ -469,7 +481,7 @@ export function OrigamiResults({
             {DOWNLOADS.map((download) => (
               <li key={download.format}>
                 <a
-                  href={`/api/origami/${payload.id}/${download.format}?paper=${paperMm}`}
+                  href={`/api/origami/${payload.id}/${download.format}?paper=${paperMm}${title ? `&title=${encodeURIComponent(title)}` : ""}`}
                   download
                 >
                   {download.label}

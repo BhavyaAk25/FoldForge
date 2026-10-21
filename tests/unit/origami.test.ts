@@ -14,7 +14,13 @@ import {
   type CreaseSegment,
 } from "@/core/origami/crease-pattern";
 import { applyIsometry, checkFoldRules } from "@/core/origami/fold-rules";
+import {
+  designId,
+  foldableDesign,
+  parseDesignId,
+} from "@/core/origami/generate";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
+import { SUBJECTS } from "@/core/origami/subjects";
 import { poseAt, stepCount } from "@/core/origami/pose";
 import {
   deriveSequence,
@@ -280,8 +286,55 @@ describe("deriveSequence", () => {
   });
 });
 
+describe("generated designs", () => {
+  it.each(
+    SUBJECTS.flatMap((s) =>
+      "design" in s.answer ? [[s.title, s.answer.design] as const] : [],
+    ),
+  )("the %s design folds exactly as written", (_, design) => {
+    const folded = foldableDesign(design);
+    expect(folded && designId(folded)).toBe(designId(design));
+  });
+
+  it.each([
+    ["neck_0.53_0_0.78_25", true],
+    ["bird_67.5_67.5_0.8_-105_90", true],
+    // Out of bounds, not canonical, or not a family: no design.
+    ["neck_0.9_0_0.78_25", false],
+    ["neck_0.530_0_0.78_25", false],
+    ["neck_0.53_0_0.78", false],
+    ["fish_1_2_3_4", false],
+  ] as const)("parses %s: %s", (id, valid) => {
+    const design = parseDesignId(id);
+    expect(design ? designId(design) : null).toBe(valid ? id : null);
+  });
+
+  it("moves a design that does not fold to the nearest one that does", () => {
+    const leaning = foldableDesign({
+      family: "neck",
+      neckAt: 0.45,
+      leanDeg: 14,
+      headAt: 0.65,
+      headDeg: 30,
+    });
+    expect(leaning && designId(leaning)).toBe("neck_0.45_14_0.65_21");
+  });
+});
+
 describe("origami routes", () => {
   const params = <T>(value: T) => ({ params: Promise.resolve(value) });
+
+  it.each([
+    ["crane", 200],
+    ["neck_0.55_10_0.86_-15", 200],
+    ["neck_0.9_0_0.78_25", 404],
+  ] as const)("serves %s with status %i", async (id, status) => {
+    const response = await modelGet(
+      new Request(`http://localhost/api/origami/${id}`),
+      params({ id }),
+    );
+    expect(response.status).toBe(status);
+  });
 
   it("returns a checked model the page can parse", async () => {
     const response = await modelGet(

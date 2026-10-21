@@ -129,9 +129,8 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
     return done("popup", `${card.title}, 1 page`, faces, 0);
   }
   if (route.engine === "origami") {
-    const payload = origamiPayload(
-      route.modelId as Parameters<typeof origamiPayload>[0],
-    );
+    const payload = origamiPayload(route.modelId);
+    if (!payload) return done("none", `no origami ${route.modelId}`, []);
     const input = {
       ...payload.animation,
       vertices: payload.pattern.vertices,

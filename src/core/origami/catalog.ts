@@ -63,20 +63,6 @@ export const ORIGAMI_CATALOG = [
   },
 ] as const;
 
-/**
- * Words that pick a model only when the prompt asks for origami ("fold a
- * dog"): on their own they name a 3D papercraft figure.
- */
-const LOOSE_WORDS: Readonly<
-  Partial<Record<(typeof ORIGAMI_CATALOG)[number]["id"], readonly string[]>>
-> = {
-  swan: ["swan", "goose"],
-  "dog-face": ["dog", "puppy"],
-  "cat-face": ["cat", "kitten", "kitty"],
-  heart: ["heart", "love"],
-  tulip: ["flower", "blossom"],
-};
-
 export type OrigamiModelId = (typeof ORIGAMI_CATALOG)[number]["id"];
 
 export const isOrigamiModelId = (value: string): value is OrigamiModelId =>
@@ -122,25 +108,15 @@ export const matchOrigamiModel = (prompt: string): OrigamiModelId | null => {
   return best?.id ?? null;
 };
 
-/**
- * Whether a prompt asks for origami without naming a library model, such as
- * "an origami swan" or "Fold a dove": worth asking the AI for the closest
- * model. "Folding" alone is not enough ("a folding display" is papercraft),
- * and prompts naming a papercraft object never qualify.
- */
 /** Whether a prompt names something the mechanism engine makes (a box, a card, a stand). */
 export const namesMechanism = (prompt: string): boolean =>
   PAPERCRAFT_WORDS.some((word) => mentions(prompt, word));
 
-/** The library model a prompt that asks for origami names loosely ("an origami swan"). */
-export const matchOrigamiLoose = (prompt: string): OrigamiModelId | null => {
-  for (const [id, words] of Object.entries(LOOSE_WORDS)) {
-    if (words.some((word) => mentions(prompt, word)))
-      return id as OrigamiModelId;
-  }
-  return null;
-};
-
+/**
+ * Whether a prompt asks for origami ("an origami giraffe", "Fold a dove").
+ * "Folding" alone is not enough ("a folding display" is papercraft), and
+ * prompts naming a papercraft object never qualify.
+ */
 export const asksForOrigami = (prompt: string): boolean =>
   !PAPERCRAFT_WORDS.some((word) => mentions(prompt, word)) &&
   (mentions(prompt, "origami") || /^\s*fold\b/iu.test(prompt));

@@ -84,12 +84,13 @@ export function FoldForgeStart({
     <>
       <section className={styles.compose} aria-labelledby="studio-title">
         <div className={styles.intro}>
-          <p className={styles.eyebrow}>Cut-and-fold designer</p>
-          <h1 id="studio-title">Turn an idea into a buildable paper design.</h1>
+          <p className={styles.eyebrow}>Origami from a prompt</p>
+          <h1 id="studio-title">Describe it. Watch it fold. Make it.</h1>
           <p>
-            Describe something made from paper or thin cardboard. FoldForge
-            creates one checked design, shows how it assembles, and gives you
-            the cutting pattern.
+            Name an animal, a bird, a flower, or a heart. FoldForge folds it
+            from one square in 3D, step by step, checks that every fold is real,
+            and gives you the diagrams and crease pattern. Many subjects also
+            come as cut-and-glue papercraft, and cards and boxes too.
           </p>
           <ol className={styles.processSteps} aria-label="How FoldForge works">
             <li>
@@ -98,11 +99,11 @@ export function FoldForgeStart({
             </li>
             <li>
               <span>2</span>
-              Inspect the design
+              Watch it fold
             </li>
             <li>
               <span>3</span>
-              Download the pattern
+              Fold it yourself
             </li>
           </ol>
         </div>
@@ -119,8 +120,8 @@ export function FoldForgeStart({
           />
           <div className={styles.promptGuide}>
             <p>
-              Include the size, material, what it should hold, and anything that
-              should open, slide, or fold.
+              Name the subject, and a colour or paper size if you like: “a
+              yellow giraffe from a 20 cm square”.
             </p>
             <span>{prompt.length}/4,000</span>
           </div>
