@@ -58,4 +58,6 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "a turtle", expect: "origami" },
   { text: "a deer", expect: "origami" },
   { text: "a horse", expect: "origami" },
+  { text: "a fortune teller", expect: "origami" },
+  { text: "a samurai helmet", expect: "origami" },
 ];

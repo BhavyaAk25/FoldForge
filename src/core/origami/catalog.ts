@@ -23,6 +23,22 @@ export const ORIGAMI_CATALOG = [
     ],
   },
   { id: "cup", name: "Paper cup", keywords: ["cup"] },
+  {
+    id: "fortune-teller",
+    name: "Fortune teller",
+    keywords: ["fortune teller", "cootie catcher", "chatterbox", "salt cellar"],
+  },
+  {
+    id: "samurai-helmet",
+    name: "Samurai helmet",
+    keywords: [
+      "samurai helmet",
+      "kabuto",
+      "samurai hat",
+      "paper helmet",
+      "helmet",
+    ],
+  },
   { id: "bird-base", name: "Bird base", keywords: ["bird base"] },
   {
     id: "square-base",
