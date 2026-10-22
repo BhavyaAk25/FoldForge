@@ -24,7 +24,7 @@ import {
   SQUARE_BASE_HOW,
   WATERBOMB_BASE_HOW,
 } from "./how-to";
-import type { FoldLine, FoldStep } from "./sequence";
+import type { FaceSample, FoldLine, FoldStep } from "./sequence";
 
 /**
  * The origami library. Bases are crease patterns that collapse all at once;
@@ -352,6 +352,152 @@ const CAT_FACE: OrigamiModel = {
   },
 };
 
+/** A fold line through two points, run past both so it crosses every layer. */
+const through = (a: Point2, b: Point2): FoldLine => ({
+  from: p(a.x - (b.x - a.x) / 2, a.y - (b.y - a.y) / 2),
+  to: p(b.x + (b.x - a.x) / 2, b.y + (b.y - a.y) / 2),
+});
+
+/**
+ * The fortune teller (cootie catcher): all four corners to the centre, then
+ * again on the back. Its play shape is pushed out by hand from this square.
+ */
+const FORTUNE_TELLER: OrigamiModel = {
+  id: "fortune-teller",
+  summary:
+    "The classic fortune teller. Once folded flat, crease it in half both ways, push the four corners together, and slip your fingers under the flaps to open and close it.",
+  viewDeg: 0,
+  sequence: {
+    anchor: p(0.5, 0.5),
+    steps: [
+      ...(
+        [
+          [p(0, 0.5), p(0.5, 0), p(0.05, 0.05)],
+          [p(0.5, 1), p(1, 0.5), p(0.95, 0.95)],
+          [p(0, 0.5), p(0.5, 1), p(0.05, 0.95)],
+          [p(0.5, 0), p(1, 0.5), p(0.95, 0.05)],
+        ] as const
+      ).map(([a, b, toward], i): FoldStep => ({
+        kind: "valley",
+        instruction:
+          i === 0
+            ? "Crease both diagonals to find the centre, then fold one corner to it."
+            : "Fold the next corner to the centre.",
+        line: through(a, b),
+        toward,
+      })),
+      ...(
+        [
+          [p(0.25, 0.25), p(0.75, 0.25), p(0.5, 0.05)],
+          [p(0.75, 0.25), p(0.75, 0.75), p(0.95, 0.5)],
+          [p(0.25, 0.75), p(0.75, 0.75), p(0.5, 0.95)],
+          [p(0.25, 0.25), p(0.25, 0.75), p(0.05, 0.5)],
+        ] as const
+      ).map(([a, b, toward], i): FoldStep => ({
+        kind: "mountain",
+        instruction:
+          i === 0
+            ? "Turn over and fold a corner of the new square to the centre."
+            : "Fold the next corner to the centre.",
+        line: through(a, b),
+        toward,
+      })),
+    ],
+  },
+};
+
+/**
+ * The samurai helmet (kabuto): a triangle whose side corners come down and
+ * go back up as flaps, their tips turned out as horns, and the front corner
+ * rolled up twice as the brim.
+ */
+const flapA = (f: FaceSample) => f.paper.x - f.paper.y > 0.5;
+const flapB = (f: FaceSample) => f.paper.y - f.paper.x > 0.5;
+const frontCorner = (f: FaceSample) => f.paper.x > 0.5 && f.paper.y > 0.5;
+const SAMURAI_HELMET: OrigamiModel = {
+  id: "samurai-helmet",
+  summary:
+    "The traditional kabuto. Open the bottom and it sits on a head (from a large sheet) or a desk.",
+  viewDeg: 45,
+  colorDown: true,
+  sequence: {
+    anchor: p(0.3, 0.4),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down. Fold in half along the diagonal into a triangle, point down.",
+        line: through(p(0, 1), p(1, 0)),
+        toward: p(0.95, 0.95),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold one side corner down to the bottom point.",
+        line: through(p(0.5, 0), p(0.5, 0.5)),
+        toward: p(0.9, 0.05),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the other side corner down too, making a diamond.",
+        line: through(p(0, 0.5), p(0.5, 0.5)),
+        toward: p(0.05, 0.9),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the first flap's bottom point up to the top point.",
+        line: through(p(0, 0.5), p(0.5, 0)),
+        toward: p(0.05, 0.05),
+        layers: (f) => f.paper.x > 0.5 && f.paper.y < 0.5,
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the other flap's point up to match.",
+        line: through(p(0, 0.5), p(0.5, 0)),
+        toward: p(0.05, 0.05),
+        layers: (f) => f.paper.y > 0.5 && f.paper.x < 0.5,
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold that flap's top point down and out to the side: a horn.",
+        line: through(p(0.3, 0.3), p(0.7, 0.5)),
+        toward: p(0.48, 0.48),
+        layers: flapA,
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the other point out the same way.",
+        line: through(p(0.3, 0.3), p(0.5, 0.7)),
+        toward: p(0.48, 0.48),
+        layers: flapB,
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the bottom corner of the front layer up, a little below the middle.",
+        line: through(p(0, 0.3), p(0.3, 0)),
+        toward: p(0.02, 0.02),
+        layers: frontCorner,
+      },
+      {
+        kind: "valley",
+        instruction: "Fold it up again along the base of the horns: the brim.",
+        line: through(p(0, 0.4), p(0.4, 0)),
+        toward: p(0.17, 0.17),
+        layers: frontCorner,
+      },
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the back corner up behind, inside the helmet, then open the bottom.",
+        line: through(p(0, 0.3), p(0.3, 0)),
+        toward: p(0.05, 0.05),
+        layers: (f) => f.paper.x + f.paper.y < 0.6,
+      },
+    ],
+  },
+};
+
 /**
  * Heart: the top edge folded to the centre and the bottom edge up to meet
  * it make a strip from y = 0.375 to 0.75; its four corners go behind to
@@ -595,6 +741,8 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   FLAPPING_BIRD,
   PAPER_PLANE,
   PAPER_CUP,
+  FORTUNE_TELLER,
+  SAMURAI_HELMET,
   DOG_FACE,
   CAT_FACE,
   HEART,
