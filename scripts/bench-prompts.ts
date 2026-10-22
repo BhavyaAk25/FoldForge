@@ -30,7 +30,7 @@ export const BENCH_PROMPTS: readonly BenchPrompt[] = [
   { text: "a paper rat", expect: "figure" },
   { text: "a cat", expect: "origami" },
   { text: "a rabbit", expect: "figure" },
-  { text: "a fox", expect: "figure" },
+  { text: "a fox", expect: "origami" },
   { text: "a penguin", expect: "figure" },
   { text: "a fish", expect: "origami" },
   { text: "a car", expect: "figure" },

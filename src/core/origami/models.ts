@@ -359,6 +359,51 @@ const through = (a: Point2, b: Point2): FoldLine => ({
 });
 
 /**
+ * A fox's face: the triangle's side corners fold straight up past the top
+ * edge as tall ears, and the bottom point stays sharp for the snout. Each
+ * ear line is the perpendicular bisector of the corner and its ear tip.
+ */
+const FOX_EAR_TIP = p(0.22, 0.45);
+const foxEar = (tip: Point2, corner: Point2): FoldLine => {
+  const mid = p((tip.x + corner.x) / 2, (tip.y + corner.y) / 2);
+  const d = p(corner.y - tip.y, tip.x - corner.x);
+  return {
+    from: p(mid.x - 2 * d.x, mid.y - 2 * d.y),
+    to: p(mid.x + 2 * d.x, mid.y + 2 * d.y),
+  };
+};
+const FOX_FACE: OrigamiModel = {
+  id: "fox-face",
+  summary: "A fox's face with tall ears and a pointed snout, from three folds.",
+  viewDeg: -135,
+  sequence: {
+    anchor: p(0.75, 0.8),
+    steps: [
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the square in half behind, corner to corner, into a triangle pointing down.",
+        line: { from: p(-0.05, 1.05), to: p(1.05, -0.05) },
+        toward: p(0.1, 0.1),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the left corner up so its point stands well above the top edge: an ear.",
+        line: foxEar(FOX_EAR_TIP, p(0, 1)),
+        toward: p(0.02, 0.98),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the right corner up the same way for the other ear.",
+        line: foxEar(p(FOX_EAR_TIP.y, FOX_EAR_TIP.x), p(1, 0)),
+        toward: p(0.98, 0.02),
+      },
+    ],
+  },
+};
+
+/**
  * The fortune teller (cootie catcher): all four corners to the centre, then
  * again on the back. Its play shape is pushed out by hand from this square.
  */
@@ -743,6 +788,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   PAPER_CUP,
   FORTUNE_TELLER,
   SAMURAI_HELMET,
+  FOX_FACE,
   DOG_FACE,
   CAT_FACE,
   HEART,

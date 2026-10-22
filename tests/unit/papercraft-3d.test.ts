@@ -208,7 +208,10 @@ describe("figures", () => {
 
   it.each([
     ["fold a paper crane", { engine: "origami", modelId: "crane" }],
-    ["a red fox", { engine: "figure", preset: "Fox", primary: "#d6403a" }],
+    [
+      "a red rabbit",
+      { engine: "figure", preset: "Rabbit", primary: "#d6403a" },
+    ],
     // A subject with a fold gets origami first and the figure beside it.
     [
       "a yellow duck with an orange beak",
@@ -278,6 +281,7 @@ describe("figures", () => {
     ],
     ["a lily", { engine: "origami", modelId: "lily" }],
     ["a cootie catcher", { engine: "origami", modelId: "fortune-teller" }],
+    ["a fox", { engine: "origami", modelId: "fox-face", preset: "Fox" }],
     ["a samurai helmet", { engine: "origami", modelId: "samurai-helmet" }],
     ["a turtle", { engine: "origami", modelId: "legs_170_205" }],
     // Standing four-legged animals fold from two squares.
