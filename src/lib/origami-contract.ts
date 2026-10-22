@@ -31,7 +31,11 @@ export const OrigamiPayloadSchema = z.object({
     faces: z.array(z.array(z.number().int())),
   }),
   steps: z.array(
-    z.object({ instruction: z.string(), added: z.array(z.number().int()) }),
+    z.object({
+      instruction: z.string(),
+      added: z.array(z.number().int()),
+      howTo: z.array(z.string()),
+    }),
   ),
   animation: z.object({
     collapse: z.array(z.array(z.number())).nullable(),

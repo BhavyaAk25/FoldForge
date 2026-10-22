@@ -110,6 +110,29 @@
   font-size: 1.2rem;
 }
 
+.howTo {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.howTo summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.howTo ol {
+  margin: 8px 0 0;
+  padding-left: 1.3em;
+}
+
+.howTo li + li {
+  margin-top: 4px;
+}
+
 .steps {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

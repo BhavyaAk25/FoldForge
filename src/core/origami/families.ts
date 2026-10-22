@@ -1,4 +1,5 @@
 import type { CreaseSegment, Point2 } from "./crease-pattern";
+import { ANIMAL_BODY_HOW, BIRD_BASE_HOW, FROG_BASE_HOW } from "./how-to";
 import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
 
 /**
@@ -94,6 +95,7 @@ export const BIRD_BASE_STEP: FoldStep = {
   instruction:
     "Fold a bird base: crease both diagonals and midlines, collapse into a square base, kite-fold the lower edges to the centre, then petal-fold the front and back.",
   segments: BIRD_BASE,
+  howTo: BIRD_BASE_HOW,
 };
 const front = (f: FaceSample): boolean => f.paper.x + f.paper.y < 1;
 const back = (f: FaceSample): boolean => !front(f);
@@ -479,6 +481,7 @@ export const fourLegs = (d: FourLegsDesign, summary: string): ModelShape => ({
         instruction:
           "Fold a frog base, closed point up: a square base with every flap squashed and petal-folded.",
         segments: FROG_BASE,
+        howTo: FROG_BASE_HOW,
       },
       ...FROG_NARROW_STEPS,
       {
@@ -566,6 +569,7 @@ export const animalBody = (summary: string): ModelShape => ({
         instruction:
           "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down as legs.",
         segments: ANIMAL_BODY,
+        howTo: ANIMAL_BODY_HOW,
       },
     ],
   },

@@ -416,6 +416,13 @@ describe("origami routes", () => {
     const payload = OrigamiPayloadSchema.parse(await response.json());
     expect(payload.steps.length).toBe(payload.verification.stepsChecked);
     expect(payload.steps.every((step) => step.added.length > 0)).toBe(true);
+    // A base comes with the classic hand sequence, on the page and the sheet.
+    expect(payload.steps[0]!.howTo.length).toBeGreaterThanOrEqual(5);
+    const sheet = await exportGet(
+      new Request("http://localhost"),
+      params({ id: "crane", format: "instructions" }),
+    );
+    expect(await sheet.text()).toContain("Folding the base by hand");
   });
 
   it("serves a two-square animal: the body names the neck sheet tucked in front", async () => {

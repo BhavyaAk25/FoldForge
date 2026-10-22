@@ -213,6 +213,8 @@ export const instructionsSvg = (
   finished: StepDiagram,
   viewDeg: number,
   paperMm: number,
+  /** How to fold the base by hand, printed in full below the diagrams. */
+  howTo: readonly string[] = [],
 ): string => {
   const cell = 60;
   const columns = 3;
@@ -238,11 +240,11 @@ export const instructionsSvg = (
     },
   ];
   const rows = Math.ceil(cells.length / columns);
-  const wrap = (text: string): string[] => {
+  const wrap = (text: string, width = 42): string[] => {
     const words = text.split(" ");
     const lines: string[] = [""];
     for (const word of words) {
-      if (`${lines.at(-1)} ${word}`.length > 42) lines.push(word);
+      if (`${lines.at(-1)} ${word}`.length > width) lines.push(word);
       else lines[lines.length - 1] = `${lines.at(-1)} ${word}`.trim();
     }
     return lines;
@@ -261,12 +263,30 @@ export const instructionsSvg = (
     })
     .join("\n");
   const width = columns * cell;
-  const height = 14 + rows * (cell + 16);
+  const diagramsEnd = 14 + rows * (cell + 16);
+  // The base by hand: a numbered list across the sheet's full width.
+  const handLines = howTo.length
+    ? [
+        "Folding the base by hand:",
+        ...howTo.flatMap((text, i) =>
+          wrap(`${String.fromCharCode(97 + i)}. ${text}`, 120),
+        ),
+      ]
+    : [];
+  const hand = handLines
+    .map(
+      (line, j) =>
+        `<text x="2" y="${diagramsEnd + 4 + j * 4.2}" font-family="sans-serif" font-size="3.2"${j === 0 ? ' font-weight="bold"' : ""}>${xml(line)}</text>`,
+    )
+    .join("");
+  const height =
+    diagramsEnd + (handLines.length ? 6 + handLines.length * 4.2 : 0);
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">`,
     `<rect width="${width}" height="${height}" fill="#fff"/>`,
     `<text x="2" y="9" font-family="sans-serif" font-size="6" font-weight="bold">${xml(title)}: folding instructions (${paperMm} mm square)</text>`,
     body,
+    hand,
     "</svg>",
   ].join("\n");
 };
