@@ -63,6 +63,12 @@ export const SUBJECTS: readonly Subject[] = [
     answer: { library: "dog-face" },
   },
   {
+    words: ["fox", "foxes"],
+    title: "Fox",
+    color: "#e0702d",
+    answer: { library: "fox-face" },
+  },
+  {
     words: ["swan", "goose"],
     title: "Swan",
     color: "#f4f1ea",
