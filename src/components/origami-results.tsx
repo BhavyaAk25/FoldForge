@@ -581,6 +581,18 @@ function OrigamiSheet({
       <div className={styles.columns}>
         <section className={styles.panel}>
           <h3>Step by step</h3>
+          {payload.steps.some((step) => step.howTo.length > 0) ? (
+            <details className={styles.howTo} open>
+              <summary>Folding the base by hand</summary>
+              <ol>
+                {payload.steps
+                  .flatMap((step) => step.howTo)
+                  .map((text, i) => (
+                    <li key={i}>{text}</li>
+                  ))}
+              </ol>
+            </details>
+          ) : null}
           <ol className={styles.steps}>
             {payload.steps.map((step, index) => (
               <li

@@ -56,6 +56,8 @@ export type FoldStep =
        * proven by closing every loop of faces, not by flat-folding rules.
        */
       readonly form?: FormAngle;
+      /** How to fold this base by hand, step by step (`how-to.ts`). */
+      readonly howTo?: readonly string[];
     }
   | {
       /** valley: the flap comes toward the viewer. mountain: it goes behind. */

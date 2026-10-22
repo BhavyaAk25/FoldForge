@@ -17,6 +17,13 @@ import {
   wingedBird,
   type ModelShape,
 } from "./families";
+import {
+  BIRD_BASE_HOW,
+  FISH_BASE_HOW,
+  FROG_BASE_HOW,
+  SQUARE_BASE_HOW,
+  WATERBOMB_BASE_HOW,
+} from "./how-to";
 import type { FoldLine, FoldStep } from "./sequence";
 
 /**
@@ -61,12 +68,16 @@ const base = (
   id: OrigamiModelId,
   segments: readonly CreaseSegment[],
   instruction: string,
+  howTo: readonly string[],
   anchor: Point2,
   summary: string,
 ): OrigamiModel => ({
   id,
   summary,
-  sequence: { anchor, steps: [{ kind: "creases", instruction, segments }] },
+  sequence: {
+    anchor,
+    steps: [{ kind: "creases", instruction, segments, howTo }],
+  },
   viewDeg: 0,
 });
 
@@ -549,6 +560,7 @@ const LILY: OrigamiModel = {
         instruction:
           "Fold a frog base, closed point down: a square base with every flap squashed and petal-folded.",
         segments: FROG_BASE,
+        howTo: FROG_BASE_HOW,
       },
       ...FROG_NARROW_STEPS,
       // Petals alternate toward and away from you, so the lily opens all round.
@@ -595,6 +607,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "bird-base",
     BIRD_BASE,
     "Crease both diagonals and midlines, collapse into a square base, kite-fold the lower edges to the centre, then petal-fold the front and back.",
+    BIRD_BASE_HOW,
     BIRD_ANCHOR,
     "The base for the crane, the flapping bird, and many birds.",
   ),
@@ -602,6 +615,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "square-base",
     SQUARE_BASE,
     "Mountain-fold both midlines, valley-fold one diagonal, and collapse the sheet into a small square.",
+    SQUARE_BASE_HOW,
     p(0.3, 0.1),
     "Also called the preliminary base; the start of the bird and frog bases.",
   ),
@@ -609,6 +623,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "waterbomb-base",
     WATERBOMB_BASE,
     "Valley-fold both diagonals, mountain-fold the horizontal midline, and collapse into a triangle.",
+    WATERBOMB_BASE_HOW,
     p(0.5, 0.1),
     "A triangle with two flaps on each side; the start of the waterbomb balloon.",
   ),
@@ -616,6 +631,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "fish-base",
     FISH_BASE,
     "Kite-fold two opposite corners toward the diagonal, then rabbit-ear the two side corners.",
+    FISH_BASE_HOW,
     p(0.2, 0.15),
     "A long diamond with two small flaps; the start of the fish and the whale.",
   ),
@@ -623,6 +639,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     "frog-base",
     FROG_BASE,
     "Fold a square base, squash-fold each of its four flaps, then petal-fold all four squashed flaps.",
+    FROG_BASE_HOW,
     p(0.5, 0.06),
     "Four long flaps around a narrow diamond; the start of the frog and the lily.",
   ),

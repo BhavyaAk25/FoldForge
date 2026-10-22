@@ -36,6 +36,8 @@ export interface OrigamiPayload {
   readonly steps: readonly {
     readonly instruction: string;
     readonly added: readonly number[];
+    /** For a base: how to fold it by hand, step by step. */
+    readonly howTo: readonly string[];
   }[];
   readonly animation: Omit<FoldAnimation, "faces">;
   /**
@@ -217,6 +219,7 @@ const build = (id: string): Built | null => {
       steps: derived.value.map((step) => ({
         instruction: step.instruction,
         added: edgesAlong(pattern, step.added),
+        howTo: step.step.kind === "creases" ? (step.step.howTo ?? []) : [],
       })),
       animation: {
         collapse: animation.collapse,
@@ -302,6 +305,7 @@ export const origamiExport = (
               ),
           payload.viewDeg,
           paperMm,
+          payload.steps.flatMap((step) => step.howTo),
         ),
         contentType: "image/svg+xml",
         filename: `${file}-instructions.svg`,
