@@ -768,3 +768,36 @@ test("has no serious accessibility violations before or after forging", async ({
   await expect(page.getByTestId("candidate-card")).toHaveCount(1);
   expect(await seriousViolations()).toEqual([]);
 });
+
+test("folds a standing animal from two squares on the real server", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The dev server names itself localhost, and the same-origin guard
+  // compares the browser's origin with that name.
+  const port = new URL(test.info().project.use.baseURL ?? "").port;
+  await page.goto(`http://localhost:${port}/`);
+  await page.getByLabel("What do you want to make?").fill("a horse");
+  await page.getByRole("button", { name: "Create design" }).click();
+
+  await expect(page.getByRole("heading", { name: "Horse" })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByRole("img", { name: /both sheets together/u }),
+  ).toBeVisible();
+  await expect(page.getByText("Square 1 of 2 · Body and legs")).toBeVisible();
+  await expect(page.getByText("Square 2 of 2 · Neck and head")).toBeVisible();
+  // The body's base comes with the hand sequence; the neck has no base.
+  await expect(page.getByText("Folding the base by hand")).toHaveCount(1);
+  // Each square has its own downloads; the second names its sheet.
+  await expect(
+    page.locator('a[href*="~2/instructions"][download]'),
+  ).toHaveCount(1);
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
