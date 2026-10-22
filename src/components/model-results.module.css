@@ -126,11 +126,30 @@
 
 .howTo ol {
   margin: 8px 0 0;
-  padding-left: 1.3em;
+  padding: 0;
+  list-style: none;
+}
+
+.howTo li {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  align-items: start;
 }
 
 .howTo li + li {
-  margin-top: 4px;
+  margin-top: 8px;
+}
+
+.howTo svg,
+.howToBlank {
+  width: 72px;
+  aspect-ratio: 1;
+}
+
+.howTo svg {
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
 }
 
 .steps {

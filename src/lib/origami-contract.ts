@@ -34,7 +34,21 @@ export const OrigamiPayloadSchema = z.object({
     z.object({
       instruction: z.string(),
       added: z.array(z.number().int()),
-      howTo: z.array(z.string()),
+      howTo: z.array(
+        z.object({
+          text: z.string(),
+          diagram: z
+            .object({
+              polygons: z.array(
+                z.object({ points: z.string(), front: z.boolean() }),
+              ),
+              creases: z.array(
+                z.object({ points: z.string(), mountain: z.boolean() }),
+              ),
+            })
+            .nullable(),
+        }),
+      ),
     }),
   ),
   animation: z.object({

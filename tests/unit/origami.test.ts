@@ -418,6 +418,11 @@ describe("origami routes", () => {
     expect(payload.steps.every((step) => step.added.length > 0)).toBe(true);
     // A base comes with the classic hand sequence, on the page and the sheet.
     expect(payload.steps[0]!.howTo.length).toBeGreaterThanOrEqual(5);
+    // Creasing steps show their lines; the square base is drawn folded.
+    expect(payload.steps[0]!.howTo[0]!.diagram?.creases).toHaveLength(2);
+    expect(
+      payload.steps[0]!.howTo[2]!.diagram?.polygons.length,
+    ).toBeGreaterThan(1);
     const sheet = await exportGet(
       new Request("http://localhost"),
       params({ id: "crane", format: "instructions" }),

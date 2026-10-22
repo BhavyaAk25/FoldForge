@@ -587,8 +587,46 @@ function OrigamiSheet({
               <ol>
                 {payload.steps
                   .flatMap((step) => step.howTo)
-                  .map((text, i) => (
-                    <li key={i}>{text}</li>
+                  .map((sub, i) => (
+                    <li key={i}>
+                      {sub.diagram ? (
+                        <svg viewBox="0 0 1 1" aria-hidden="true">
+                          {sub.diagram.polygons.map((polygon, j) => (
+                            <polygon
+                              key={j}
+                              points={polygon.points}
+                              fill={polygon.front ? colors.front : colors.back}
+                              stroke="#5b4a33"
+                              strokeOpacity={0.35}
+                              strokeWidth={0.004}
+                            />
+                          ))}
+                          {sub.diagram.creases.map((crease, j) => (
+                            <polyline
+                              key={j}
+                              points={crease.points}
+                              fill="none"
+                              stroke={crease.mountain ? "#c0392b" : "#2463b5"}
+                              strokeWidth={0.012}
+                              strokeDasharray={
+                                crease.mountain
+                                  ? "0.03 0.012 0.006 0.012"
+                                  : "0.02 0.01"
+                              }
+                            />
+                          ))}
+                        </svg>
+                      ) : (
+                        <span
+                          className={styles.howToBlank}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>
+                        <strong>{String.fromCharCode(97 + i)}.</strong>{" "}
+                        {sub.text}
+                      </span>
+                    </li>
                   ))}
               </ol>
             </details>

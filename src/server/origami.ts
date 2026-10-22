@@ -4,8 +4,11 @@ import type { CreasePatternV1 } from "@/core/origami/crease-pattern";
 import {
   creasePatternSvg,
   foldFile,
+  flatCreaseDiagram,
   formDiagram,
   instructionsSvg,
+  type HowToDiagram,
+  type StepDiagram,
   stepDiagram,
   type InstructionStep,
 } from "@/core/origami/export";
@@ -37,7 +40,10 @@ export interface OrigamiPayload {
     readonly instruction: string;
     readonly added: readonly number[];
     /** For a base: how to fold it by hand, step by step. */
-    readonly howTo: readonly string[];
+    readonly howTo: readonly {
+      readonly text: string;
+      readonly diagram: HowToDiagram | null;
+    }[];
   }[];
   readonly animation: Omit<FoldAnimation, "faces">;
   /**
@@ -157,6 +163,33 @@ const uprightBounds = (
   };
 };
 
+/** A folded state's diagram as a hand-folding picture (no creases to add). */
+const picture = (diagram: StepDiagram): HowToDiagram => ({
+  polygons: diagram.polygons,
+  creases: [],
+});
+
+/** The square base, derived and checked like any library model, drawn once. */
+let squareBase: HowToDiagram | null = null;
+const squareBaseDiagram = (): HowToDiagram => {
+  if (squareBase) return squareBase;
+  const model = ORIGAMI_MODELS.find((m) => m.id === "square-base");
+  const derived = model ? deriveSequence(model.sequence) : null;
+  if (!model || !derived?.ok)
+    throw new Error("The library square base does not derive.");
+  const animation = animateSequence(derived.value, model.sequence.anchor);
+  squareBase = picture(
+    stepDiagram(
+      derived.value.at(-1)!.pattern,
+      animation.keyframes.at(-1)!,
+      null,
+      // Drawn as a diamond, open end down, as books show it.
+      45,
+    ),
+  );
+  return squareBase;
+};
+
 const build = (id: string): Built | null => {
   const cached = cache.get(id);
   if (cached) return cached;
@@ -219,7 +252,26 @@ const build = (id: string): Built | null => {
       steps: derived.value.map((step) => ({
         instruction: step.instruction,
         added: edgesAlong(pattern, step.added),
-        howTo: step.step.kind === "creases" ? (step.step.howTo ?? []) : [],
+        howTo:
+          step.step.kind === "creases"
+            ? (step.step.howTo ?? []).map((sub) => ({
+                text: sub.text,
+                diagram: !sub.show
+                  ? null
+                  : "creases" in sub.show
+                    ? flatCreaseDiagram(sub.show.creases)
+                    : sub.show.folded === "square-base"
+                      ? squareBaseDiagram()
+                      : picture(
+                          stepDiagram(
+                            pattern,
+                            animation.keyframes[0]!,
+                            null,
+                            model.viewDeg,
+                          ),
+                        ),
+              }))
+            : [],
       })),
       animation: {
         collapse: animation.collapse,

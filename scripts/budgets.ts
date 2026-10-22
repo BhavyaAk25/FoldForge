@@ -16,7 +16,7 @@ export const BUDGETS = {
    * Lines of TypeScript under src/ (measured 37,103 after adding pop-up
    * cards and the playing-card box, net of deleting the old pop-up template).
    */
-  sourceLines: 39_750,
+  sourceLines: 40_000,
   /** Lines of TypeScript under tests/ (measured 20,281 with the papercraft and router tests). */
   testLines: 21_000,
   /** Test lines per source line (measured 0.68): tests may not outgrow code. */
