@@ -18,6 +18,7 @@ import {
   type ModelShape,
 } from "./families";
 import {
+  type HowToStep,
   BIRD_BASE_HOW,
   FISH_BASE_HOW,
   FROG_BASE_HOW,
@@ -68,7 +69,7 @@ const base = (
   id: OrigamiModelId,
   segments: readonly CreaseSegment[],
   instruction: string,
-  howTo: readonly string[],
+  howTo: readonly HowToStep[],
   anchor: Point2,
   summary: string,
 ): OrigamiModel => ({

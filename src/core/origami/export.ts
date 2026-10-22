@@ -1,4 +1,4 @@
-import type { CreasePatternV1, Point2 } from "./crease-pattern";
+import type { CreasePatternV1, CreaseSegment, Point2 } from "./crease-pattern";
 import { applyIsometry, orientation, type Isometry } from "./fold-rules";
 import type { FoldKeyframe } from "./animate";
 import type { FoldLine } from "./sequence";
@@ -197,12 +197,56 @@ const stepDiagramSvg = (diagram: StepDiagram): string =>
     ? `<polyline points="${diagram.line}" fill="none" stroke="#2463b5" stroke-width="0.008" stroke-dasharray="0.03 0.015"/>`
     : "");
 
+/** A hand-folding sub-step's picture: faces as in `StepDiagram`, plus creases to make. */
+export interface HowToDiagram {
+  readonly polygons: StepDiagram["polygons"];
+  readonly creases: readonly {
+    readonly points: string;
+    readonly mountain: boolean;
+  }[];
+}
+
+/** The flat square with the creases a sub-step makes, fitted like `stepDiagram`. */
+export const flatCreaseDiagram = (
+  creases: readonly CreaseSegment[],
+): HowToDiagram => {
+  const at = ({ x, y }: Point2) =>
+    `${n(0.08 + 0.84 * x)},${n(0.92 - 0.84 * y)}`;
+  const corners: Point2[] = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ];
+  return {
+    polygons: [{ points: corners.map(at).join(" "), front: true }],
+    creases: creases.map((c) => ({
+      points: `${at(c.from)} ${at(c.to)}`,
+      mountain: c.assignment === "M",
+    })),
+  };
+};
+
+/** A sub-step's picture drawn into a unit cell, for the instruction sheet. */
+const howToDiagramSvg = (diagram: HowToDiagram): string =>
+  stepDiagramSvg({ polygons: diagram.polygons, line: null }) +
+  diagram.creases
+    .map(
+      (c) =>
+        `<polyline points="${c.points}" fill="none" stroke="${c.mountain ? "#c0392b" : "#2463b5"}" stroke-width="0.008" stroke-dasharray="${c.mountain ? "0.03 0.012 0.006 0.012" : "0.02 0.01"}"/>`,
+    )
+    .join("");
+
 export interface InstructionStep {
   readonly instruction: string;
   /** The state the step starts from, or null for the first step from a flat sheet. */
   readonly before: FoldKeyframe | null;
   readonly line: FoldLine | null;
 }
+
+/** The sheet's heading, shrunk to fit its width (about 0.55 em per character). */
+const titleSvg = (text: string, width: number): string =>
+  `<text x="2" y="9" font-family="sans-serif" font-size="${n(Math.min(6, (width - 4) / (0.55 * text.length)))}" font-weight="bold">${xml(text)}</text>`;
 
 /** A printable sheet: the crease pattern, then one diagram per step, three to a row. */
 export const instructionsSvg = (
@@ -214,7 +258,10 @@ export const instructionsSvg = (
   viewDeg: number,
   paperMm: number,
   /** How to fold the base by hand, printed in full below the diagrams. */
-  howTo: readonly string[] = [],
+  howTo: readonly {
+    readonly text: string;
+    readonly diagram: HowToDiagram | null;
+  }[] = [],
 ): string => {
   const cell = 60;
   const columns = 3;
@@ -264,27 +311,32 @@ export const instructionsSvg = (
     .join("\n");
   const width = columns * cell;
   const diagramsEnd = 14 + rows * (cell + 16);
-  // The base by hand: a numbered list across the sheet's full width.
-  const handLines = howTo.length
-    ? [
-        "Folding the base by hand:",
-        ...howTo.flatMap((text, i) =>
-          wrap(`${String.fromCharCode(97 + i)}. ${text}`, 120),
-        ),
-      ]
-    : [];
-  const hand = handLines
-    .map(
-      (line, j) =>
-        `<text x="2" y="${diagramsEnd + 4 + j * 4.2}" font-family="sans-serif" font-size="3.2"${j === 0 ? ' font-weight="bold"' : ""}>${xml(line)}</text>`,
-    )
-    .join("");
-  const height =
-    diagramsEnd + (handLines.length ? 6 + handLines.length * 4.2 : 0);
+  // The base by hand: one row per sub-step, its picture beside its text.
+  const PICTURE = 26;
+  let at = diagramsEnd + (howTo.length ? 10 : 0);
+  const handRows = howTo.map((step, i) => {
+    const lines = wrap(`${String.fromCharCode(97 + i)}. ${step.text}`, 92);
+    const top = at;
+    at += Math.max(step.diagram ? PICTURE : 0, lines.length * 4.2) + 4;
+    const picture = step.diagram
+      ? `<g transform="translate(2 ${top}) scale(${PICTURE})">${howToDiagramSvg(step.diagram)}</g>`
+      : "";
+    const text = lines
+      .map(
+        (line, j) =>
+          `<text x="${PICTURE + 6}" y="${top + 4 + j * 4.2}" font-family="sans-serif" font-size="3.2">${xml(line)}</text>`,
+      )
+      .join("");
+    return picture + text;
+  });
+  const hand = howTo.length
+    ? `<text x="2" y="${diagramsEnd + 5}" font-family="sans-serif" font-size="3.6" font-weight="bold">Folding the base by hand</text>${handRows.join("")}`
+    : "";
+  const height = howTo.length ? at + 2 : diagramsEnd;
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}">`,
     `<rect width="${width}" height="${height}" fill="#fff"/>`,
-    `<text x="2" y="9" font-family="sans-serif" font-size="6" font-weight="bold">${xml(title)}: folding instructions (${paperMm} mm square)</text>`,
+    titleSvg(`${title}: folding instructions (${paperMm} mm square)`, width),
     body,
     hand,
     "</svg>",

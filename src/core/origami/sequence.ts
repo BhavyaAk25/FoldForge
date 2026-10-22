@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "../result";
+import type { HowToStep } from "./how-to";
 import {
   buildCreasePattern,
   type CreaseAssignment,
@@ -57,7 +58,7 @@ export type FoldStep =
        */
       readonly form?: FormAngle;
       /** How to fold this base by hand, step by step (`how-to.ts`). */
-      readonly howTo?: readonly string[];
+      readonly howTo?: readonly HowToStep[];
     }
   | {
       /** valley: the flap comes toward the viewer. mountain: it goes behind. */
