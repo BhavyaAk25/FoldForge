@@ -623,6 +623,61 @@ const TOY_PISTOL: OrigamiModel = {
 };
 
 /**
+ * A sailboat: coloured side down, a band folded up along the bottom shows
+ * the colour as the hull, the two top corners fold behind to leave a white
+ * sail standing on it, and the hull's corners fold behind so it narrows to
+ * the waterline. The sail lines start at the hull's top corners, so they
+ * never cut the hull.
+ */
+const HULL = 0.2;
+const BOW = 0.13;
+const MAST = p(0.45, 1);
+const SAILBOAT: OrigamiModel = {
+  id: "sailboat",
+  summary:
+    "A sailboat: a white sail standing on a coloured hull, in five folds.",
+  viewDeg: 0,
+  colorDown: true,
+  sequence: {
+    anchor: p(0.45, 0.6),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down. Fold a band along the bottom edge up, about a sixth of the square: the hull.",
+        line: through(p(0, HULL), p(1, HULL)),
+        toward: p(0.5, 0.02),
+      },
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the top left corner behind, from the hull's left end up to the top of the mast.",
+        line: through(p(0, 2 * HULL), MAST),
+        toward: p(0.02, 0.98),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the top right corner behind the same way: the sail.",
+        line: through(p(1, 2 * HULL), MAST),
+        toward: p(0.98, 0.98),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the hull's bottom left corner behind: the stern.",
+        line: through(p(0, HULL + BOW), p(BOW, HULL)),
+        toward: p(0.01, HULL + 0.01),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the bottom right corner behind too: the bow.",
+        line: through(p(1, HULL + BOW), p(1 - BOW, HULL)),
+        toward: p(0.99, HULL + 0.01),
+      },
+    ],
+  },
+};
+
+/**
  * A fox's face: the triangle's side corners fold straight up past the top
  * edge as tall ears, and the bottom point stays sharp for the snout. Each
  * ear line is the perpendicular bisector of the corner and its ear tip.
@@ -1132,6 +1187,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   TREE,
   PIZZA_SLICE,
   TOY_PISTOL,
+  SAILBOAT,
   BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
