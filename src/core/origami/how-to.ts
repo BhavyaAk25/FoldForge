@@ -48,22 +48,6 @@ const SQUARE_BASE_STEPS: readonly HowToStep[] = [
 
 export const SQUARE_BASE_HOW: readonly HowToStep[] = SQUARE_BASE_STEPS;
 
-export const BIRD_BASE_HOW: readonly HowToStep[] = [
-  ...SQUARE_BASE_STEPS,
-  {
-    text: "With the open end toward you, fold the lower edges of the front flaps to the centre line. Fold the top triangle down over them, crease hard, then unfold these three folds.",
-    show: null,
-  },
-  {
-    text: "Lift the bottom corner of the front layer up along the top crease; the sides fold in to the centre on the creases you made. Flatten this long diamond (a petal fold).",
-    show: null,
-  },
-  {
-    text: "Turn over and repeat the last two steps on the back.",
-    show: { folded: "self" },
-  },
-];
-
 export const FROG_BASE_HOW: readonly HowToStep[] = [
   ...SQUARE_BASE_STEPS,
   {

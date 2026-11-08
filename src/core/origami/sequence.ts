@@ -85,6 +85,19 @@ export type FoldStep =
     }
   | {
       /**
+       * Several creases at once in the middle of a sequence: a squash, a
+       * petal fold, a sink. `add` are new creases on the sheet with their
+       * senses; `open` are existing creases (on the sheet) that open flat.
+       * Nothing is assumed about how the paper moves: the new pattern is
+       * proven like any state, flat-foldable with a non-crossing layer order.
+       */
+      readonly kind: "collapse";
+      readonly instruction: string;
+      readonly add: readonly CreaseSegment[];
+      readonly open?: readonly FoldLine[];
+    }
+  | {
+      /**
        * The moving part of a flap turns inside out: pushed in between the
        * flap's own layers (inside) or wrapped around them (outside).
        */
@@ -463,6 +476,54 @@ const reverseSpine = (
 };
 
 /**
+ * Existing creases with every part that a new crease runs along cut away,
+ * followed by the new creases, so a new crease can restate an old one's sense.
+ */
+const overlay = (
+  existing: readonly CreaseSegment[],
+  added: readonly CreaseSegment[],
+): CreaseSegment[] => {
+  const kept = existing.flatMap((e) => {
+    const d = sub(e.to, e.from);
+    const span = d.x * d.x + d.y * d.y;
+    const at = (q: Point2) =>
+      ((q.x - e.from.x) * d.x + (q.y - e.from.y) * d.y) / span;
+    const collinear = (q: Point2) =>
+      Math.abs(cross(d, sub(q, e.from))) / Math.sqrt(span) < 1e-7;
+    // Parameter intervals of e covered by new creases, merged.
+    const covered = added
+      .filter((a) => collinear(a.from) && collinear(a.to))
+      .map(
+        (a) => [at(a.from), at(a.to)].sort((s, t) => s - t) as [number, number],
+      )
+      .map(([s, t]) => [Math.max(0, s), Math.min(1, t)] as [number, number])
+      .filter(([s, t]) => t - s > 1e-9)
+      .sort((s, t) => s[0] - t[0]);
+    const pieces: CreaseSegment[] = [];
+    let from = 0;
+    for (const [s, t] of covered) {
+      if (s - from > 1e-9) pieces.push(piece(e, from, s));
+      from = Math.max(from, t);
+    }
+    if (1 - from > 1e-9) pieces.push(piece(e, from, 1));
+    return pieces;
+  });
+  return [...kept, ...added];
+};
+
+const piece = (e: CreaseSegment, s: number, t: number): CreaseSegment => ({
+  from: {
+    x: e.from.x + (e.to.x - e.from.x) * s,
+    y: e.from.y + (e.to.y - e.from.y) * s,
+  },
+  to: {
+    x: e.from.x + (e.to.x - e.from.x) * t,
+    y: e.from.y + (e.to.y - e.from.y) * t,
+  },
+  assignment: e.assignment,
+});
+
+/**
  * Closure tolerance for a 3D form, in sheet widths: 1e-6 is 0.15 micrometres
  * on a 150 mm square, so only rounding is forgiven.
  */
@@ -589,6 +650,27 @@ export const deriveSequence = (
     } else if (step.kind === "creases") {
       segments = [...step.segments];
       result = checkedPattern(segments, sequence.anchor, index);
+    } else if (step.kind === "collapse") {
+      // A new crease along an old one sets its sense: the old crease is cut
+      // away there. Then the named creases open flat.
+      const split = buildCreasePattern(overlay(segments, step.add));
+      if (!split.ok)
+        return err({ kind: "pattern", step: index, error: split.error });
+      const opened = step.open ?? [];
+      const next = segmentsOf(split.value).map((segment): CreaseSegment => {
+        const m = {
+          x: (segment.from.x + segment.to.x) / 2,
+          y: (segment.from.y + segment.to.y) / 2,
+        };
+        const restated = step.add.find((a) => onSegment(m, a));
+        if (restated) return { ...segment, assignment: restated.assignment };
+        return opened.some((line) => onSegment(m, { ...line, assignment: "F" }))
+          ? { ...segment, assignment: "F" }
+          : segment;
+      });
+      added = step.add;
+      result = checkedPattern(next, sequence.anchor, index);
+      if (result.ok) segments = next;
     } else if (step.kind === "turn") {
       const current = buildCreasePattern(segments);
       if (!current.ok)

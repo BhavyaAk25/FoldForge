@@ -1,5 +1,5 @@
 import type { CreaseSegment, Point2 } from "./crease-pattern";
-import { ANIMAL_BODY_HOW, BIRD_BASE_HOW, FROG_BASE_HOW } from "./how-to";
+import { ANIMAL_BODY_HOW, FROG_BASE_HOW, SQUARE_BASE_HOW } from "./how-to";
 import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
 
 /**
@@ -63,26 +63,40 @@ const K = Math.tan(Math.PI / 8) / 2;
 export const CENTRE = p(0.5, 0.5);
 const [D1, D2, D3, D4] = [p(0.5, K), p(1 - K, 0.5), p(0.5, 1 - K), p(K, 0.5)];
 
-/** Square base, kite folds front and back, then petal folds; corners (0,0) and (1,1) become the petals. */
-export const BIRD_BASE: readonly CreaseSegment[] = [
-  ...[
-    [p(0, 0), D1],
-    [p(0, 0), D4],
-    [p(1, 0), D1],
-    [p(1, 0), D2],
-    [p(1, 1), D2],
-    [p(1, 1), D3],
-    [p(0, 1), D3],
-    [p(0, 1), D4],
-    [CENTRE, D1],
-    [CENTRE, D2],
-    [CENTRE, D3],
-    [CENTRE, D4],
-  ].map(([a, b]) => crease(a!, b!, "M")),
-  crease(D1, D4, "V"),
-  crease(D2, D3, "V"),
+/** The square (preliminary) base: both midlines mountain, one diagonal valley. */
+export const SQUARE_BASE: readonly CreaseSegment[] = [
+  crease(p(0.5, 0), p(0.5, 1), "M"),
+  crease(p(0, 0.5), p(1, 0.5), "M"),
   crease(p(1, 0), p(0, 1), "V"),
 ];
+
+/**
+ * A petal fold on a square base: the flap's lower edges fold in along kite
+ * lines from its tip to D (22.5 degrees from the diagonal), the line D-D
+ * across them is the hinge the tip lifts on, and the outer parts of the two
+ * midlines it crosses open flat. Corners (0,0) and (1,1) become the petals.
+ */
+const petalFold = (
+  tip: Point2,
+  [a, b]: readonly [Point2, Point2],
+  [sideA, sideB]: readonly [Point2, Point2],
+  [edgeA, edgeB]: readonly [Point2, Point2],
+  instruction: string,
+): FoldStep => ({
+  kind: "collapse",
+  instruction,
+  add: [
+    crease(tip, a, "M"),
+    crease(tip, b, "M"),
+    crease(sideA, a, "M"),
+    crease(sideB, b, "M"),
+    crease(a, b, "V"),
+  ],
+  open: [
+    { from: a, to: edgeA },
+    { from: b, to: edgeB },
+  ],
+});
 
 /**
  * Bird-base frame (anchor in the face (0,0)-D1-(1,0)): the petal tips sit at
@@ -90,13 +104,30 @@ export const BIRD_BASE: readonly CreaseSegment[] = [
  * all on the axis y = 0. Front layers come from the half x + y < 1.
  */
 export const BIRD_ANCHOR = p(0.5, 0.05);
-export const BIRD_BASE_STEP: FoldStep = {
-  kind: "creases",
-  instruction:
-    "Fold a bird base: crease both diagonals and midlines, collapse into a square base, kite-fold the lower edges to the centre, then petal-fold the front and back.",
-  segments: BIRD_BASE,
-  howTo: BIRD_BASE_HOW,
-};
+/** A square base, then a petal fold on the front and one on the back: the bird base. */
+export const BIRD_BASE_STEPS: readonly FoldStep[] = [
+  {
+    kind: "creases",
+    instruction:
+      "Fold a square base: crease both diagonals and both midlines, then collapse the sheet into a small square, open end down.",
+    segments: SQUARE_BASE,
+    howTo: SQUARE_BASE_HOW,
+  },
+  petalFold(
+    p(0, 0),
+    [D1, D4],
+    [p(1, 0), p(0, 1)],
+    [p(0.5, 0), p(0, 0.5)],
+    "Petal-fold the front: fold its lower edges to the centre line and unfold, then lift the bottom corner up and let the sides fold in. Flatten it into a long diamond.",
+  ),
+  petalFold(
+    p(1, 1),
+    [D2, D3],
+    [p(1, 0), p(0, 1)],
+    [p(1, 0.5), p(0.5, 1)],
+    "Turn over and petal-fold the back the same way: a bird base.",
+  ),
+];
 const front = (f: FaceSample): boolean => f.paper.x + f.paper.y < 1;
 const back = (f: FaceSample): boolean => !front(f);
 
@@ -171,7 +202,7 @@ export const wingedBird = (d: BirdDesign, summary: string): ModelShape => {
     sequence: {
       anchor: BIRD_ANCHOR,
       steps: [
-        BIRD_BASE_STEP,
+        ...BIRD_BASE_STEPS,
         narrow(
           "valley",
           NARROW,

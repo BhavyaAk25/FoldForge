@@ -317,6 +317,53 @@ describe("the origami box", () => {
   });
 });
 
+describe("collapse steps", () => {
+  it("teach the bird base as a square base and two petal folds, the paper moving as one sheet", () => {
+    const bird = ORIGAMI_MODELS.find((m) => m.id === "bird-base")!;
+    const derived = deriveSequence(bird.sequence);
+    expect(derived.ok).toBe(true);
+    if (!derived.ok) return;
+    expect(derived.value.map((s) => s.step.kind)).toEqual([
+      "creases",
+      "collapse",
+      "collapse",
+    ]);
+    const animation = animateSequence(derived.value, bird.sequence.anchor);
+    // Each petal fold turns faces over their own lines (and the model with them).
+    expect(animation.moves.every((m) => m.axes !== null)).toBe(true);
+    const input = {
+      vertices: derived.value.at(-1)!.pattern.vertices,
+      faces: animation.faces,
+      collapse: animation.collapse,
+      keyframes: animation.keyframes,
+      moves: animation.moves,
+    };
+    // Mid-fold poses are finite, and each fold ends exactly on its keyframe.
+    for (const at of [1.5, 2, 2.5, 3]) {
+      expect(poseAt(input, at).every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it("rejects a collapse that breaks the fold rules", () => {
+    const result = deriveSequence({
+      anchor: p(0.5, 0.05),
+      steps: [
+        {
+          kind: "creases",
+          instruction: "",
+          segments: [{ from: p(0, 0.5), to: p(1, 0.5), assignment: "V" }],
+        },
+        {
+          kind: "collapse",
+          instruction: "",
+          add: [{ from: p(0.5, 0), to: p(0.5, 0.5), assignment: "M" }],
+        },
+      ],
+    });
+    expect(result.ok ? null : result.error.kind).toBe("not_flat_foldable");
+  });
+});
+
 describe("page turns", () => {
   const frog = ORIGAMI_MODELS.find((m) => m.id === "frog-base")!;
   const axis = { from: p(0.5, -0.5), to: p(0.5, 1) };
@@ -417,7 +464,9 @@ describe("origami routes", () => {
     expect(payload.steps.length).toBe(payload.verification.stepsChecked);
     expect(payload.steps.every((step) => step.added.length > 0)).toBe(true);
     // A base comes with the classic hand sequence, on the page and the sheet.
-    expect(payload.steps[0]!.howTo.length).toBeGreaterThanOrEqual(5);
+    expect(payload.steps[0]!.howTo).toHaveLength(3);
+    // The bird base is then taught as two petal folds, each its own step.
+    expect(payload.steps[1]!.instruction).toMatch(/^Petal-fold/u);
     // Creasing steps show their lines; the square base is drawn folded.
     expect(payload.steps[0]!.howTo[0]!.diagram?.creases).toHaveLength(2);
     expect(

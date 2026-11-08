@@ -1,5 +1,5 @@
 import type { CreasePatternV1, Point2 } from "./crease-pattern";
-import type { Isometry } from "./fold-rules";
+import { applyIsometry, type Isometry } from "./fold-rules";
 import { solveLayerOrder } from "./layers";
 import {
   assignmentsIn,
@@ -43,7 +43,62 @@ export interface FoldMove {
   /** +1: the flap swings toward the viewer; -1: behind. */
   readonly swing: 1 | -1;
   readonly endDeg: number;
+  /**
+   * A collapse moves faces about different lines at once. Per face: the line
+   * it turns over and which way, or null for a face that slides without
+   * turning over (or does not move). Null for a single-line fold.
+   */
+  readonly axes: readonly (FaceAxis | null)[] | null;
+  /**
+   * A collapse whose frame face is in the part that moves turns most of the
+   * model over at once: that shared turn, applied after each face's own
+   * axis (which is then relative to it), so the paper moves as one sheet.
+   */
+  readonly turn: FaceAxis | null;
 }
+
+export interface FaceAxis {
+  readonly line: FoldLine;
+  readonly swing: 1 | -1;
+}
+
+type Linear = Pick<Isometry, "a" | "b" | "c" | "d" | "tx" | "ty">;
+
+const compose = (s: Linear, t: Linear): Linear => ({
+  a: s.a * t.a + s.b * t.c,
+  b: s.a * t.b + s.b * t.d,
+  c: s.c * t.a + s.d * t.c,
+  d: s.c * t.b + s.d * t.d,
+  tx: s.a * t.tx + s.b * t.ty + s.tx,
+  ty: s.c * t.tx + s.d * t.ty + s.ty,
+});
+
+const inverse = (t: Linear): Linear => {
+  const det = t.a * t.d - t.b * t.c;
+  const [a, b, c, d] = [t.d / det, -t.b / det, -t.c / det, t.a / det];
+  return { a, b, c, d, tx: -(a * t.tx + b * t.ty), ty: -(c * t.tx + d * t.ty) };
+};
+
+const isIdentity = (t: Linear): boolean => same({ ...t }, IDENTITY);
+
+/**
+ * The line a reflection turns paper over: its axis holds every midpoint of a
+ * point and its image. Null when the motion does not flip the paper.
+ */
+const reflectionAxis = (r: Linear): FoldLine | null => {
+  if (r.a * r.d - r.b * r.c > 0) return null;
+  // The axis direction is fixed by r: r v = v.
+  const v =
+    Math.hypot(r.a + 1, r.c) > 1e-6
+      ? { x: r.a + 1, y: r.c }
+      : { x: r.b, y: r.d + 1 };
+  const length = Math.hypot(v.x, v.y);
+  const mid = { x: r.tx / 2, y: r.ty / 2 };
+  return {
+    from: { x: mid.x - v.x / length, y: mid.y - v.y / length },
+    to: { x: mid.x + v.x / length, y: mid.y + v.y / length },
+  };
+};
 
 export interface FoldAnimation {
   readonly faces: readonly (readonly number[])[];
@@ -63,6 +118,39 @@ const same = (s: Isometry, t: Isometry): boolean =>
   [s.a - t.a, s.b - t.b, s.c - t.c, s.d - t.d, s.tx - t.tx, s.ty - t.ty].every(
     (d) => Math.abs(d) < 1e-7,
   );
+
+/**
+ * A collapse's first new crease as it lies in the folded state before it,
+ * for its step diagram: mapped by the final face just beside it.
+ */
+const foldedLine = (
+  added: readonly { readonly from: Point2; readonly to: Point2 }[],
+  before: FoldKeyframe,
+  finalPattern: CreasePatternV1,
+): FoldLine => {
+  const first = added[0];
+  if (!first) throw new Error("A collapse added no crease.");
+  const [dx, dy] = [first.to.x - first.from.x, first.to.y - first.from.y];
+  const length = Math.hypot(dx, dy);
+  const mid = {
+    x: (first.from.x + first.to.x) / 2,
+    y: (first.from.y + first.to.y) / 2,
+  };
+  const beside = [1, -1]
+    .map((side) =>
+      faceAt(finalPattern, {
+        x: mid.x - (side * 1e-4 * dy) / length,
+        y: mid.y + (side * 1e-4 * dx) / length,
+      }),
+    )
+    .find((face) => face >= 0);
+  const transform =
+    beside === undefined ? IDENTITY : before.transforms[beside]!;
+  return {
+    from: applyIsometry(transform, first.from),
+    to: applyIsometry(transform, first.to),
+  };
+};
 
 /** For each final face, the face of `cp` it lies in. */
 const containing = (
@@ -243,7 +331,9 @@ export const animateSequence = (
   ];
   const states: (CreasePatternV1 | null)[] = [hasBase ? first.pattern : null];
   const moves: FoldMove[] = [];
-  for (const { step, pattern } of steps.slice(hasBase ? 1 : 0)) {
+  // Collapses: their moves get per-face axes once the layers are solved.
+  const collapses: number[] = [];
+  for (const { step, pattern, added } of steps.slice(hasBase ? 1 : 0)) {
     if (step.kind === "creases")
       throw new Error("A base step appeared after the first step.");
     const before = keyframes.at(-1)!;
@@ -251,12 +341,25 @@ export const animateSequence = (
     const moving = after.map((t, face) => !same(t, before.transforms[face]!));
     const swing: 1 | -1 = step.kind === "mountain" ? -1 : 1;
     const reverse =
-      step.kind === "inside-reverse" || step.kind === "outside-reverse";
+      step.kind === "inside-reverse" ||
+      step.kind === "outside-reverse" ||
+      step.kind === "collapse";
     const endDeg =
       step.kind === "valley" || step.kind === "mountain"
         ? (step.openDeg ?? 180)
         : 180;
-    moves.push({ line: step.line, moving, swing, endDeg });
+    if (step.kind === "collapse") collapses.push(moves.length);
+    moves.push({
+      line:
+        step.kind === "collapse"
+          ? foldedLine(added, before, finalPattern)
+          : step.line,
+      moving,
+      swing,
+      endDeg,
+      axes: null,
+      turn: null,
+    });
     keyframes.push({
       transforms: after,
       layers: restack(before.layers, moving, swing, reverse),
@@ -278,6 +381,44 @@ export const animateSequence = (
     if (!solved) throw new Error("A derived state has no layer order.");
     return { transforms: k.transforms, layers: solved.levels };
   });
+  // A collapse: each face's motion from its two keyframes. The motion most
+  // faces share is the whole model turning (often none); every face then
+  // turns over its own axis relative to that, toward the viewer if it ends
+  // above the faces that only turned with the model.
+  const withAxes = moves.map((move, index): FoldMove => {
+    if (!collapses.includes(index)) return move;
+    const [from, to] = [stacked[index]!, stacked[index + 1]!];
+    const motions = from.transforms.map((t, face) =>
+      compose(to.transforms[face]!, inverse(t)),
+    );
+    const key = (t: Linear) =>
+      [t.a, t.b, t.c, t.d, t.tx, t.ty].map((v) => v.toFixed(5)).join();
+    const counts = new Map<string, number>();
+    motions.forEach((m) => counts.set(key(m), (counts.get(key(m)) ?? 0) + 1));
+    const shared = motions.reduce((best, m) =>
+      (counts.get(key(m)) ?? 0) > (counts.get(key(best)) ?? 0) ? m : best,
+    );
+    const turnLine = isIdentity(shared) ? null : reflectionAxis(shared);
+    const base = turnLine ? shared : (IDENTITY as Linear);
+    const riders = motions.flatMap((m, face) =>
+      key(m) === key(base) ? [to.layers[face] ?? 0] : [],
+    );
+    const level =
+      riders.reduce((a, b) => a + b, 0) / Math.max(1, riders.length);
+    return {
+      ...move,
+      turn: turnLine ? { line: turnLine, swing: 1 } : null,
+      axes: motions.map((m, face) => {
+        const own = compose(inverse(base), m);
+        if (isIdentity(own)) return null;
+        const line = reflectionAxis(own);
+        if (!line) return null;
+        const above = (to.layers[face] ?? 0) >= level;
+        // After the model turns over, what ends above was below before.
+        return { line, swing: above === (turnLine === null) ? 1 : -1 };
+      }),
+    };
+  });
   return {
     faces: finalPattern.faces,
     collapse: collapse?.frames ?? null,
@@ -293,7 +434,7 @@ export const animateSequence = (
       })),
       layers: k.layers,
     })),
-    moves,
+    moves: withAxes,
     formed: form !== null,
   };
 };

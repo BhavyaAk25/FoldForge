@@ -66,6 +66,22 @@ export const OrigamiPayloadSchema = z.object({
         moving: z.array(z.boolean()),
         swing: z.union([z.literal(1), z.literal(-1)]),
         endDeg: z.number(),
+        axes: z
+          .array(
+            z
+              .object({
+                line: z.object({ from: PointSchema, to: PointSchema }),
+                swing: z.union([z.literal(1), z.literal(-1)]),
+              })
+              .nullable(),
+          )
+          .nullable(),
+        turn: z
+          .object({
+            line: z.object({ from: PointSchema, to: PointSchema }),
+            swing: z.union([z.literal(1), z.literal(-1)]),
+          })
+          .nullable(),
       }),
     ),
     formed: z.boolean(),
