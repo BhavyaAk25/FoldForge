@@ -272,7 +272,10 @@ describe("figures", () => {
     ["an origami teapot", { engine: "origami", modelId: "crane", noted: true }],
     // A subject with no fold is never sent to the enclosure engine.
     ["a teapot", { engine: "origami", modelId: "crane", noted: true }],
-    ["a spaceship", { engine: "origami", modelId: "crane", noted: true }],
+    // A subject with no fold of its own gets the closest one, and says so.
+    ["a spaceship", { engine: "origami", modelId: "paper-plane", noted: true }],
+    ["a red rose", { engine: "origami", modelId: "tulip", noted: true }],
+    ["a dragon", { engine: "origami", modelId: "neck_0.52_-10_0.75_-20" }],
     // Everyday objects fold too.
     [
       "Make a cookie",

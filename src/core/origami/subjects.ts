@@ -14,6 +14,8 @@ interface Subject {
   readonly color: string;
   readonly answer:
     { readonly library: OrigamiModelId } | { readonly design: Design };
+  /** No fold of the subject itself: the answer is the closest one, and says so. */
+  readonly closest?: true;
 }
 
 const neck = (
@@ -61,6 +63,40 @@ export const SUBJECTS: readonly Subject[] = [
     title: "Dog",
     color: "#b07a4f",
     answer: { library: "dog-face" },
+  },
+  {
+    words: ["rocket", "spaceship", "spacecraft", "space shuttle"],
+    title: "Rocket",
+    color: "#c8463d",
+    answer: { library: "paper-plane" },
+    closest: true,
+  },
+  {
+    words: ["rose", "roses", "daisy", "sunflower", "daffodil"],
+    title: "Flower",
+    color: "#d6403a",
+    answer: { library: "tulip" },
+    closest: true,
+  },
+  {
+    words: ["lotus", "water lily"],
+    title: "Lotus",
+    color: "#f2a9b4",
+    answer: { library: "lily" },
+    closest: true,
+  },
+  {
+    words: ["butterfly", "butterflies", "moth"],
+    title: "Butterfly",
+    color: "#6c8fd6",
+    answer: { library: "flapping-bird" },
+    closest: true,
+  },
+  {
+    words: ["dragon", "dragons", "wyvern"],
+    title: "Dragon",
+    color: "#3f8f4e",
+    answer: neck(0.52, -10, 0.75, -20),
   },
   {
     words: ["cookie", "biscuit", "cracker"],
@@ -309,20 +345,22 @@ export const subjectOrigami = (
   readonly title: string;
   readonly color: string;
   readonly library: boolean;
+  /** The subject word the prompt used, when the answer is only the closest fold. */
+  readonly closest: string | null;
 } | null => {
   // The longest matching word wins, so "duckling" beats "duck".
-  let best: { readonly subject: Subject; readonly length: number } | null =
-    null;
+  let best: { readonly subject: Subject; readonly word: string } | null = null;
   for (const subject of SUBJECTS)
     for (const word of subject.words)
-      if (mentions(prompt, word) && (!best || word.length > best.length))
-        best = { subject, length: word.length };
+      if (mentions(prompt, word) && (!best || word.length > best.word.length))
+        best = { subject, word };
   if (!best) return null;
   const { answer, title, color } = best.subject;
+  const closest = best.subject.closest ? best.word : null;
   if ("library" in answer)
-    return { modelId: answer.library, title, color, library: true };
+    return { modelId: answer.library, title, color, library: true, closest };
   const design = foldableDesign(answer.design);
   return design
-    ? { modelId: designId(design), title, color, library: false }
+    ? { modelId: designId(design), title, color, library: false, closest }
     : null;
 };

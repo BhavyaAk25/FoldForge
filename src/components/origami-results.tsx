@@ -293,7 +293,7 @@ function Checks({ payload }: { readonly payload: OrigamiPayloadResponse }) {
         </>
       ) : (
         <>
-          Checked at every one of {payload.verification.stepsChecked} steps:
+          Checked at every one of {payload.verification.stepsChecked} steps:{" "}
           {payload.verification.interiorVertices > 0
             ? `Maekawa and Kawasaki at all ${payload.verification.interiorVertices} inner vertices, `
             : ""}

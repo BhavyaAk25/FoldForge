@@ -328,7 +328,13 @@ export const routePrompt = async (prompt: string): Promise<RouteResponse> => {
       prompt,
       subject.modelId,
       subject.library ? null : subject.title,
-      { alternative, paperColor: colorWord(prompt) ?? subject.color },
+      {
+        alternative,
+        paperColor: colorWord(prompt) ?? subject.color,
+        note: subject.closest
+          ? `FoldForge has no ${subject.closest} fold yet, so this is the closest one it has.`
+          : null,
+      },
     );
   }
   // A known figure with no fold yet stays papercraft unless origami is asked for.
