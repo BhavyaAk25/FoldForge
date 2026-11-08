@@ -58,6 +58,8 @@ const EXAMPLE_PROMPTS: readonly ExamplePrompt[] = [
 export const DEFAULT_PROMPT = EXAMPLE_PROMPTS[0]?.prompt ?? "";
 
 interface FoldForgeStartProps {
+  /** An error to show under the prompt's buttons, or null. */
+  readonly notice: React.ReactNode;
   readonly aiAvailable: boolean;
   readonly busy: boolean;
   readonly healthKnown: boolean;
@@ -70,6 +72,7 @@ interface FoldForgeStartProps {
 }
 
 export function FoldForgeStart({
+  notice,
   aiAvailable,
   busy,
   healthKnown,
@@ -142,6 +145,7 @@ export function FoldForgeStart({
               Explore a prepared vertical-lift study
             </button>
           </div>
+          {notice}
           {!aiAvailable && healthKnown ? (
             <p className={styles.offlineNote}>
               Template mode: no AI key is configured, so FoldForge recognizes

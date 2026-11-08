@@ -109,6 +109,10 @@ const formatFailure = (error: unknown): string => {
   if (error instanceof z.ZodError) {
     return "The response could not be checked safely. Please try again.";
   }
+  // fetch rejects with a TypeError when the request never reached the server.
+  if (error instanceof TypeError) {
+    return "FoldForge could not be reached. Check your connection and try again.";
+  }
   return "FoldForge stopped safely. Your saved work is unchanged.";
 };
 
@@ -658,6 +662,22 @@ export function FoldForgeApp() {
         .map((operation) => operation.instruction)
     : [];
 
+  // An error shows where the person is looking: under the prompt before
+  // anything is made, beside the results once they are on screen.
+  const hasResult =
+    origami !== null ||
+    papercraft !== null ||
+    popup !== null ||
+    candidates.length > 0;
+  const errorBanner = error ? (
+    <div className={styles.errorBanner} role="alert">
+      <span>{error}</span>
+      <button type="button" onClick={() => setError("")}>
+        Dismiss
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className={styles.shell} id="top">
       <a className={styles.skipLink} href="#studio-main">
@@ -691,6 +711,7 @@ export function FoldForgeApp() {
 
       <main className={styles.main} id="studio-main">
         <FoldForgeStart
+          notice={hasResult ? null : errorBanner}
           busy={busy}
           healthKnown={health !== null}
           aiAvailable={aiAvailable}
@@ -729,14 +750,7 @@ export function FoldForgeApp() {
         <p className={styles.liveRegion} aria-live="polite" aria-atomic="true">
           {statusMessage}
         </p>
-        {error ? (
-          <div className={styles.errorBanner} role="alert">
-            <span>{error}</span>
-            <button type="button" onClick={() => setError("")}>
-              Dismiss
-            </button>
-          </div>
-        ) : null}
+        {hasResult ? errorBanner : null}
 
         {origami ? (
           <OrigamiResults
