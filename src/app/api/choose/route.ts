@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { modelFailureDiagnostic } from "@/server/api/forge-diagnostic";
 import { runModelRoute } from "@/server/api/model-route";
 import { apiError } from "@/server/api/response";
 import { DescribeFabricationRequestSchema } from "@/server/fabrication-ai/contracts";
@@ -21,15 +20,5 @@ export const POST = (request: Request): Promise<NextResponse> =>
       );
     }
     const route = await routePrompt(parsed.data.prompt);
-    if (route.engine === "error") {
-      const diagnostic = modelFailureDiagnostic("intent", route.error);
-      return apiError(
-        "AI_BUSY",
-        "The free AI is busy right now. Try again in a minute, or name what you want directly: an animal (cat, duck, fox), a car, a house, a box, a card, or an origami crane.",
-        502,
-        [],
-        diagnostic,
-      );
-    }
     return NextResponse.json(route);
   });

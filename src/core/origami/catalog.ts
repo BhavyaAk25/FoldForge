@@ -65,6 +65,35 @@ export const ORIGAMI_CATALOG = [
     keywords: ["cat face", "kitty face", "origami cat", "paper cat"],
   },
   {
+    id: "cookie",
+    name: "Cookie",
+    keywords: ["cookie", "cookies", "biscuit", "origami cookie"],
+  },
+  { id: "house", name: "House", keywords: ["origami house", "paper house"] },
+  {
+    id: "tree",
+    name: "Pine tree",
+    keywords: ["origami tree", "paper tree", "christmas tree", "pine tree"],
+  },
+  {
+    id: "pizza-slice",
+    name: "Pizza slice",
+    keywords: ["pizza", "pizza slice", "slice of pizza"],
+  },
+  {
+    id: "toy-pistol",
+    name: "Toy pistol",
+    keywords: [
+      "toy gun",
+      "paper gun",
+      "origami gun",
+      "gun",
+      "pistol",
+      "toy pistol",
+      "blaster",
+    ],
+  },
+  {
     id: "fox-face",
     name: "Fox face",
     keywords: ["fox face", "origami fox", "paper fox"],
@@ -113,6 +142,9 @@ export const PAPERCRAFT_WORDS = [
   "tag",
   "envelope",
   "tray",
+  "mechanism",
+  "ornament",
+  "drawer",
 ];
 
 /**

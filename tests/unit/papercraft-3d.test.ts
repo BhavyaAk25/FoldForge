@@ -270,7 +270,18 @@ describe("figures", () => {
       { engine: "origami", modelId: "bird_65_65_0.8_-105_120", noted: true },
     ],
     ["an origami teapot", { engine: "origami", modelId: "crane", noted: true }],
-    ["a teapot", { engine: "mechanism" }],
+    // A subject with no fold is never sent to the enclosure engine.
+    ["a teapot", { engine: "origami", modelId: "crane", noted: true }],
+    ["a spaceship", { engine: "origami", modelId: "crane", noted: true }],
+    // Everyday objects fold too.
+    [
+      "Make a cookie",
+      { engine: "origami", modelId: "cookie", paper: "#b9773a" },
+    ],
+    ["make gun", { engine: "origami", modelId: "toy-pistol" }],
+    ["a pizza", { engine: "origami", modelId: "pizza-slice" }],
+    ["a house", { engine: "origami", modelId: "house", preset: "House" }],
+    ["a christmas tree", { engine: "origami", modelId: "tree" }],
     [
       "a goldfish",
       { engine: "origami", modelId: "fish_0.3_80", preset: "Fish" },
