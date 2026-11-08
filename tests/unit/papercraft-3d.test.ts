@@ -301,7 +301,7 @@ describe("figures", () => {
     ["a cootie catcher", { engine: "origami", modelId: "fortune-teller" }],
     ["a fox", { engine: "origami", modelId: "fox-face", preset: "Fox" }],
     ["a samurai helmet", { engine: "origami", modelId: "samurai-helmet" }],
-    ["a turtle", { engine: "origami", modelId: "legs_170_205" }],
+    ["a turtle", { engine: "origami", modelId: "turtle" }],
     // Standing four-legged animals fold from two squares.
     [
       "a deer",

@@ -1045,6 +1045,33 @@ const FROG: OrigamiModel = {
   ),
 };
 
+/**
+ * A turtle: the four-legged frog-base design with the long point folded
+ * behind across the body, so a blunt head sits over a broad shell instead
+ * of the frog's pointed body.
+ */
+const TURTLE_LEGS = fourLegs(
+  { frontDeg: 170, hindDeg: 205 },
+  "A turtle from the frog base, seen from above: a short head over a broad shell, with four legs out.",
+);
+const TURTLE: OrigamiModel = {
+  id: "turtle",
+  ...TURTLE_LEGS,
+  sequence: {
+    ...TURTLE_LEGS.sequence,
+    steps: [
+      ...TURTLE_LEGS.sequence.steps,
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the long point behind about halfway down: a short head over the shell.",
+        line: { from: p(0.2, 0.27), to: p(0.8, 0.27) },
+        toward: p(0.5, 0.49),
+      },
+    ],
+  },
+};
+
 export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   CRANE,
   FLAPPING_BIRD,
@@ -1066,6 +1093,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   BOX,
   LILY,
   FROG,
+  TURTLE,
   SWAN,
   {
     id: "bird-base",
