@@ -360,6 +360,202 @@ const through = (a: Point2, b: Point2): FoldLine => ({
 });
 
 /**
+ * A round cookie: the corners folded behind make a regular octagon (each cut
+ * leg 1 / (2 + sqrt 2) of the side), and its eight corners folded behind
+ * again round it toward a disc. The front stays one colour.
+ */
+const OCTAGON_CUT = 1 / (2 + Math.SQRT2);
+const OCTAGON_CORNERS = [
+  p(OCTAGON_CUT, 0),
+  p(1 - OCTAGON_CUT, 0),
+  p(1, OCTAGON_CUT),
+  p(1, 1 - OCTAGON_CUT),
+  p(1 - OCTAGON_CUT, 1),
+  p(OCTAGON_CUT, 1),
+  p(0, 1 - OCTAGON_CUT),
+  p(0, OCTAGON_CUT),
+];
+const COOKIE: OrigamiModel = {
+  id: "cookie",
+  summary:
+    "A round cookie: a square's corners folded behind, twice, until it is nearly a disc.",
+  viewDeg: 0,
+  sequence: {
+    anchor: p(0.5, 0.5),
+    steps: [
+      ...(
+        [
+          [p(0, OCTAGON_CUT), p(OCTAGON_CUT, 0), p(0.02, 0.02)],
+          [p(1 - OCTAGON_CUT, 0), p(1, OCTAGON_CUT), p(0.98, 0.02)],
+          [p(1, 1 - OCTAGON_CUT), p(1 - OCTAGON_CUT, 1), p(0.98, 0.98)],
+          [p(OCTAGON_CUT, 1), p(0, 1 - OCTAGON_CUT), p(0.02, 0.98)],
+        ] as const
+      ).map(([a, b, toward], i): FoldStep => ({
+        kind: "mountain",
+        instruction:
+          i === 0
+            ? "Coloured side up, fold one corner behind so the cut is about 3/10 of the side: the start of an octagon."
+            : "Fold the next corner behind the same way.",
+        line: through(a, b),
+        toward,
+      })),
+      ...OCTAGON_CORNERS.map((v, i): FoldStep => {
+        const [dx, dy] = [v.x - 0.5, v.y - 0.5];
+        const length = Math.hypot(dx, dy);
+        const [ux, uy] = [dx / length, dy / length];
+        const at = p(v.x - 0.035 * ux, v.y - 0.035 * uy);
+        return {
+          kind: "mountain",
+          instruction:
+            i === 0
+              ? "Fold the tip of one of the eight corners behind, just a little, to round it."
+              : "Round the next corner the same way.",
+          line: through(at, p(at.x - uy, at.y + ux)),
+          toward: p(v.x - 0.005 * ux, v.y - 0.005 * uy),
+        };
+      }),
+    ],
+  },
+};
+
+/**
+ * A house: coloured side down, the two top corners fold down to meet at the
+ * centre, so their coloured backs make the roof over plain white walls.
+ */
+const HOUSE: OrigamiModel = {
+  id: "house",
+  summary: "A house with a coloured roof over white walls, from two folds.",
+  viewDeg: 0,
+  colorDown: true,
+  sequence: {
+    anchor: p(0.5, 0.2),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down. Fold the top left corner down to the centre of the square: half the roof.",
+        line: through(p(0, 0.5), p(0.5, 1)),
+        toward: p(0.02, 0.98),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the top right corner down to the centre too.",
+        line: through(p(1, 0.5), p(0.5, 1)),
+        toward: p(0.98, 0.98),
+      },
+    ],
+  },
+};
+
+/**
+ * A tall triangle: two edges folded behind to the diagonal (a kite seen
+ * from the back), then its wide corner folded behind along the shoulders.
+ * The tree and the pizza slice both start here.
+ */
+const KITE_T = Math.tan(Math.PI / 8);
+const TALL_TRIANGLE: readonly FoldStep[] = [
+  {
+    kind: "mountain",
+    instruction:
+      "Coloured side up, fold the lower edge behind to the diagonal from the bottom left corner.",
+    line: through(p(0, 0), p(1, KITE_T)),
+    toward: p(0.95, 0.05),
+  },
+  {
+    kind: "mountain",
+    instruction: "Fold the left edge behind to the same diagonal: a kite.",
+    line: through(p(0, 0), p(KITE_T, 1)),
+    toward: p(0.05, 0.95),
+  },
+  {
+    kind: "mountain",
+    instruction:
+      "Fold the kite's wide corner behind along the line between its two side points: a tall triangle.",
+    line: through(p(1, KITE_T), p(KITE_T, 1)),
+    toward: p(0.98, 0.98),
+  },
+];
+
+const TREE: OrigamiModel = {
+  id: "tree",
+  summary: "A tall pine tree, from three folds behind.",
+  viewDeg: -135,
+  sequence: { anchor: p(0.3, 0.3), steps: TALL_TRIANGLE },
+};
+
+const PIZZA_CRUST = 1 + KITE_T - 0.14;
+const PIZZA_SLICE: OrigamiModel = {
+  id: "pizza-slice",
+  summary: "A slice of pizza, point down, with its crust folded over the top.",
+  viewDeg: 45,
+  sequence: {
+    anchor: p(0.3, 0.3),
+    steps: [
+      ...TALL_TRIANGLE,
+      {
+        kind: "valley",
+        instruction:
+          "Fold a narrow band along the wide edge to the front: the crust. Turn it point down.",
+        line: through(p(PIZZA_CRUST, 0), p(0, PIZZA_CRUST)),
+        toward: p(0.9, 0.48),
+      },
+    ],
+  },
+};
+
+/**
+ * A toy pistol: the square folded in half three times into a strip (the
+ * barrel), and its back end inside-reverse-folded down and back as the grip.
+ * A reflection in a line at 145 degrees turns the strip's 0-degree direction
+ * to 290 degrees: down and slightly back.
+ */
+const TOY_PISTOL: OrigamiModel = {
+  id: "toy-pistol",
+  summary:
+    "A paper toy pistol: a folded strip for the barrel, its end turned down for the grip.",
+  viewDeg: 0,
+  // Three folds toward the viewer leave the paper's back on top.
+  colorDown: true,
+  sequence: {
+    anchor: p(0.2, 0.06),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down. Fold the square in half, top edge down to the bottom.",
+        line: through(p(0, 0.5), p(1, 0.5)),
+        toward: p(0.5, 0.95),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold it in half again the same way.",
+        line: through(p(0, 0.25), p(1, 0.25)),
+        toward: p(0.5, 0.45),
+      },
+      {
+        kind: "valley",
+        instruction: "And once more, into a long narrow strip: the barrel.",
+        line: through(p(0, 0.125), p(1, 0.125)),
+        toward: p(0.5, 0.22),
+      },
+      {
+        kind: "inside-reverse",
+        instruction:
+          "Inside-reverse-fold the right end down and slightly back: the grip.",
+        line: through(
+          p(0.72, 0.06),
+          p(
+            0.72 + 0.4 * Math.cos((145 * Math.PI) / 180),
+            0.06 + 0.4 * Math.sin((145 * Math.PI) / 180),
+          ),
+        ),
+        toward: p(0.97, 0.06),
+      },
+    ],
+  },
+};
+
+/**
  * A fox's face: the triangle's side corners fold straight up past the top
  * edge as tall ears, and the bottom point stays sharp for the snout. Each
  * ear line is the perpendicular bisector of the corner and its ear tip.
@@ -790,6 +986,11 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   FORTUNE_TELLER,
   SAMURAI_HELMET,
   FOX_FACE,
+  COOKIE,
+  HOUSE,
+  TREE,
+  PIZZA_SLICE,
+  TOY_PISTOL,
   DOG_FACE,
   CAT_FACE,
   HEART,

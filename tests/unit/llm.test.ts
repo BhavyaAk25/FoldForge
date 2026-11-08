@@ -188,3 +188,36 @@ describe("generateStructured", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("routing with the AI", () => {
+  beforeEach(() => create.mockReset());
+
+  it("never turns an object the AI calls a mechanism into an enclosure", async () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    const { routePrompt } = await import("@/server/fabrication-ai/router");
+    create.mockResolvedValue(
+      reply(
+        JSON.stringify({
+          engine: "mechanism",
+          cardDesign: null,
+          origamiId: null,
+          presetId: null,
+          colors: null,
+          sizeMm: null,
+          paperSizeMm: null,
+          neckDesign: null,
+          birdDesign: null,
+          fishDesign: null,
+          legsDesign: null,
+          standingDesign: null,
+          title: null,
+          reason: "A laptop is a hinged enclosure.",
+        }),
+      ),
+    );
+    const route = await routePrompt("a laptop");
+    vi.unstubAllEnvs();
+    expect(route).toMatchObject({ engine: "origami", modelId: "crane" });
+    expect(route.engine === "origami" && route.note).toMatch(/no fold/u);
+  });
+});

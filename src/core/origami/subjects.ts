@@ -63,6 +63,36 @@ export const SUBJECTS: readonly Subject[] = [
     answer: { library: "dog-face" },
   },
   {
+    words: ["cookie", "biscuit", "cracker"],
+    title: "Cookie",
+    color: "#b9773a",
+    answer: { library: "cookie" },
+  },
+  {
+    words: ["house", "home", "cottage", "cabin", "hut", "barn"],
+    title: "House",
+    color: "#c8463d",
+    answer: { library: "house" },
+  },
+  {
+    words: ["tree", "pine", "fir", "spruce", "christmas tree", "forest"],
+    title: "Pine tree",
+    color: "#3f8f4e",
+    answer: { library: "tree" },
+  },
+  {
+    words: ["pizza"],
+    title: "Pizza slice",
+    color: "#f2b134",
+    answer: { library: "pizza-slice" },
+  },
+  {
+    words: ["gun", "pistol", "revolver", "blaster", "rifle", "water gun"],
+    title: "Toy pistol",
+    color: "#3b3f45",
+    answer: { library: "toy-pistol" },
+  },
+  {
     words: ["fox", "foxes"],
     title: "Fox",
     color: "#e0702d",

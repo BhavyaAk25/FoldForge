@@ -294,9 +294,11 @@ function Checks({ payload }: { readonly payload: OrigamiPayloadResponse }) {
       ) : (
         <>
           Checked at every one of {payload.verification.stepsChecked} steps:
-          Maekawa and Kawasaki at all {payload.verification.interiorVertices}{" "}
-          inner vertices, every face lands in one consistent flat-folded place,
-          and the layers stack with no paper passing through paper.{" "}
+          {payload.verification.interiorVertices > 0
+            ? `Maekawa and Kawasaki at all ${payload.verification.interiorVertices} inner vertices, `
+            : ""}
+          every face lands in one consistent flat-folded place, and the layers
+          stack with no paper passing through paper.{" "}
           {payload.verification.mountains} mountain and{" "}
           {payload.verification.valleys} valley creases.
           {payload.animation.collapseStrain !== null
