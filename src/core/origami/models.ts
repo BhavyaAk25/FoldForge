@@ -7,8 +7,8 @@ import {
   frogCorner,
   across,
   BIRD_ANCHOR,
-  BIRD_BASE,
-  BIRD_BASE_STEP,
+  BIRD_BASE_STEPS,
+  SQUARE_BASE,
   crease,
   neckCreature,
   p,
@@ -19,7 +19,6 @@ import {
 } from "./families";
 import {
   type HowToStep,
-  BIRD_BASE_HOW,
   FISH_BASE_HOW,
   FROG_BASE_HOW,
   SQUARE_BASE_HOW,
@@ -40,11 +39,6 @@ export interface OrigamiModel extends ModelShape {
 }
 
 const R = Math.SQRT1_2;
-const SQUARE_BASE: readonly CreaseSegment[] = [
-  crease(p(0.5, 0), p(0.5, 1), "M"),
-  crease(p(0, 0.5), p(1, 0.5), "M"),
-  crease(p(1, 0), p(0, 1), "V"),
-];
 
 const WATERBOMB_BASE: readonly CreaseSegment[] = [
   crease(p(0, 0), p(1, 1), "V"),
@@ -104,7 +98,7 @@ const FLAPPING_BIRD: OrigamiModel = {
   sequence: {
     anchor: BIRD_ANCHOR,
     steps: [
-      BIRD_BASE_STEP,
+      ...BIRD_BASE_STEPS,
       {
         kind: "inside-reverse",
         instruction:
@@ -999,14 +993,13 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   LILY,
   FROG,
   SWAN,
-  base(
-    "bird-base",
-    BIRD_BASE,
-    "Crease both diagonals and midlines, collapse into a square base, kite-fold the lower edges to the centre, then petal-fold the front and back.",
-    BIRD_BASE_HOW,
-    BIRD_ANCHOR,
-    "The base for the crane, the flapping bird, and many birds.",
-  ),
+  {
+    id: "bird-base",
+    summary:
+      "The base for the crane, the flapping bird, and many birds: a square base, petal-folded front and back.",
+    viewDeg: -90,
+    sequence: { anchor: BIRD_ANCHOR, steps: BIRD_BASE_STEPS },
+  },
   base(
     "square-base",
     SQUARE_BASE,

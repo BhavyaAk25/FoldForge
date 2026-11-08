@@ -1,4 +1,5 @@
 import type { FoldKeyframe, FoldMove } from "./animate";
+import type { FoldLine } from "./sequence";
 import type { Point2 } from "./crease-pattern";
 import { applyIsometry } from "./fold-rules";
 
@@ -65,7 +66,10 @@ const collapsePose = (
   return lerp(frames[index]!, frames[index + 1]!, position - index);
 };
 
-/** One face's corners turned about move `index`'s line, `u` of the way through it. */
+/**
+ * One face's corners turned about its line in move `index` (the fold line,
+ * or the face's own axis in a collapse), `u` of the way through it.
+ */
 const turnedFace = (
   input: PoseInput,
   face: number,
@@ -75,15 +79,16 @@ const turnedFace = (
   const before = input.keyframes[index]!;
   const after = input.keyframes[index + 1]!;
   const move = input.moves[index]!;
+  const axis = move.axes?.[face] ?? { line: move.line, swing: move.swing };
   const angle = (move.endDeg * Math.PI * ease(u)) / 180;
-  const origin = move.line.from;
+  const origin = axis.line.from;
   const length = Math.hypot(
-    move.line.to.x - origin.x,
-    move.line.to.y - origin.y,
+    axis.line.to.x - origin.x,
+    axis.line.to.y - origin.y,
   );
   const along = {
-    x: (move.line.to.x - origin.x) / length,
-    y: (move.line.to.y - origin.y) / length,
+    x: (axis.line.to.x - origin.x) / length,
+    y: (axis.line.to.y - origin.y) / length,
   };
   const normal = { x: -along.y, y: along.x };
   const z =
@@ -98,9 +103,84 @@ const turnedFace = (
     return [
       origin.x + along.x * t + normal.x * d * Math.cos(angle),
       origin.y + along.y * t + normal.y * d * Math.cos(angle),
-      z + move.swing * Math.abs(d) * Math.sin(angle),
+      z + axis.swing * Math.abs(d) * Math.sin(angle),
     ];
   });
+};
+
+/** A point turned about an in-plane line in 3D: (along, across, up). */
+const frameOf = (line: FoldLine) => {
+  const length = Math.hypot(line.to.x - line.from.x, line.to.y - line.from.y);
+  const along = {
+    x: (line.to.x - line.from.x) / length,
+    y: (line.to.y - line.from.y) / length,
+  };
+  return { origin: line.from, along, normal: { x: -along.y, y: along.x } };
+};
+
+/**
+ * One face during a collapse: it turns over its own axis (if it has one),
+ * then the whole model turns with the shared turn (if any). At the end the
+ * two make up exactly the face's motion between the keyframes.
+ */
+const collapsedFace = (
+  input: PoseInput,
+  face: number,
+  index: number,
+  u: number,
+): number[] => {
+  const move = input.moves[index]!;
+  const from = input.keyframes[index]!;
+  const to = input.keyframes[index + 1]!;
+  const own = move.axes?.[face] ?? null;
+  const angle = Math.PI * ease(u);
+  const z0 = (from.layers[face] ?? 0) * gapFor(input);
+  let points = input.faces[face]!.map((v) => {
+    const p = applyIsometry(from.transforms[face]!, input.vertices[v]!);
+    return { x: p.x, y: p.y, z: z0 };
+  });
+  if (!own && !move.turn && move.moving[face]) {
+    // Slides without turning over: straight there.
+    const z1 = (to.layers[face] ?? 0) * gapFor(input);
+    return input.faces[face]!.flatMap((v, i) => {
+      const q = applyIsometry(to.transforms[face]!, input.vertices[v]!);
+      const p = points[i]!;
+      const e = ease(u);
+      return [p.x + (q.x - p.x) * e, p.y + (q.y - p.y) * e, z0 + (z1 - z0) * e];
+    });
+  }
+  if (own) {
+    const { origin, along, normal } = frameOf(own.line);
+    points = points.map((p) => {
+      const o = { x: p.x - origin.x, y: p.y - origin.y };
+      const t = o.x * along.x + o.y * along.y;
+      const d = o.x * normal.x + o.y * normal.y;
+      return {
+        x: origin.x + along.x * t + normal.x * d * Math.cos(angle),
+        y: origin.y + along.y * t + normal.y * d * Math.cos(angle),
+        z: p.z + own.swing * Math.abs(d) * Math.sin(angle),
+      };
+    });
+  }
+  if (move.turn) {
+    // The whole model turns over: a true rotation, so z flips with it.
+    const { origin, along, normal } = frameOf(move.turn.line);
+    points = points.map((p) => {
+      const o = { x: p.x - origin.x, y: p.y - origin.y };
+      const t = o.x * along.x + o.y * along.y;
+      const d = o.x * normal.x + o.y * normal.y;
+      const [d1, z1] = [
+        d * Math.cos(angle) - p.z * Math.sin(angle),
+        d * Math.sin(angle) + p.z * Math.cos(angle),
+      ];
+      return {
+        x: origin.x + along.x * t + normal.x * d1,
+        y: origin.y + along.y * t + normal.y * d1,
+        z: z1,
+      };
+    });
+  }
+  return points.flatMap((p) => [p.x, p.y, p.z]);
 };
 
 /**
@@ -109,7 +189,9 @@ const turnedFace = (
  */
 const movePose = (input: PoseInput, index: number, u: number): number[] =>
   input.faces.flatMap((face, f) => {
-    if (input.moves[index]!.moving[f]) return turnedFace(input, f, index, u);
+    const move = input.moves[index]!;
+    if (move.axes) return collapsedFace(input, f, index, u);
+    if (move.moving[f]) return turnedFace(input, f, index, u);
     for (let j = index - 1; j >= 0; j -= 1) {
       if (!input.moves[j]!.moving[f]) continue;
       if (input.moves[j]!.endDeg < 180) return turnedFace(input, f, j, 1);
