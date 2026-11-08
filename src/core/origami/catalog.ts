@@ -111,6 +111,11 @@ export const ORIGAMI_CATALOG = [
     keywords: ["sailboat", "sail boat", "paper boat", "origami boat", "yacht"],
   },
   {
+    id: "star",
+    name: "Star",
+    keywords: ["star", "origami star", "paper star"],
+  },
+  {
     id: "fox-face",
     name: "Fox face",
     keywords: ["fox face", "origami fox", "paper fox"],

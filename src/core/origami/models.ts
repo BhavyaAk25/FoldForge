@@ -678,6 +678,60 @@ const SAILBOAT: OrigamiModel = {
 };
 
 /**
+ * An eight-pointed star: the four corners fold behind to the centre (a
+ * blintz from the back), then each flap's point folds back out past its edge,
+ * so a square of points stands out from behind the diamond. Each point line
+ * is parallel to its flap's edge, `STAR_TIP` of the way from the edge to the
+ * centre, and moves only its own flap.
+ */
+const STAR_TIP = 0.29;
+const STAR_CORNERS = [
+  ["bottom left", 0, 0],
+  ["bottom right", 1, 0],
+  ["top right", 1, 1],
+  ["top left", 0, 1],
+] as const;
+const STAR: OrigamiModel = {
+  id: "star",
+  summary:
+    "An eight-pointed star: four corners folded behind, then their points folded back out.",
+  viewDeg: 45,
+  sequence: {
+    anchor: p(0.5, 0.5),
+    steps: [
+      ...STAR_CORNERS.map(([name, x, y], index): FoldStep => ({
+        kind: "mountain",
+        instruction:
+          index === 0
+            ? "Coloured side up, fold the bottom left corner behind to the centre."
+            : `Fold the ${name} corner behind to the centre too.`,
+        line: through(p(0.5, y), p(x, 0.5)),
+        toward: p(0.01 + 0.98 * x, 0.01 + 0.98 * y),
+      })),
+      ...STAR_CORNERS.map(([name, x, y], index): FoldStep => {
+        // From the edge midpoint toward the centre, spanning the whole flap.
+        const at = (v: number) => 0.25 + 0.5 * v + (0.25 - 0.5 * v) * STAR_TIP;
+        const [dx, dy] = [x === 0 ? 0.3 : -0.3, y === 0 ? -0.3 : 0.3];
+        return {
+          kind: "mountain",
+          instruction:
+            index === 0
+              ? "Behind, fold the point of the bottom left flap back out past the edge: a star point."
+              : `Fold the point of the ${name} flap back out the same way.`,
+          line: {
+            from: p(at(x) - dx, at(y) - dy),
+            to: p(at(x) + dx, at(y) + dy),
+          },
+          toward: p(0.5, 0.5),
+          layers: ({ paper }) =>
+            Math.abs(paper.x - x) + Math.abs(paper.y - y) < 0.5,
+        };
+      }),
+    ],
+  },
+};
+
+/**
  * A fox's face: the triangle's side corners fold straight up past the top
  * edge as tall ears, and the bottom point stays sharp for the snout. Each
  * ear line is the perpendicular bisector of the corner and its ear tip.
@@ -1188,6 +1242,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   PIZZA_SLICE,
   TOY_PISTOL,
   SAILBOAT,
+  STAR,
   BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
