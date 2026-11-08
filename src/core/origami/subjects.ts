@@ -260,7 +260,7 @@ export const SUBJECTS: readonly Subject[] = [
     words: ["fish", "goldfish", "koi", "carp", "trout", "salmon"],
     title: "Fish",
     color: "#ec8a2f",
-    answer: { design: { family: "fish", tailAt: 0.3, tailUpDeg: 80 } },
+    answer: { library: "fish" },
   },
   ...(
     [

@@ -1046,6 +1046,53 @@ const FROG: OrigamiModel = {
 };
 
 /**
+ * A fish seen from the side, head forward: a diamond whose back corner is
+ * pleated (folded in, then its tip folded back out past the new edge) into
+ * a tail fin, and whose top and bottom corners fold behind to slim it.
+ * The pleat's second fold takes only the tail flap's layers.
+ */
+const FISH_IN = 0.25;
+const FISH_OUT = 0.27;
+const FISH: OrigamiModel = {
+  id: "fish",
+  summary:
+    "A fish with a pointed head and a tail fin, from a square on its corner.",
+  viewDeg: -45,
+  sequence: {
+    anchor: p(0.6, 0.6),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Coloured side up, turn the square to a diamond. Fold the left corner in, about a quarter of the way.",
+        line: through(p(2 * FISH_IN, 0), p(0, 2 * FISH_IN)),
+        toward: p(0.01, 0.01),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold that corner back out just past the new edge, so its tip sticks out behind as the tail.",
+        line: through(p(2 * FISH_OUT, 0), p(0, 2 * FISH_OUT)),
+        toward: p(2 * FISH_IN - 0.01, 2 * FISH_IN - 0.01),
+        layers: (f) => f.paper.x + f.paper.y < 2 * FISH_IN,
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the bottom corner behind, level with the middle.",
+        line: through(p(1, 0.5), p(0.5, 0)),
+        toward: p(0.99, 0.01),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold the top corner behind the same way: a slim body.",
+        line: through(p(0, 0.5), p(0.5, 1)),
+        toward: p(0.01, 0.99),
+      },
+    ],
+  },
+};
+
+/**
  * A turtle: the four-legged frog-base design with the long point folded
  * behind across the body, so a blunt head sits over a broad shell instead
  * of the frog's pointed body.
@@ -1094,6 +1141,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   LILY,
   FROG,
   TURTLE,
+  FISH,
   SWAN,
   {
     id: "bird-base",

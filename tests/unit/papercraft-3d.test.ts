@@ -289,10 +289,7 @@ describe("figures", () => {
     ["a pizza", { engine: "origami", modelId: "pizza-slice" }],
     ["a house", { engine: "origami", modelId: "house", preset: "House" }],
     ["a christmas tree", { engine: "origami", modelId: "tree" }],
-    [
-      "a goldfish",
-      { engine: "origami", modelId: "fish_0.3_80", preset: "Fish" },
-    ],
+    ["a goldfish", { engine: "origami", modelId: "fish", preset: "Fish" }],
     [
       "an origami frog",
       { engine: "origami", modelId: "frog", paper: "#4f9d55" },
