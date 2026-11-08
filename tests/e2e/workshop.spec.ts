@@ -810,8 +810,10 @@ test("shows a dropped request beside the prompt, in view", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("What do you want to make?").fill("a crane");
   await page.getByRole("button", { name: "Create design" }).click();
-  const alert = page.getByRole("alert");
-  await expect(alert).toContainText("could not be reached");
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "could not be reached" });
+  await expect(alert).toBeVisible();
   await expect(alert).toBeInViewport();
   // The aborted request is the point of this test, not an unexpected error.
   const messages = consoleMessagesByPage.get(page) ?? [];
