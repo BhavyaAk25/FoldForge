@@ -55,6 +55,7 @@ export const ORIGAMI_CATALOG = [
   { id: "frog-base", name: "Frog base", keywords: ["frog base"] },
   { id: "lily", name: "Lily", keywords: ["lily", "lilies", "origami lily"] },
   { id: "frog", name: "Frog", keywords: ["frog", "toad", "origami frog"] },
+  { id: "fish", name: "Fish", keywords: ["origami fish", "paper fish"] },
   {
     id: "turtle",
     name: "Turtle",
