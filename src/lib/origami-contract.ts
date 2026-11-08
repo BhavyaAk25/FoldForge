@@ -96,6 +96,7 @@ export const OrigamiPayloadSchema = z.object({
       dy: z.number(),
     })
     .nullable(),
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]),
   verification: z.object({
     stepsChecked: z.number().int(),
     mountains: z.number().int(),

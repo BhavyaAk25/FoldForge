@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { GET as exportGet } from "@/app/api/origami/[id]/[format]/route";
 import { GET as modelGet } from "@/app/api/origami/[id]/route";
 import { animateSequence } from "@/core/origami/animate";
+import { difficultyOf } from "@/core/origami/difficulty";
 import {
   ORIGAMI_CATALOG,
   asksForOrigami,
@@ -314,6 +315,20 @@ describe("the origami box", () => {
     };
     const derived = deriveSequence(open as typeof model.sequence);
     expect(derived.ok ? null : derived.error.kind).toBe("form_open");
+  });
+});
+
+describe("difficulty", () => {
+  it.each([
+    ["paper-plane", "beginner"],
+    ["cookie", "beginner"],
+    ["crane", "intermediate"],
+    ["butterfly", "intermediate"],
+    ["frog", "advanced"],
+    ["lily", "advanced"],
+  ] as const)("rates %s %s", (id, level) => {
+    const model = ORIGAMI_MODELS.find((m) => m.id === id)!;
+    expect(difficultyOf(model.sequence.steps)).toBe(level);
   });
 });
 

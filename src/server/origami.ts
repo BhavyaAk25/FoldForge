@@ -13,6 +13,7 @@ import {
   type InstructionStep,
 } from "@/core/origami/export";
 import type { ModelShape } from "@/core/origami/families";
+import { difficultyOf, type Difficulty } from "@/core/origami/difficulty";
 import { applyIsometry } from "@/core/origami/fold-rules";
 import { designSheets, parseDesignId } from "@/core/origami/generate";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
@@ -61,6 +62,8 @@ export interface OrigamiPayload {
     readonly dx: number;
     readonly dy: number;
   } | null;
+  /** How hard it is to fold by hand, from its steps. */
+  readonly difficulty: Difficulty;
   readonly verification: {
     /** Every intermediate state passed Maekawa, Kawasaki, and face consistency. */
     readonly stepsChecked: number;
@@ -281,6 +284,7 @@ const build = (id: string): Built | null => {
         formed: animation.formed,
       },
       assembly,
+      difficulty: difficultyOf(model.sequence.steps),
       verification: {
         stepsChecked: derived.value.length,
         mountains: pattern.edges.filter((e) => e.assignment === "M").length,

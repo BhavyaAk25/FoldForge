@@ -740,6 +740,18 @@ export function OrigamiResults({
 }) {
   const pair = payload.assembly && second ? payload.assembly : null;
   const name = title ?? (pair ? "Standing animal" : payload.name);
+  const levels = ["beginner", "intermediate", "advanced"] as const;
+  const level =
+    pair && second
+      ? levels[
+          Math.max(
+            levels.indexOf(payload.difficulty),
+            levels.indexOf(second.difficulty),
+          )
+        ]!
+      : payload.difficulty;
+  const steps =
+    payload.steps.length + (pair && second ? second.steps.length : 0);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -761,6 +773,9 @@ export function OrigamiResults({
               : "Origami from one square"}
         </p>
         <h2 id="origami-title">{name}</h2>
+        <p className={styles.difficulty} data-level={level}>
+          {level[0]!.toUpperCase() + level.slice(1)} · {steps} steps
+        </p>
         {pair ? null : <p>{payload.summary}</p>}
         {note ? (
           <p className={styles.aiChoice}>
