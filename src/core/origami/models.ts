@@ -354,6 +354,79 @@ const through = (a: Point2, b: Point2): FoldLine => ({
 });
 
 /**
+ * The classic butterfly on the waterbomb base (point up, its two front flaps
+ * hinged at the triangle's sides). Each front flap is the bottom face's side
+ * corner with the side face folded onto it; the bottom face spans both, but
+ * each fold line only crosses its own corner.
+ */
+const BOTTOM = ({ paper: { x, y } }: FaceSample) => y < x && x + y < 1;
+const BUTTERFLY: OrigamiModel = {
+  id: "butterfly",
+  summary:
+    "The classic butterfly from a waterbomb base: open the wings at the end so it stands.",
+  viewDeg: 0,
+  // The wings are the folded-up flaps, which show the paper's back.
+  colorDown: true,
+  sequence: {
+    anchor: p(0.5, 0.1),
+    steps: [
+      {
+        kind: "creases",
+        instruction:
+          "Start coloured side down and fold a waterbomb base: a triangle, point up, with two flaps on each side.",
+        segments: WATERBOMB_BASE,
+        howTo: WATERBOMB_BASE_HOW,
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the bottom right corner of the front flap up to the top point.",
+        line: { from: p(0.4, -0.1), to: p(1.1, 0.6) },
+        toward: p(0.97, 0.01),
+        layers: (f) =>
+          BOTTOM(f) ||
+          (f.paper.x + f.paper.y > 1 &&
+            f.paper.y < 0.5 &&
+            f.paper.x > f.paper.y),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the bottom left corner up the same way: a square on a triangle.",
+        line: { from: p(0.6, -0.1), to: p(-0.1, 0.6) },
+        toward: p(0.03, 0.01),
+        layers: (f) =>
+          BOTTOM(f) ||
+          (f.paper.y > f.paper.x &&
+            f.paper.x + f.paper.y < 1 &&
+            f.paper.y < 0.5),
+      },
+      {
+        kind: "mountain",
+        instruction:
+          "Turn over and fold the top point down so it reaches just past the bottom edge.",
+        line: { from: p(-0.1, 0.2), to: p(1.1, 0.2) },
+        toward: p(0.5, 0.45),
+      },
+      {
+        kind: "mountain",
+        instruction: "Fold that tip back up over the edge to lock the body.",
+        line: { from: p(0.3, -0.03), to: p(0.7, -0.03) },
+        toward: p(0.5, -0.09),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the butterfly in half down the middle, then open the wings.",
+        line: { from: p(0.5, -0.2), to: p(0.5, 0.6) },
+        toward: p(0.2, 0.15),
+        openDeg: 40,
+      },
+    ],
+  },
+};
+
+/**
  * A round cookie: the corners folded behind make a regular octagon (each cut
  * leg 1 / (2 + sqrt 2) of the side), and its eight corners folded behind
  * again round it toward a disc. The front stays one colour.
@@ -985,6 +1058,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   TREE,
   PIZZA_SLICE,
   TOY_PISTOL,
+  BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
   HEART,
