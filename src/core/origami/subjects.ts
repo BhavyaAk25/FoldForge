@@ -281,6 +281,12 @@ export const SUBJECTS: readonly Subject[] = [
     answer: { library: "frog" },
   },
   {
+    words: ["turtle", "tortoise"],
+    title: "Turtle",
+    color: "#4f7f4f",
+    answer: { library: "turtle" },
+  },
+  {
     words: ["lily", "lilies"],
     title: "Lily",
     color: "#f2a9b4",
@@ -290,7 +296,6 @@ export const SUBJECTS: readonly Subject[] = [
   ...(
     [
       [["toad"], "Toad", "#8a6a4f", 165, 230],
-      [["turtle", "tortoise"], "Turtle", "#4f7f4f", 170, 205],
       [
         ["lizard", "gecko", "newt", "salamander"],
         "Lizard",
