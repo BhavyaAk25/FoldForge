@@ -19,6 +19,7 @@ export const ORIGAMI_CATALOG = [
       "airplane",
       "aeroplane",
       "plane",
+      "jet",
       "dart",
     ],
   },
