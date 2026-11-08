@@ -91,9 +91,13 @@ const turnedFace = (
     y: (axis.line.to.y - origin.y) / length,
   };
   const normal = { x: -along.y, y: along.x };
+  // A fold that stops short of flat (a wing opened partway) never turns the
+  // flap's layers past each other, so they keep their order from before;
+  // the keyframe after is the fully folded stack, reversed.
+  const target = move.endDeg < 180 ? before : after;
   const z =
     ((before.layers[face] ?? 0) +
-      ((after.layers[face] ?? 0) - (before.layers[face] ?? 0)) * ease(u)) *
+      ((target.layers[face] ?? 0) - (before.layers[face] ?? 0)) * ease(u)) *
     gapFor(input);
   return input.faces[face]!.flatMap((v) => {
     const p = applyIsometry(before.transforms[face]!, input.vertices[v]!);

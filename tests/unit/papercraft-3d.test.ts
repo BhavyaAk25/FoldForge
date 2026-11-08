@@ -276,6 +276,10 @@ describe("figures", () => {
     ["a spaceship", { engine: "origami", modelId: "paper-plane", noted: true }],
     ["a red rose", { engine: "origami", modelId: "tulip", noted: true }],
     ["a dragon", { engine: "origami", modelId: "neck_0.52_-10_0.75_-20" }],
+    [
+      "a blue butterfly",
+      { engine: "origami", modelId: "butterfly", paper: "#3a7bd5" },
+    ],
     // Everyday objects fold too.
     [
       "Make a cookie",

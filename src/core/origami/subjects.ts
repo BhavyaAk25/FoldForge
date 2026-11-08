@@ -89,8 +89,7 @@ export const SUBJECTS: readonly Subject[] = [
     words: ["butterfly", "butterflies", "moth"],
     title: "Butterfly",
     color: "#6c8fd6",
-    answer: { library: "flapping-bird" },
-    closest: true,
+    answer: { library: "butterfly" },
   },
   {
     words: ["dragon", "dragons", "wyvern"],
