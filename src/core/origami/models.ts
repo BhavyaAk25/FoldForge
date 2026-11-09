@@ -796,6 +796,54 @@ const SNAKE: OrigamiModel = {
 };
 
 /**
+ * A paper hat: the square folded in half (the fold is the crown), its two top
+ * corners folded down to the centre line, and the bottom band of every layer
+ * folded up over the triangle as the brim. On a square the corner triangles
+ * reach the bottom, so the brim takes all the layers and its ends stand out
+ * past the sides.
+ */
+const HAT_BRIM = 0.12;
+const PAPER_HAT: OrigamiModel = {
+  id: "paper-hat",
+  summary:
+    "The classic folded paper hat: a pointed crown with a brim, in four folds.",
+  viewDeg: 0,
+  colorDown: true,
+  sequence: {
+    anchor: p(0.5, 0.3),
+    steps: [
+      {
+        kind: "valley",
+        instruction:
+          "Start coloured side down. Fold the square in half, top edge down to the bottom; the fold is the top of the hat.",
+        line: through(p(0, 0.5), p(1, 0.5)),
+        toward: p(0.5, 0.99),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the top left corner down so the top edge lies along the centre line.",
+        line: through(p(0.5, 0.5), p(0, 0)),
+        toward: p(0.02, 0.48),
+      },
+      {
+        kind: "valley",
+        instruction: "Fold the top right corner down the same way: a triangle.",
+        line: through(p(0.5, 0.5), p(1, 0)),
+        toward: p(0.98, 0.48),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the bottom band up over the triangle, all layers together: the brim.",
+        line: through(p(0, HAT_BRIM), p(1, HAT_BRIM)),
+        toward: p(0.5, 0.01),
+      },
+    ],
+  },
+};
+
+/**
  * A fox's face: the triangle's side corners fold straight up past the top
  * edge as tall ears, and the bottom point stays sharp for the snout. Each
  * ear line is the perpendicular bisector of the corner and its ear tip.
@@ -1308,6 +1356,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   SAILBOAT,
   STAR,
   SNAKE,
+  PAPER_HAT,
   BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
