@@ -29,6 +29,8 @@ type Engine = "origami" | "figure" | "popup" | "papercraft" | "none";
 interface Face {
   readonly points: readonly (readonly [number, number, number])[];
   readonly color: string;
+  /** Origami: height in the folded stack, which orders flat layers. */
+  readonly layer?: number;
 }
 
 interface BenchResult {
@@ -42,7 +44,31 @@ interface BenchResult {
 }
 
 const PAPER = "#e8d6b4";
+/** White origami paper's back, as the page draws it. */
+const PAPER_BACK = "#f6f1e7";
 const CELL = 300;
+const PITCH_DEG = 25;
+
+/** Whether a face's front (its points wound counter-clockwise) faces the bench view. */
+const facesView = (
+  points: readonly (readonly [number, number, number])[],
+  yawDeg: number,
+): boolean => {
+  const [a, b, c] = points;
+  if (!a || !b || !c) return true;
+  const n = [
+    (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]),
+    (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]),
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]),
+  ];
+  const [yaw, pitch] = [yawDeg, PITCH_DEG].map((d) => (d * Math.PI) / 180);
+  const toward = [
+    Math.sin(yaw!) * Math.cos(pitch!),
+    Math.cos(yaw!) * Math.cos(pitch!),
+    Math.sin(pitch!),
+  ];
+  return n[0]! * toward[0]! + n[1]! * toward[1]! + n[2]! * toward[2]! > 0;
+};
 
 const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
   const start = performance.now();
@@ -140,9 +166,12 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
     const r = (payload.viewDeg * Math.PI) / 180;
     let k = 0;
     // Origami lies in x-y with z toward the viewer; stand it up (y up, z depth).
-    const faces = payload.pattern.faces.map((face) => ({
-      color: route.paperColor,
-      points: face.map(() => {
+    // That swaps two axes, so a face whose front faces the view winds clockwise.
+    const [front, back] = payload.colorDown
+      ? [PAPER_BACK, route.paperColor]
+      : [route.paperColor, PAPER_BACK];
+    const faces = payload.pattern.faces.map((face) => {
+      const points = face.map(() => {
         const [x, y, z] = [pose[k]!, pose[k + 1]!, pose[k + 2]!];
         k += 3;
         return [
@@ -150,8 +179,13 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
           z,
           x * Math.sin(r) + y * Math.cos(r),
         ] as const;
-      }),
-    }));
+      });
+      return {
+        color: facesView(points, -35) ? back : front,
+        points,
+        layer: points.reduce((sum, p) => sum + p[1], 0) / points.length,
+      };
+    });
     return done(
       "origami",
       `${payload.name}, ${payload.steps.length} steps`,
@@ -192,7 +226,7 @@ const darken = (hex: string, k: number) =>
 /** Shaded isometric view (z up), painter-sorted, fitted to one cell. */
 const renderSvg = (faces: readonly Face[], yawDeg: number): string => {
   const yaw = (yawDeg * Math.PI) / 180;
-  const pitch = (25 * Math.PI) / 180;
+  const pitch = (PITCH_DEG * Math.PI) / 180;
   const view = ([x, y, z]: readonly [number, number, number]) => {
     const [rx, ry] = [
       x * Math.cos(yaw) - y * Math.sin(yaw),
@@ -223,6 +257,7 @@ const renderSvg = (faces: readonly Face[], yawDeg: number): string => {
   return projected
     .sort((a, b) => {
       const mean = (f: typeof a) =>
+        f.face.layer ??
         f.points.reduce((sum, p) => sum + p.depth, 0) / f.points.length;
       return mean(a) - mean(b);
     })
