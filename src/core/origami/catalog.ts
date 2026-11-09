@@ -125,6 +125,12 @@ export const ORIGAMI_CATALOG = [
     name: "Paper hat",
     keywords: ["paper hat", "newspaper hat", "party hat", "pirate hat"],
   },
+  { id: "kite", name: "Kite", keywords: ["kite", "paper kite"] },
+  {
+    id: "gem",
+    name: "Gem",
+    keywords: ["gem", "gemstone", "jewel", "origami diamond"],
+  },
   {
     id: "fox-face",
     name: "Fox face",

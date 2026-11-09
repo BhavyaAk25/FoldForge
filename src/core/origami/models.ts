@@ -570,6 +570,51 @@ const PIZZA_SLICE: OrigamiModel = {
   },
 };
 
+/** A kite: the tall triangle's first two folds, its narrow point down. */
+const KITE: OrigamiModel = {
+  id: "kite",
+  summary: "A diamond kite, from two folds behind.",
+  viewDeg: 45,
+  sequence: { anchor: p(0.6, 0.6), steps: TALL_TRIANGLE.slice(0, 2) },
+};
+
+/**
+ * A cut gem: the top corner folded far behind leaves a flat table above a
+ * short crown, the side corners are the girdle (blunted a little), and the
+ * bottom corner is the long pavilion's point.
+ */
+const GEM_TABLE = 0.7;
+const GEM_GIRDLE = 0.06;
+const GEM: OrigamiModel = {
+  id: "gem",
+  summary:
+    "A cut gem: a flat table, a wide girdle, and a long point, in three folds.",
+  viewDeg: 45,
+  sequence: {
+    anchor: p(0.4, 0.4),
+    steps: [
+      {
+        kind: "mountain",
+        instruction:
+          "Coloured side up, corner to the top, fold the top corner far behind: the gem's flat table.",
+        line: through(p(1, 1 - GEM_TABLE), p(1 - GEM_TABLE, 1)),
+        toward: p(0.99, 0.99),
+      },
+      ...(
+        [
+          ["left", p(0, 1 - GEM_GIRDLE), p(GEM_GIRDLE, 1), p(0.01, 0.99)],
+          ["right", p(1 - GEM_GIRDLE, 0), p(1, GEM_GIRDLE), p(0.99, 0.01)],
+        ] as const
+      ).map(([side, a, b, toward]): FoldStep => ({
+        kind: "mountain",
+        instruction: `Fold the tip of the ${side} corner behind: the girdle.`,
+        line: through(a, b),
+        toward,
+      })),
+    ],
+  },
+};
+
 /**
  * A toy pistol: the square folded in half three times into a strip (the
  * barrel), and its back end inside-reverse-folded down and back as the grip.
@@ -1357,6 +1402,8 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   STAR,
   SNAKE,
   PAPER_HAT,
+  KITE,
+  GEM,
   BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
