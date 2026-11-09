@@ -732,6 +732,70 @@ const STAR: OrigamiModel = {
 };
 
 /**
+ * A snake: the square halved four times into a slim strip, the last time
+ * behind so the colour is outside on both faces, then bent into a zigzag by
+ * folding the strip across itself. Each line bisects the turn at its bend
+ * (a gentle turn needs a line close to the strip) and moves only the paper
+ * past the bend, since the line also crosses the body behind it.
+ */
+const SNAKE_TURNS = [-40, 40, -40, 40];
+const rad = (deg: number) => (deg * Math.PI) / 180;
+const snakeSteps = (): FoldStep[] => {
+  const halvings = [0.5, 0.25, 0.125, 0.0625].map((y, index): FoldStep => ({
+    kind: index === 3 ? "mountain" : "valley",
+    instruction: [
+      "Start coloured side down. Fold the square in half, top edge down to the bottom.",
+      "Fold it in half again the same way.",
+      "And again.",
+      "Fold it in half once more, this time behind: a slim strip, coloured on both sides.",
+    ][index]!,
+    line: through(p(0, y), p(1, y)),
+    toward: p(0.5, 2 * y - 0.01),
+  }));
+  let at = p(0.12, 1 / 32);
+  let heading = 0;
+  let travelled = 0.12;
+  const bends = SNAKE_TURNS.map((turn, index): FoldStep => {
+    const length = index === 0 ? 0.16 : 0.17;
+    const bend = p(
+      at.x + length * Math.cos(rad(heading)),
+      at.y + length * Math.sin(rad(heading)),
+    );
+    const line = rad((heading + turn) / 2);
+    const [ux, uy] = [0.3 * Math.cos(line), 0.3 * Math.sin(line)];
+    const toward = p(
+      bend.x + 0.03 * Math.cos(rad(heading)),
+      bend.y + 0.03 * Math.sin(rad(heading)),
+    );
+    travelled += length;
+    const past = travelled - 0.06;
+    at = bend;
+    heading = turn;
+    return {
+      kind: index % 2 === 0 ? "valley" : "mountain",
+      instruction:
+        index === 0
+          ? "A third of the way along, fold the strip across itself so it turns down: the neck."
+          : `A little further on, fold it ${index % 2 === 0 ? "to the front" : "behind"} so it turns ${turn > 0 ? "up" : "down"}.`,
+      line: {
+        from: p(bend.x - ux, bend.y - uy),
+        to: p(bend.x + ux, bend.y + uy),
+      },
+      toward,
+      layers: ({ paper }) => paper.x > past,
+    };
+  });
+  return [...halvings, ...bends];
+};
+const SNAKE: OrigamiModel = {
+  id: "snake",
+  summary: "A slithering snake: a slim folded strip bent into a zigzag.",
+  viewDeg: 0,
+  colorDown: true,
+  sequence: { anchor: p(0.02, 0.03), steps: snakeSteps() },
+};
+
+/**
  * A fox's face: the triangle's side corners fold straight up past the top
  * edge as tall ears, and the bottom point stays sharp for the snout. Each
  * ear line is the perpendicular bisector of the corner and its ear tip.
@@ -1243,6 +1307,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   TOY_PISTOL,
   SAILBOAT,
   STAR,
+  SNAKE,
   BUTTERFLY,
   DOG_FACE,
   CAT_FACE,
