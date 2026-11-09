@@ -579,6 +579,43 @@ const KITE: OrigamiModel = {
 };
 
 /**
+ * A leaf: the kite folded from both ends (a slim diamond), then folded in
+ * half along the long diagonal and left partly open, so the midrib stands.
+ */
+const LEAF: OrigamiModel = {
+  id: "leaf",
+  summary: "A slim leaf with a raised midrib, from five folds.",
+  viewDeg: 60,
+  sequence: {
+    anchor: p(0.6, 0.55),
+    steps: [
+      ...TALL_TRIANGLE.slice(0, 2),
+      {
+        kind: "mountain",
+        instruction:
+          "Fold the edges at the wide corner behind to the same diagonal too, the left one first.",
+        line: through(p(1, 1), p(0, 1 - KITE_T)),
+        toward: p(0.2, 0.9),
+      },
+      {
+        kind: "mountain",
+        instruction: "Then the other one: a slim diamond.",
+        line: through(p(1, 1), p(1 - KITE_T, 0)),
+        toward: p(0.9, 0.2),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold it in half along the long diagonal and open it partway: the midrib.",
+        line: through(p(0.2, 0.2), p(0.8, 0.8)),
+        toward: p(0.4, 0.6),
+        openDeg: 35,
+      },
+    ],
+  },
+};
+
+/**
  * A cut gem: the top corner folded far behind leaves a flat table above a
  * short crown, the side corners are the girdle (blunted a little), and the
  * bottom corner is the long pavilion's point.
@@ -1403,6 +1440,7 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
   SNAKE,
   PAPER_HAT,
   KITE,
+  LEAF,
   GEM,
   BUTTERFLY,
   DOG_FACE,

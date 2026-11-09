@@ -292,6 +292,8 @@ describe("figures", () => {
     ["a cobra", { engine: "origami", modelId: "snake" }],
     ["a pirate hat", { engine: "origami", modelId: "paper-hat" }],
     ["a kite", { engine: "origami", modelId: "kite" }],
+    ["an autumn leaf", { engine: "origami", modelId: "leaf" }],
+    ["a bowl", { engine: "origami", modelId: "cup", noted: true }],
     ["a diamond", { engine: "origami", modelId: "gem" }],
     ["the sun", { engine: "origami", modelId: "star", noted: true }],
     ["a house", { engine: "origami", modelId: "house", preset: "House" }],
