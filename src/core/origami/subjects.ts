@@ -134,7 +134,7 @@ export const SUBJECTS: readonly Subject[] = [
     answer: { library: "sailboat" },
   },
   {
-    words: ["star", "stars", "starburst", "christmas star"],
+    words: ["star", "stars", "christmas star"],
     title: "Star",
     color: "#f2c230",
     answer: { library: "star" },
@@ -150,6 +150,34 @@ export const SUBJECTS: readonly Subject[] = [
     title: "Paper hat",
     color: "#3a7bd5",
     answer: { library: "paper-hat" },
+  },
+  {
+    words: ["kite"],
+    title: "Kite",
+    color: "#d6403a",
+    answer: { library: "kite" },
+  },
+  {
+    words: [
+      "diamond",
+      "gem",
+      "gemstone",
+      "jewel",
+      "crystal",
+      "ruby",
+      "emerald",
+      "sapphire",
+    ],
+    title: "Gem",
+    color: "#5bb8e8",
+    answer: { library: "gem" },
+  },
+  {
+    words: ["sun", "sunshine", "starburst"],
+    title: "Sun",
+    color: "#f2b134",
+    answer: { library: "star" },
+    closest: true,
   },
   {
     words: ["fox", "foxes"],
