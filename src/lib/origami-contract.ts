@@ -88,12 +88,19 @@ export const OrigamiPayloadSchema = z.object({
   }),
   assembly: z
     .object({
-      secondId: z.string(),
       label: z.string(),
-      secondLabel: z.string(),
-      scale: z.number(),
-      dx: z.number(),
-      dy: z.number(),
+      parts: z
+        .array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            scale: z.number(),
+            dx: z.number(),
+            dy: z.number(),
+          }),
+        )
+        .min(1)
+        .max(8),
     })
     .nullable(),
   difficulty: z.enum(["beginner", "intermediate", "advanced"]),

@@ -15,7 +15,11 @@ import {
 import type { ModelShape } from "@/core/origami/families";
 import { difficultyOf, type Difficulty } from "@/core/origami/difficulty";
 import { applyIsometry } from "@/core/origami/fold-rules";
-import { designSheets, parseDesignId } from "@/core/origami/generate";
+import {
+  designSheets,
+  parseDesignId,
+  type Sheet,
+} from "@/core/origami/generate";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
 import {
   deriveSequence,
@@ -48,19 +52,21 @@ export interface OrigamiPayload {
   }[];
   readonly animation: Omit<FoldAnimation, "faces">;
   /**
-   * For the first sheet of a two-sheet model: the second sheet's id and
-   * where its finished shape sits on this one. Its points (upright, in its
-   * own paper units) map to this sheet's upright frame by scaling and then
-   * shifting by (dx, dy). Each sheet is checked; the tuck is placed, not
-   * proven.
+   * For the first sheet of a model folded from several: this sheet's label
+   * and each later sheet's id, label, and where its finished shape sits on
+   * this one. A part's points (upright, in its own paper units) map to this
+   * sheet's upright frame by scaling and then shifting by (dx, dy). Each
+   * sheet is checked; the tucks are placed, not proven.
    */
   readonly assembly: {
-    readonly secondId: string;
     readonly label: string;
-    readonly secondLabel: string;
-    readonly scale: number;
-    readonly dx: number;
-    readonly dy: number;
+    readonly parts: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly scale: number;
+      readonly dx: number;
+      readonly dy: number;
+    }[];
   } | null;
   /** How hard it is to fold by hand, from its steps. */
   readonly difficulty: Difficulty;
@@ -100,11 +106,10 @@ const resolve = (
   readonly model: ModelShape;
   readonly name: string;
   readonly library: boolean;
-  /** The design's other sheet, when this is the first of two. */
-  readonly partner: {
+  /** This sheet's label and the sheets after it, when it is the first of several. */
+  readonly parts: {
     readonly label: string;
-    readonly scale: number;
-    readonly ownLabel: string;
+    readonly later: readonly Sheet[];
   } | null;
 } | null => {
   if (isOrigamiModelId(id)) {
@@ -112,7 +117,7 @@ const resolve = (
     const entry = ORIGAMI_CATALOG.find((e) => e.id === id);
     if (!model || !entry)
       throw new Error(`Origami model ${id} is missing from the library.`);
-    return { model, name: entry.name, library: true, partner: null };
+    return { model, name: entry.name, library: true, parts: null };
   }
   const [designPart = "", sheetPart] = id.split(SHEET_MARK);
   const design = parseDesignId(designPart);
@@ -121,21 +126,24 @@ const resolve = (
     design,
     "A design shaped for this subject from one of the model families, folded and checked at every step.",
   );
+  // Only "~2", "~3", ... name a later sheet, so one sheet has one URL.
   const index = sheetPart === undefined ? 0 : Number(sheetPart) - 1;
-  // Only "~2" names a second sheet, so one sheet has one URL.
-  if (sheetPart !== undefined && (sheetPart !== "2" || sheets.length < 2))
+  if (
+    sheetPart !== undefined &&
+    (!/^[2-9]$/u.test(sheetPart) || index >= sheets.length)
+  )
     return null;
   const sheet = sheets[index]!;
-  const second = index === 0 ? sheets[1] : undefined;
   return {
     model: sheet.model,
     name: sheet.label
       ? `${FAMILY_NAMES[design.family]}: ${sheet.label.toLowerCase()}`
       : FAMILY_NAMES[design.family],
     library: false,
-    partner: second
-      ? { label: second.label, scale: second.scale, ownLabel: sheet.label }
-      : null,
+    parts:
+      index === 0 && sheets.length > 1
+        ? { label: sheet.label, later: sheets.slice(1) }
+        : null,
   };
 };
 
@@ -218,29 +226,41 @@ const build = (id: string): Built | null => {
     };
   });
   let assembly: OrigamiPayload["assembly"] = null;
-  if (resolved.partner) {
-    const secondId = `${id}${SHEET_MARK}2`;
-    const second = build(secondId);
-    const partner = resolve(secondId);
-    if (!second || !partner) return null;
+  if (resolved.parts) {
     const body = uprightBounds(pattern, animation, model.viewDeg);
-    const neck = uprightBounds(
-      second.payload.pattern,
-      { ...second.payload.animation, faces: second.payload.pattern.faces },
-      partner.model.viewDeg,
-    );
-    const { scale } = resolved.partner;
-    // The neck sheet's kite sits inside the body's front (its left), with
-    // the neck rising from the front of the back: tuned on the giraffe-like
-    // designs, the kite's left edge just ahead of the body and its foot a
-    // half body-height up, so it stays hidden between the body's layers.
+    const [width, height] = [body.maxX - body.minX, body.maxY - body.minY];
+    const parts = resolved.parts.later.map((sheet, i) => {
+      const partId = `${id}${SHEET_MARK}${i + 2}`;
+      const part = build(partId);
+      if (!part) return null;
+      const own = uprightBounds(
+        part.payload.pattern,
+        { ...part.payload.animation, faces: part.payload.pattern.faces },
+        sheet.model.viewDeg,
+      );
+      const { scale } = sheet;
+      // The neck's kite sits inside the body's front (its left), rising from
+      // the front of the back: tuned on the giraffe-like designs, its left
+      // edge just ahead of the body and its foot a half body-height up, so
+      // it stays hidden between the body's layers. The tail hangs from the
+      // rear: its upper end (its outline's top left) tucked in just below
+      // the back and inside the rear edge.
+      const [dx, dy] =
+        sheet.tuck === "rear"
+          ? [
+              body.maxX - 0.1 * width - scale * own.minX,
+              body.maxY - 0.08 * height - scale * own.maxY,
+            ]
+          : [
+              body.minX - 0.16 * width - scale * own.minX,
+              body.minY + 0.52 * height - scale * own.minY,
+            ];
+      return { id: partId, label: sheet.label, scale, dx, dy };
+    });
+    if (parts.some((part) => part === null)) return null;
     assembly = {
-      secondId,
-      label: resolved.partner.ownLabel,
-      secondLabel: resolved.partner.label,
-      scale,
-      dx: body.minX - 0.16 * (body.maxX - body.minX) - scale * neck.minX,
-      dy: body.minY + 0.52 * (body.maxY - body.minY) - scale * neck.minY,
+      label: resolved.parts.label,
+      parts: parts.filter((part) => part !== null),
     };
   }
   const built: Built = {

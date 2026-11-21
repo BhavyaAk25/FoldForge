@@ -23,7 +23,7 @@ import {
 } from "@/core/origami/generate";
 import { ORIGAMI_MODELS } from "@/core/origami/models";
 import { SUBJECTS } from "@/core/origami/subjects";
-import { poseAt, stepCount } from "@/core/origami/pose";
+import { poseAt, stepCount, tuckedDepths } from "@/core/origami/pose";
 import {
   deriveSequence,
   faceAt,
@@ -457,9 +457,11 @@ describe("origami routes", () => {
     ["crane", 200],
     ["neck_0.55_10_0.86_-15", 200],
     ["neck_0.9_0_0.78_25", 404],
-    // A standing animal is two squares; only "~2" names the second.
+    // A standing animal is three squares: "~2" and "~3" name the others.
     ["standing_0.55_10_0.8_-30~2", 200],
-    ["standing_0.55_10_0.8_-30~3", 404],
+    ["standing_0.55_10_0.8_-30~3", 200],
+    ["standing_0.55_10_0.8_-30~4", 404],
+    ["standing_0.55_10_0.8_-30~03", 404],
     ["neck_0.55_10_0.86_-15~2", 404],
   ] as const)("serves %s with status %i", async (id, status) => {
     const response = await modelGet(
@@ -494,25 +496,31 @@ describe("origami routes", () => {
     expect(await sheet.text()).toContain("Folding the base by hand");
   });
 
-  it("serves a two-square animal: the body names the neck sheet tucked in front", async () => {
+  it("serves a standing animal: the body names the neck in front and the tail behind", async () => {
     const id = "standing_0.55_10_0.8_-30";
-    const body = OrigamiPayloadSchema.parse(
-      await (
-        await modelGet(new Request("http://localhost"), params({ id }))
-      ).json(),
-    );
-    expect(body.assembly).toMatchObject({ secondId: `${id}~2`, scale: 0.6 });
-    const neck = OrigamiPayloadSchema.parse(
-      await (
-        await modelGet(
-          new Request("http://localhost"),
-          params({ id: body.assembly!.secondId }),
-        )
-      ).json(),
-    );
-    expect(neck.assembly).toBeNull();
-    // The neck's kite starts ahead of the body's front (its left edge).
-    expect(body.assembly!.dx).toBeLessThan(0.3);
+    const get = async (sheet: string) =>
+      OrigamiPayloadSchema.parse(
+        await (
+          await modelGet(new Request("http://localhost"), params({ id: sheet }))
+        ).json(),
+      );
+    const body = await get(id);
+    const [neck, tail] = body.assembly!.parts;
+    expect(neck).toMatchObject({ id: `${id}~2`, scale: 0.6 });
+    expect(tail).toMatchObject({ id: `${id}~3`, label: "Tail", scale: 0.26 });
+    expect((await get(neck!.id)).assembly).toBeNull();
+    expect((await get(tail!.id)).assembly).toBeNull();
+    // The neck's kite starts ahead of the body's front (its left edge); the
+    // tail hangs from the rear.
+    expect(neck!.dx).toBeLessThan(0.3);
+    expect(tail!.dx).toBeGreaterThan(0.5);
+    // A tucked sheet's stack, however deep, sits thinly at the median of
+    // the body's depths, not pulled forward by a few deep wrapped layers.
+    expect(
+      tuckedDepths([0, 0.004, 0.008, 0.012, 0.03], [0, 0.009, 0.018]).map(
+        (z) => Math.round(z * 1e6) / 1e6,
+      ),
+    ).toEqual([0.005, 0.008, 0.011]);
   });
 
   it.each([

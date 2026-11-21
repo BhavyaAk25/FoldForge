@@ -769,7 +769,7 @@ test("has no serious accessibility violations before or after forging", async ({
   expect(await seriousViolations()).toEqual([]);
 });
 
-test("folds a standing animal from two squares on the real server", async ({
+test("folds a standing animal from three squares on the real server", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -784,16 +784,18 @@ test("folds a standing animal from two squares on the real server", async ({
     timeout: 30_000,
   });
   await expect(
-    page.getByRole("img", { name: /both sheets together/u }),
+    page.getByRole("img", { name: /all its sheets together/u }),
   ).toBeVisible();
-  await expect(page.getByText("Square 1 of 2 · Body and legs")).toBeVisible();
-  await expect(page.getByText("Square 2 of 2 · Neck and head")).toBeVisible();
-  // The body's base comes with the hand sequence; the neck has no base.
+  await expect(page.getByText("Square 1 of 3 · Body and legs")).toBeVisible();
+  await expect(page.getByText("Square 2 of 3 · Neck and head")).toBeVisible();
+  await expect(page.getByText("Square 3 of 3 · Tail")).toBeVisible();
+  // The body's base comes with the hand sequence; the neck and tail have none.
   await expect(page.getByText("Folding the base by hand")).toHaveCount(1);
-  // Each square has its own downloads; the second names its sheet.
-  await expect(
-    page.locator('a[href*="~2/instructions"][download]'),
-  ).toHaveCount(1);
+  // Each square has its own downloads, named by its sheet.
+  for (const sheet of ["~2", "~3"])
+    await expect(
+      page.locator(`a[href*="${sheet}/instructions"][download]`),
+    ).toHaveCount(1);
   const overflow = await page.evaluate(
     () =>
       document.documentElement.scrollWidth -
