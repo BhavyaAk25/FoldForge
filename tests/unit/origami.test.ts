@@ -408,6 +408,16 @@ describe("page turns", () => {
     expect(animation.moves[0]!.moving.every(Boolean)).toBe(false);
   });
 
+  it("opens the lily's petals to different angles, so all four show", () => {
+    const lily = ORIGAMI_MODELS.find((m) => m.id === "lily")!;
+    const derived = deriveSequence(lily.sequence);
+    if (!derived.ok) throw new Error(derived.error.kind);
+    const petals = animateSequence(derived.value, lily.sequence.anchor)
+      .moves.slice(-4)
+      .map((move) => move.endDeg * move.swing);
+    expect(new Set(petals).size).toBe(4);
+  });
+
   it("refuses a turn about a line with no hinge on it", () => {
     const missed = turn({ from: p(0.6, -0.5), to: p(0.6, 1) });
     expect(missed.ok ? null : missed.error.kind).toBe("fold_misses");

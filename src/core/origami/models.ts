@@ -1277,6 +1277,9 @@ const BOX: OrigamiModel = {
  * each side; the states between are the ones checked. Then each petal folds
  * out across the widest part and stays part-open, so the flower stands.
  */
+/** How far the outer and the inner petal on each side open. */
+const LILY_OUTER_DEG = 140;
+const LILY_INNER_DEG = 65;
 const LILY: OrigamiModel = {
   id: "lily",
   summary:
@@ -1294,6 +1297,8 @@ const LILY: OrigamiModel = {
       },
       ...FROG_NARROW_STEPS,
       // Petals alternate toward and away from you, so the lily opens all round.
+      // Each side's outer petal opens further than the one beneath it, so the
+      // four fan out instead of lying on each other.
       ...[1, 2, 3, 0].map((corner, i): FoldStep => ({
         kind: i % 2 === 0 ? "valley" : "mountain",
         instruction:
@@ -1305,7 +1310,7 @@ const LILY: OrigamiModel = {
         line: { from: p(0.3, 0), to: p(0.8, 0) },
         toward: p(0.52, -0.2),
         layers: frogCorner(corner),
-        openDeg: 115,
+        openDeg: i < 2 ? LILY_OUTER_DEG : LILY_INNER_DEG,
       })),
     ],
   },
