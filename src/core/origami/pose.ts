@@ -228,3 +228,22 @@ export const poseAt = (input: PoseInput, at: number): number[] => {
   }
   return movePose(input, step - (input.collapse ? 1 : 0), u);
 };
+
+/**
+ * A tucked sheet's depths moved in between the first sheet's layers: its
+ * whole stack squeezed into a thin slab at their median depth, so it shows
+ * only where it comes out past the first sheet's outline. The median, not
+ * the middle of the range, since a few wrapped layers (a band folded over a
+ * back) can stack far deeper than the rest of the sheet.
+ */
+export const tuckedDepths = (
+  outer: readonly number[],
+  inner: readonly number[],
+): number[] => {
+  const sorted = [...outer].sort((a, b) => a - b);
+  const middle = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const half = ((sorted.at(-1) ?? 0) - (sorted[0] ?? 0)) / 10;
+  const [from, to] = [Math.min(...inner), Math.max(...inner)];
+  const span = to - from || 1;
+  return inner.map((z) => middle - half + (2 * half * (z - from)) / span);
+};

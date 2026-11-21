@@ -559,6 +559,48 @@ export const fourLegs = (d: FourLegsDesign, summary: string): ModelShape => ({
   },
 });
 
+/** A fold line through two points, run past both so it crosses every layer. */
+export const through = (a: Point2, b: Point2): FoldLine => ({
+  from: p(a.x - (b.x - a.x) / 2, a.y - (b.y - a.y) / 2),
+  to: p(b.x + (b.x - a.x) / 2, b.y + (b.y - a.y) / 2),
+});
+
+/** tan 22.5 degrees: a kite fold lays an edge along the diagonal from (0, 0). */
+export const KITE_T = Math.tan(Math.PI / 8);
+/** Two edges folded behind to the diagonal from (0, 0): a kite. */
+export const KITE_FOLDS: readonly FoldStep[] = [
+  {
+    kind: "mountain",
+    instruction:
+      "Coloured side up, fold the lower edge behind to the diagonal from the bottom left corner.",
+    line: through(p(0, 0), p(1, KITE_T)),
+    toward: p(0.95, 0.05),
+  },
+  {
+    kind: "mountain",
+    instruction: "Fold the left edge behind to the same diagonal: a kite.",
+    line: through(p(0, 0), p(KITE_T, 1)),
+    toward: p(0.05, 0.95),
+  },
+];
+/** The kite folded from its wide corner too: a slim diamond on the diagonal. */
+export const SLIM_DIAMOND: readonly FoldStep[] = [
+  ...KITE_FOLDS,
+  {
+    kind: "mountain",
+    instruction:
+      "Fold the edges at the wide corner behind to the same diagonal too, the left one first.",
+    line: through(p(1, 1), p(0, 1 - KITE_T)),
+    toward: p(0.2, 0.9),
+  },
+  {
+    kind: "mountain",
+    instruction: "Then the other one: a slim diamond.",
+    line: through(p(1, 1), p(1 - KITE_T, 0)),
+    toward: p(0.9, 0.2),
+  },
+];
+
 /**
  * A standing animal's body: every edge folds in to the centre with each
  * corner squashed out as a point (the double boat, or pig, base), and the
@@ -589,11 +631,38 @@ export const ANIMAL_BODY: readonly CreaseSegment[] = [
   ]),
 ];
 
+/**
+ * A standing animal's tail: the slim diamond folded in half behind, so the
+ * colour is outside. Its upper end tucks into the back of the body and the
+ * other hangs down and back; the long diagonal points 225 degrees, turned
+ * by the view to 290.
+ */
+export const animalTail = (): ModelShape => ({
+  summary: "The tail: its upper end tucks into the back of the body.",
+  viewDeg: 65,
+  sequence: {
+    anchor: p(0.6, 0.4),
+    steps: [
+      ...SLIM_DIAMOND,
+      {
+        kind: "mountain",
+        instruction:
+          "Fold it in half behind along the long diagonal: the tail. Tuck one end into the back of the body.",
+        line: through(p(0.2, 0.2), p(0.8, 0.8)),
+        toward: p(0.3, 0.7),
+      },
+    ],
+  },
+});
+
+/** Where the back's fold goes in: the base's back is at 0.5, its legs end at 0.125. */
+const ANIMAL_BACK = 0.45;
 export const animalBody = (summary: string): ModelShape => ({
   summary,
   viewDeg: 0,
   sequence: {
-    anchor: p(0.5, 0.45),
+    // Below the back's new line, so the body, not the sunk strip, stays put.
+    anchor: p(0.5, 0.3),
     steps: [
       {
         kind: "creases",
@@ -601,6 +670,16 @@ export const animalBody = (summary: string): ModelShape => ({
           "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down as legs.",
         segments: ANIMAL_BODY,
         howTo: ANIMAL_BODY_HOW,
+      },
+      {
+        // The base's back stands twice as tall as its legs are long; wrapping
+        // a band of the top down over both halves lowers it by a third. (Sunk
+        // inside instead, it opens a notch where the edges meet at the top.)
+        kind: "outside-reverse",
+        instruction:
+          "Fold a band along the top down over the outside, on both sides at once, so the back is lower and longer-looking.",
+        line: { from: p(0.1, ANIMAL_BACK), to: p(0.9, ANIMAL_BACK) },
+        toward: p(0.5, 0.49),
       },
     ],
   },

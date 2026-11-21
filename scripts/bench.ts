@@ -9,7 +9,7 @@ import { buildPapercraft } from "../src/core/mesh/model";
 import { rigSpec } from "../src/core/mesh/rigs";
 import { popupCard } from "../src/core/popup/cards";
 import { halfTriangles, pagePoint, piecePoint } from "../src/core/popup/popup";
-import { poseAt, stepCount } from "../src/core/origami/pose";
+import { poseAt, stepCount, tuckedDepths } from "../src/core/origami/pose";
 import { templateFallback } from "../src/server/fabrication-ai/plan-response";
 import { routePrompt } from "../src/server/fabrication-ai/router";
 import { origamiPayload } from "../src/server/origami";
@@ -157,38 +157,72 @@ const run = async (prompt: BenchPrompt): Promise<BenchResult> => {
   if (route.engine === "origami") {
     const payload = origamiPayload(route.modelId);
     if (!payload) return done("none", `no origami ${route.modelId}`, []);
-    const input = {
-      ...payload.animation,
-      vertices: payload.pattern.vertices,
-      faces: payload.pattern.faces,
+    // Each sheet upright (turned by its view), placed as the page places it:
+    // the first as is, any tucked sheet scaled, shifted, and slid in between
+    // the first's layers.
+    const upright = (
+      sheet: NonNullable<ReturnType<typeof origamiPayload>>,
+      place: { scale: number; dx: number; dy: number },
+    ) => {
+      const input = {
+        ...sheet.animation,
+        vertices: sheet.pattern.vertices,
+        faces: sheet.pattern.faces,
+      };
+      const pose = poseAt(input, stepCount(input));
+      const r = (sheet.viewDeg * Math.PI) / 180;
+      return pose.map((_, i) => {
+        const base = i - (i % 3);
+        const [x, y, z] = [pose[base]!, pose[base + 1]!, pose[base + 2]!];
+        if (i % 3 === 0)
+          return place.scale * (x * Math.cos(r) - y * Math.sin(r)) + place.dx;
+        if (i % 3 === 1)
+          return place.scale * (x * Math.sin(r) + y * Math.cos(r)) + place.dy;
+        return place.scale * z;
+      });
     };
-    const pose = poseAt(input, stepCount(input));
-    const r = (payload.viewDeg * Math.PI) / 180;
-    let k = 0;
+    const depths = (pose: readonly number[]) =>
+      pose.filter((_, i) => i % 3 === 2);
+    const first = upright(payload, { scale: 1, dx: 0, dy: 0 });
+    const sheets = [
+      { sheet: payload, pose: first },
+      ...(payload.assembly?.parts ?? []).flatMap((part) => {
+        const sheet = origamiPayload(part.id);
+        if (!sheet) return [];
+        const pose = upright(sheet, part);
+        const z = tuckedDepths(depths(first), depths(pose));
+        return [
+          {
+            sheet,
+            pose: pose.map((v, i) => (i % 3 === 2 ? z[(i - 2) / 3]! : v)),
+          },
+        ];
+      }),
+    ];
     // Origami lies in x-y with z toward the viewer; stand it up (y up, z depth).
     // That swaps two axes, so a face whose front faces the view winds clockwise.
-    const [front, back] = payload.colorDown
-      ? [PAPER_BACK, route.paperColor]
-      : [route.paperColor, PAPER_BACK];
-    const faces = payload.pattern.faces.map((face) => {
-      const points = face.map(() => {
-        const [x, y, z] = [pose[k]!, pose[k + 1]!, pose[k + 2]!];
-        k += 3;
-        return [
-          x * Math.cos(r) - y * Math.sin(r),
-          z,
-          x * Math.sin(r) + y * Math.cos(r),
-        ] as const;
+    const faces = sheets.flatMap(({ sheet, pose }) => {
+      const [front, back] = sheet.colorDown
+        ? [PAPER_BACK, route.paperColor]
+        : [route.paperColor, PAPER_BACK];
+      let k = 0;
+      return sheet.pattern.faces.map((face) => {
+        const points = face.map(() => {
+          const point = [pose[k]!, pose[k + 2]!, pose[k + 1]!] as const;
+          k += 3;
+          return point;
+        });
+        return {
+          color: facesView(points, -35) ? back : front,
+          points,
+          layer: points.reduce((sum, p) => sum + p[1], 0) / points.length,
+        };
       });
-      return {
-        color: facesView(points, -35) ? back : front,
-        points,
-        layer: points.reduce((sum, p) => sum + p[1], 0) / points.length,
-      };
     });
+    const steps = sheets.reduce((sum, s) => sum + s.sheet.steps.length, 0);
     return done(
       "origami",
-      `${payload.name}, ${payload.steps.length} steps`,
+      `${payload.name.replace(/:.*$/u, "")}, ${sheets.length > 1 ? `${sheets.length} squares, ` : ""}${steps} steps`,
       faces,
     );
   }

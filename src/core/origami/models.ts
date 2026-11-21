@@ -3,6 +3,10 @@ import type { CreaseSegment, Point2 } from "./crease-pattern";
 import {
   FROG_BASE,
   FROG_NARROW_STEPS,
+  KITE_FOLDS,
+  KITE_T,
+  SLIM_DIAMOND,
+  through,
   fourLegs,
   frogCorner,
   across,
@@ -347,12 +351,6 @@ const CAT_FACE: OrigamiModel = {
   },
 };
 
-/** A fold line through two points, run past both so it crosses every layer. */
-const through = (a: Point2, b: Point2): FoldLine => ({
-  from: p(a.x - (b.x - a.x) / 2, a.y - (b.y - a.y) / 2),
-  to: p(b.x + (b.x - a.x) / 2, b.y + (b.y - a.y) / 2),
-});
-
 /**
  * The classic butterfly on the waterbomb base (point up, its two front flaps
  * hinged at the triangle's sides). Each front flap is the bottom face's side
@@ -519,21 +517,8 @@ const HOUSE: OrigamiModel = {
  * from the back), then its wide corner folded behind along the shoulders.
  * The tree and the pizza slice both start here.
  */
-const KITE_T = Math.tan(Math.PI / 8);
 const TALL_TRIANGLE: readonly FoldStep[] = [
-  {
-    kind: "mountain",
-    instruction:
-      "Coloured side up, fold the lower edge behind to the diagonal from the bottom left corner.",
-    line: through(p(0, 0), p(1, KITE_T)),
-    toward: p(0.95, 0.05),
-  },
-  {
-    kind: "mountain",
-    instruction: "Fold the left edge behind to the same diagonal: a kite.",
-    line: through(p(0, 0), p(KITE_T, 1)),
-    toward: p(0.05, 0.95),
-  },
+  ...KITE_FOLDS,
   {
     kind: "mountain",
     instruction:
@@ -570,12 +555,12 @@ const PIZZA_SLICE: OrigamiModel = {
   },
 };
 
-/** A kite: the tall triangle's first two folds, its narrow point down. */
+/** A kite: two folds behind, its narrow point down. */
 const KITE: OrigamiModel = {
   id: "kite",
   summary: "A diamond kite, from two folds behind.",
   viewDeg: 45,
-  sequence: { anchor: p(0.6, 0.6), steps: TALL_TRIANGLE.slice(0, 2) },
+  sequence: { anchor: p(0.6, 0.6), steps: KITE_FOLDS },
 };
 
 /**
@@ -589,20 +574,7 @@ const LEAF: OrigamiModel = {
   sequence: {
     anchor: p(0.6, 0.55),
     steps: [
-      ...TALL_TRIANGLE.slice(0, 2),
-      {
-        kind: "mountain",
-        instruction:
-          "Fold the edges at the wide corner behind to the same diagonal too, the left one first.",
-        line: through(p(1, 1), p(0, 1 - KITE_T)),
-        toward: p(0.2, 0.9),
-      },
-      {
-        kind: "mountain",
-        instruction: "Then the other one: a slim diamond.",
-        line: through(p(1, 1), p(1 - KITE_T, 0)),
-        toward: p(0.9, 0.2),
-      },
+      ...SLIM_DIAMOND,
       {
         kind: "valley",
         instruction:

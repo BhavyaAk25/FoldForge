@@ -17,7 +17,12 @@ import {
 
 import type { CreasePatternV1 } from "@/core/origami/crease-pattern";
 import { stepDiagram } from "@/core/origami/export";
-import { poseAt, stepCount, type PoseInput } from "@/core/origami/pose";
+import {
+  poseAt,
+  stepCount,
+  tuckedDepths,
+  type PoseInput,
+} from "@/core/origami/pose";
 import type { OrigamiPayloadResponse } from "@/lib/origami-contract";
 
 import styles from "./model-results.module.css";
@@ -316,7 +321,6 @@ function Checks({ payload }: { readonly payload: OrigamiPayloadResponse }) {
 const placedSheet = (
   payload: OrigamiPayloadResponse,
   place: { scale: number; dx: number; dy: number },
-  lift: number,
 ) => {
   const input = poseInput(payload);
   const pose = poseAt(input, stepCount(input));
@@ -327,7 +331,7 @@ const placedSheet = (
     const [x, y, z] = [pose[base]!, pose[base + 1]!, pose[base + 2]!];
     if (i % 3 === 0) return place.scale * (x * cos - y * sin) + place.dx;
     if (i % 3 === 1) return place.scale * (x * sin + y * cos) + place.dy;
-    return place.scale * z + lift;
+    return place.scale * z;
   });
   return { faces: payload.pattern.faces, positions };
 };
@@ -382,25 +386,37 @@ function PlacedPaper({
   );
 }
 
-/** A two-sheet model put together: the second sheet tucked into the first. */
+/** A model of several squares put together: each later sheet tucked into the first. */
 function AssembledModel({
   first,
-  second,
+  parts,
   paperColor,
   name,
 }: {
   readonly first: OrigamiPayloadResponse;
-  readonly second: OrigamiPayloadResponse;
+  readonly parts: readonly OrigamiPayloadResponse[];
   readonly paperColor: string;
   readonly name: string;
 }) {
   const { turn, handlers } = useTurn();
+  const assembly = first.assembly!;
   const sheets = useMemo(() => {
-    const place = first.assembly!;
-    // The second sheet lies between the first's layers, at their middle.
+    const body = placedSheet(first, { scale: 1, dx: 0, dy: 0 });
+    const depths = (positions: readonly number[]) =>
+      positions.filter((_, i) => i % 3 === 2);
+    // A tucked sheet lies between the first's layers, at their middle.
     const placed = [
-      placedSheet(first, { scale: 1, dx: 0, dy: 0 }, 0),
-      placedSheet(second, place, 0),
+      body,
+      ...parts.map((part, i) => {
+        const sheet = placedSheet(part, assembly.parts[i]!);
+        const z = tuckedDepths(depths(body.positions), depths(sheet.positions));
+        return {
+          faces: sheet.faces,
+          positions: sheet.positions.map((value, j) =>
+            j % 3 === 2 ? z[(j - 2) / 3]! : value,
+          ),
+        };
+      }),
     ];
     const all = placed.flatMap((s) => s.positions);
     const view = frame(all);
@@ -415,14 +431,15 @@ function AssembledModel({
               : value) * view.scale,
       ),
     }));
-  }, [first, second]);
+  }, [first, parts, assembly]);
+  const tucked = assembly.parts.map((part) => part.label.toLowerCase());
   return (
     <div className={styles.stage}>
       <div
         className={styles.canvas}
         {...handlers}
         role="img"
-        aria-label={`The finished ${name.toLowerCase()}, both sheets together. Drag to turn it.`}
+        aria-label={`The finished ${name.toLowerCase()}, all its sheets together. Drag to turn it.`}
       >
         <Canvas
           camera={{ position: [0, 0, 1.45], fov: 40, near: 0.05, far: 20 }}
@@ -436,15 +453,15 @@ function AssembledModel({
                 key={i}
                 faces={sheet.faces}
                 positions={sheet.positions}
-                colors={sidesFor(i === 0 ? first : second, paperColor)}
+                colors={sidesFor(i === 0 ? first : parts[i - 1]!, paperColor)}
               />
             ))}
           </group>
         </Canvas>
       </div>
       <p className={styles.nowFolding}>
-        Finished: the {first.assembly!.secondLabel.toLowerCase()} tucked into
-        the {first.assembly!.label.toLowerCase()}. Each sheet folds below.
+        Finished: the {tucked.join(" and the ")} tucked into the{" "}
+        {assembly.label.toLowerCase()}. Each sheet folds below.
       </p>
     </div>
   );
@@ -716,7 +733,7 @@ function OrigamiSheet({
 
 export function OrigamiResults({
   payload,
-  second = null,
+  parts = [],
   paperMm,
   paperColor,
   aiReason,
@@ -725,8 +742,8 @@ export function OrigamiResults({
   children,
 }: {
   readonly payload: OrigamiPayloadResponse;
-  /** A two-sheet model's second sheet, named by `payload.assembly`. */
-  readonly second?: OrigamiPayloadResponse | null;
+  /** A model of several squares: the sheets after the first, named by `payload.assembly`. */
+  readonly parts?: readonly OrigamiPayloadResponse[];
   /** Why this is not the design asked for, shown plainly (not as an AI choice). */
   readonly note?: string | null;
   /** Shown under the heading: the cut-and-glue offer, when there is one. */
@@ -738,20 +755,20 @@ export function OrigamiResults({
   readonly paperColor: string;
   readonly aiReason: string | null;
 }) {
-  const pair = payload.assembly && second ? payload.assembly : null;
-  const name = title ?? (pair ? "Standing animal" : payload.name);
+  const assembly =
+    payload.assembly && parts.length === payload.assembly.parts.length
+      ? payload.assembly
+      : null;
+  const sheets = assembly ? [payload, ...parts] : [payload];
+  const name = title ?? (assembly ? "Standing animal" : payload.name);
   const levels = ["beginner", "intermediate", "advanced"] as const;
+  // The harder sheet sets the level; the steps add up.
   const level =
-    pair && second
-      ? levels[
-          Math.max(
-            levels.indexOf(payload.difficulty),
-            levels.indexOf(second.difficulty),
-          )
-        ]!
-      : payload.difficulty;
-  const steps =
-    payload.steps.length + (pair && second ? second.steps.length : 0);
+    levels[
+      Math.max(...sheets.map((sheet) => levels.indexOf(sheet.difficulty)))
+    ]!;
+  const steps = sheets.reduce((sum, sheet) => sum + sheet.steps.length, 0);
+  const squares = ["one", "two", "three", "four", "five"][sheets.length - 1];
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -766,8 +783,8 @@ export function OrigamiResults({
     >
       <header className={styles.heading}>
         <p className={styles.kicker}>
-          {pair
-            ? "New origami design · two squares"
+          {assembly
+            ? `New origami design · ${squares ?? sheets.length} squares`
             : title
               ? `New origami design · ${payload.name.toLowerCase()}`
               : "Origami from one square"}
@@ -776,7 +793,7 @@ export function OrigamiResults({
         <p className={styles.difficulty} data-level={level}>
           {level[0]!.toUpperCase() + level.slice(1)} · {steps} steps
         </p>
-        {pair ? null : <p>{payload.summary}</p>}
+        {assembly ? null : <p>{payload.summary}</p>}
         {note ? (
           <p className={styles.aiChoice}>
             <strong>Note:</strong> {note}
@@ -788,45 +805,48 @@ export function OrigamiResults({
             are computed, not generated.
           </p>
         ) : null}
-        {pair ? (
+        {assembly ? (
           <p>
-            Folded from two squares, as classic origami animals often are: a{" "}
-            {paperMm} mm square for the {pair.label.toLowerCase()} and a{" "}
-            {Math.round(paperMm * pair.scale)} mm square for the{" "}
-            {pair.secondLabel.toLowerCase()}, whose wide end tucks into the
-            front of the body. Each square is checked at every step; the tuck
-            itself is placed, not checked.
+            Folded from {squares ?? sheets.length} squares, as classic origami
+            animals often are: a {paperMm} mm square for the{" "}
+            {assembly.label.toLowerCase()}
+            {assembly.parts.map(
+              (part, i) =>
+                `${i < assembly.parts.length - 1 ? "," : assembly.parts.length > 1 ? ", and" : " and"} a ${Math.round(paperMm * part.scale)} mm square for the ${part.label.toLowerCase()}`,
+            )}
+            , each tucked into the body. Each square is checked at every step;
+            the tucks themselves are placed, not checked.
           </p>
         ) : (
           <p>Fold it from a {paperMm} mm square of paper.</p>
         )}
         {children}
-        {pair ? null : <Checks payload={payload} />}
+        {assembly ? null : <Checks payload={payload} />}
       </header>
-      {pair && second ? (
+      {assembly ? (
         <>
           <AssembledModel
             first={payload}
-            second={second}
+            parts={parts}
             paperColor={paperColor}
             name={name}
           />
-          <OrigamiSheet
-            payload={payload}
-            paperMm={paperMm}
-            paperColor={paperColor}
-            title={title}
-            label={`Square 1 of 2 · ${pair.label}`}
-            part={pair.label}
-          />
-          <OrigamiSheet
-            payload={second}
-            paperMm={Math.round(paperMm * pair.scale)}
-            paperColor={paperColor}
-            title={title}
-            label={`Square 2 of 2 · ${pair.secondLabel}`}
-            part={pair.secondLabel}
-          />
+          {sheets.map((sheet, i) => {
+            const label =
+              i === 0 ? assembly.label : assembly.parts[i - 1]!.label;
+            const scale = i === 0 ? 1 : assembly.parts[i - 1]!.scale;
+            return (
+              <OrigamiSheet
+                key={sheet.id}
+                payload={sheet}
+                paperMm={Math.round(paperMm * scale)}
+                paperColor={paperColor}
+                title={title}
+                label={`Square ${i + 1} of ${sheets.length} · ${label}`}
+                part={label}
+              />
+            );
+          })}
         </>
       ) : (
         <OrigamiSheet
