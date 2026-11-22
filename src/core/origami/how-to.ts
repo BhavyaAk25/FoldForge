@@ -48,18 +48,6 @@ const SQUARE_BASE_STEPS: readonly HowToStep[] = [
 
 export const SQUARE_BASE_HOW: readonly HowToStep[] = SQUARE_BASE_STEPS;
 
-export const FROG_BASE_HOW: readonly HowToStep[] = [
-  ...SQUARE_BASE_STEPS,
-  {
-    text: "Lift one flap upright, open it, and squash it flat so its crease lies on the centre line. Squash the other three flaps the same way.",
-    show: null,
-  },
-  {
-    text: "On each squashed flap, fold the lower edges to the centre line, fold the top down over them, and unfold; then lift the bottom point up so the sides fold in (a petal fold). Do all four.",
-    show: { folded: "self" },
-  },
-];
-
 export const WATERBOMB_BASE_HOW: readonly HowToStep[] = [
   {
     text: "Coloured side up, fold in half along each diagonal and unfold.",

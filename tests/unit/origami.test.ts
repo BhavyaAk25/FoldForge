@@ -390,7 +390,7 @@ describe("page turns", () => {
     deriveSequence({
       anchor: frog.sequence.anchor,
       steps: [
-        frog.sequence.steps[0]!,
+        ...frog.sequence.steps,
         {
           kind: "turn",
           instruction: "Turn the front flap.",
@@ -405,8 +405,8 @@ describe("page turns", () => {
     if (!turned.ok) throw new Error(turned.error.kind);
     const animation = animateSequence(turned.value, frog.sequence.anchor);
     // The flap moved; the rest did not.
-    expect(animation.moves[0]!.moving.some(Boolean)).toBe(true);
-    expect(animation.moves[0]!.moving.every(Boolean)).toBe(false);
+    expect(animation.moves.at(-1)!.moving.some(Boolean)).toBe(true);
+    expect(animation.moves.at(-1)!.moving.every(Boolean)).toBe(false);
   });
 
   it("opens the lily's petals to different angles, so all four show", () => {
@@ -478,6 +478,21 @@ describe("page turns", () => {
       else expect(count).toBeGreaterThan(0);
     },
   );
+
+  it("teaches the frog base as a square base, four squashes, and four petal folds", () => {
+    expect(frog.sequence.steps.map((s) => s.kind)).toEqual([
+      "creases",
+      ...Array<string>(8).fill("collapse"),
+    ]);
+    const derived = deriveSequence(frog.sequence);
+    if (!derived.ok) throw new Error(derived.error.kind);
+    // The classic frog base: 25 mountains and 15 valleys, with the squash
+    // lines below each petal's hinge opened flat again.
+    const senses = derived.value.at(-1)!.pattern.edges.map((e) => e.assignment);
+    expect(
+      ["M", "V", "F"].map((a) => senses.filter((s) => s === a).length),
+    ).toEqual([25, 15, 8]);
+  });
 
   it("refuses a turn about a line with no hinge on it", () => {
     const missed = turn({ from: p(0.6, -0.5), to: p(0.6, 1) });

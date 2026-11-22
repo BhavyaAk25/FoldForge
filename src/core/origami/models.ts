@@ -1,7 +1,7 @@
 import type { OrigamiModelId } from "./catalog";
 import type { CreaseSegment, Point2 } from "./crease-pattern";
 import {
-  FROG_BASE,
+  FROG_BASE_STEPS,
   FROG_NARROW_STEPS,
   KITE_FOLDS,
   KITE_T,
@@ -24,7 +24,6 @@ import {
 import {
   type HowToStep,
   FISH_BASE_HOW,
-  FROG_BASE_HOW,
   SQUARE_BASE_HOW,
   WATERBOMB_BASE_HOW,
 } from "./how-to";
@@ -1291,13 +1290,7 @@ const LILY: OrigamiModel = {
   sequence: {
     anchor: p(0.5, 0.06),
     steps: [
-      {
-        kind: "creases",
-        instruction:
-          "Fold a frog base, closed point down: a square base with every flap squashed and petal-folded.",
-        segments: FROG_BASE,
-        howTo: FROG_BASE_HOW,
-      },
+      ...FROG_BASE_STEPS,
       ...FROG_NARROW_STEPS,
       // Petals alternate toward and away from you, so the lily opens all round.
       // Each side's outer petal opens further than the one beneath it, so the
@@ -1487,12 +1480,11 @@ export const ORIGAMI_MODELS: readonly OrigamiModel[] = [
     p(0.2, 0.15),
     "A long diamond with two small flaps; the start of the fish and the whale.",
   ),
-  base(
-    "frog-base",
-    FROG_BASE,
-    "Fold a square base, squash-fold each of its four flaps, then petal-fold all four squashed flaps.",
-    FROG_BASE_HOW,
-    p(0.5, 0.06),
-    "Four long flaps around a narrow diamond; the start of the frog and the lily.",
-  ),
+  {
+    id: "frog-base",
+    summary:
+      "Four long flaps around a narrow diamond; the start of the frog and the lily.",
+    viewDeg: 0,
+    sequence: { anchor: p(0.5, 0.06), steps: FROG_BASE_STEPS },
+  },
 ];
