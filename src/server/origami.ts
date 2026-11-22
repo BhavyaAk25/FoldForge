@@ -239,22 +239,18 @@ const build = (id: string): Built | null => {
         sheet.model.viewDeg,
       );
       const { scale } = sheet;
-      // The neck's kite sits inside the body's front (its left), rising from
-      // the front of the back: tuned on the giraffe-like designs, its left
-      // edge just ahead of the body and its foot a half body-height up, so
-      // it stays hidden between the body's layers. The tail hangs from the
-      // rear: its upper end (its outline's top left) tucked in just below
-      // the back and inside the rear edge.
-      const [dx, dy] =
-        sheet.tuck === "rear"
-          ? [
-              body.maxX - 0.1 * width - scale * own.minX,
-              body.maxY - 0.08 * height - scale * own.maxY,
-            ]
-          : [
-              body.minX - 0.16 * width - scale * own.minX,
-              body.minY + 0.52 * height - scale * own.minY,
-            ];
+      // Each tuck, tuned by eye: a point on the body (its front is left),
+      // then the part's point set on it, so its tucked end stays hidden.
+      const { minX: l, maxX: r, minY: b, maxY: t } = body;
+      const midX = (own.minX + own.maxX) / 2;
+      const tucks = {
+        front: [l - 0.16 * width, b + 0.22 * height, own.minX, own.minY],
+        rear: [r - 0.1 * width, t - 0.13 * height, own.minX, own.maxY],
+        "fore-legs": [l + 0.2 * width, b + 0.35 * height, midX, own.maxY],
+        "hind-legs": [r - 0.2 * width, b + 0.35 * height, midX, own.maxY],
+      } as const;
+      const [bx, by, ox, oy] = tucks[sheet.tuck ?? "front"];
+      const [dx, dy] = [bx - scale * ox, by - scale * oy];
       return { id: partId, label: sheet.label, scale, dx, dy };
     });
     if (parts.some((part) => part === null)) return null;

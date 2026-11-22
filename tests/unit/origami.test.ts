@@ -467,10 +467,10 @@ describe("origami routes", () => {
     ["crane", 200],
     ["neck_0.55_10_0.86_-15", 200],
     ["neck_0.9_0_0.78_25", 404],
-    // A standing animal is three squares: "~2" and "~3" name the others.
+    // A standing animal is five squares: "~2" to "~5" name the others.
     ["standing_0.55_10_0.8_-30~2", 200],
-    ["standing_0.55_10_0.8_-30~3", 200],
-    ["standing_0.55_10_0.8_-30~4", 404],
+    ["standing_0.55_10_0.8_-30~5", 200],
+    ["standing_0.55_10_0.8_-30~6", 404],
     ["standing_0.55_10_0.8_-30~03", 404],
     ["neck_0.55_10_0.86_-15~2", 404],
   ] as const)("serves %s with status %i", async (id, status) => {
@@ -506,7 +506,7 @@ describe("origami routes", () => {
     expect(await sheet.text()).toContain("Folding the base by hand");
   });
 
-  it("serves a standing animal: the body names the neck in front and the tail behind", async () => {
+  it("serves a standing animal: the body names the neck in front, the tail behind, and two pairs of legs", async () => {
     const id = "standing_0.55_10_0.8_-30";
     const get = async (sheet: string) =>
       OrigamiPayloadSchema.parse(
@@ -515,15 +515,17 @@ describe("origami routes", () => {
         ).json(),
       );
     const body = await get(id);
-    const [neck, tail] = body.assembly!.parts;
+    const [neck, tail, fore, hind] = body.assembly!.parts;
     expect(neck).toMatchObject({ id: `${id}~2`, scale: 0.6 });
     expect(tail).toMatchObject({ id: `${id}~3`, label: "Tail", scale: 0.26 });
+    expect(fore).toMatchObject({ id: `${id}~4`, label: "Front legs" });
+    expect(hind).toMatchObject({ id: `${id}~5`, label: "Hind legs" });
     expect((await get(neck!.id)).assembly).toBeNull();
-    expect((await get(tail!.id)).assembly).toBeNull();
-    // The neck's kite starts ahead of the body's front (its left edge); the
-    // tail hangs from the rear.
-    expect(neck!.dx).toBeLessThan(0.3);
-    expect(tail!.dx).toBeGreaterThan(0.5);
+    expect((await get(hind!.id)).assembly).toBeNull();
+    // From the front of the body (left) to its rear: the neck, the front
+    // legs, the hind legs, then the tail.
+    const x = [neck, fore, hind, tail].map((part) => part!.dx);
+    expect(x).toEqual([...x].sort((a, b) => a - b));
     // A tucked sheet's stack, however deep, sits thinly at the median of
     // the body's depths, not pulled forward by a few deep wrapped layers.
     expect(
