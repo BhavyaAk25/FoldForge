@@ -796,8 +796,8 @@ test("folds a standing animal from five squares on the real server", async ({
     await expect(
       page.getByText(`Square ${i + 1} of 5 · ${label}`),
     ).toBeVisible();
-  // The body's base comes with the hand sequence; the other sheets have none.
-  await expect(page.getByText("Folding the base by hand")).toHaveCount(1);
+  // Every sheet is taught fold by fold: none starts from a creased base.
+  await expect(page.getByText("Folding the base by hand")).toHaveCount(0);
   // Each square has its own downloads, named by its sheet.
   for (const sheet of ["~2", "~3", "~4", "~5"])
     await expect(

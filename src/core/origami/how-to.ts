@@ -84,36 +84,3 @@ export const FISH_BASE_HOW: readonly HowToStep[] = [
     show: { folded: "self" },
   },
 ];
-
-const QUARTERS = [0.25, 0.5, 0.75].flatMap((t) => [
-  line(p(t, 0), p(t, 1), "V"),
-  line(p(0, t), p(1, t), "V"),
-]);
-const CORNER_SQUARES = [
-  [0, 0],
-  [0.75, 0],
-  [0, 0.75],
-  [0.75, 0.75],
-].flatMap(([x = 0, y = 0]) => [
-  line(p(x, y), p(x + 0.25, y + 0.25), "V"),
-  line(p(x + 0.25, y), p(x, y + 0.25), "V"),
-]);
-
-export const ANIMAL_BODY_HOW: readonly HowToStep[] = [
-  {
-    text: "Fold in half both ways and unfold. Fold every edge to the centre line and unfold, so the creases divide the square into 16 small squares.",
-    show: { creases: QUARTERS },
-  },
-  {
-    text: "Fold each corner square in half along both of its diagonals and unfold.",
-    show: { creases: CORNER_SQUARES },
-  },
-  {
-    text: "Fold the top and bottom edges to the centre. Then fold the left and right edges to the centre too, pulling the trapped corners out so each makes a triangular point (a double boat base).",
-    show: null,
-  },
-  {
-    text: "Fold the whole in half along its length, points outward, so the four points hang down as legs.",
-    show: { folded: "self" },
-  },
-];

@@ -18,6 +18,7 @@ import type { Point2 } from "@/core/origami/crease-pattern";
 import { applyIsometry, checkFoldRules } from "@/core/origami/fold-rules";
 import {
   designId,
+  designSheets,
   foldableDesign,
   parseDesignId,
 } from "@/core/origami/generate";
@@ -492,6 +493,23 @@ describe("page turns", () => {
     expect(
       ["M", "V", "F"].map((a) => senses.filter((s) => s === a).length),
     ).toEqual([25, 15, 8]);
+  });
+
+  // Every base folded all at once settles in the simulator: the ones it
+  // could not (the frog base, the standing animal's body) are taught fold
+  // by fold instead, so none is animated face by face.
+  it("simulates every base collapse instead of placing it face by face", () => {
+    const standing = parseDesignId("standing_0.55_10_0.8_-30")!;
+    const sequences = [
+      ...ORIGAMI_MODELS.map((m) => m.sequence),
+      ...designSheets(standing, "").map((s) => s.model.sequence),
+    ].filter((q) => q.steps[0]?.kind === "creases" && !q.steps[0].form);
+    const faceByFace = sequences.filter((q) => {
+      const derived = deriveSequence({ ...q, steps: q.steps.slice(0, 1) });
+      if (!derived.ok) throw new Error(derived.error.kind);
+      return animateSequence(derived.value, q.anchor).collapseStrain === null;
+    });
+    expect(faceByFace).toHaveLength(0);
   });
 
   it("refuses a turn about a line with no hinge on it", () => {
