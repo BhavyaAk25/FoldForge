@@ -1,5 +1,5 @@
 import type { CreaseSegment, Point2 } from "./crease-pattern";
-import { ANIMAL_BODY_HOW, FROG_BASE_HOW, SQUARE_BASE_HOW } from "./how-to";
+import { ANIMAL_BODY_HOW, SQUARE_BASE_HOW } from "./how-to";
 import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
 
 /**
@@ -419,31 +419,79 @@ const turn = (q: Point2, times: number): Point2 =>
   times === 0 ? q : turn(p(1 - q.y, q.x), times - 1);
 
 /**
- * Square base with all four flaps squashed and petal-folded. Each squash
- * leaves a point S = (sqrt(2)/4, 1/2 - sqrt(2)/4) beside every edge midpoint,
- * where 22.5-degree creases from the corner, the centre, and the midpoint
- * meet. The centre has 16 creases, so one diagonal half is a mountain to
- * keep Maekawa's 9 against 7; the layer solver confirms a stacking exists.
+ * The frog base as folds. A squash opens the flap round an edge's midpoint:
+ * its line to the centre turns valley, with mountains from the centre 22.5
+ * degrees either side. A petal fold lifts the flap on the hinge between the
+ * points S beside the midpoint, and the squash lines below S open flat.
  */
 const FROG_S = Math.SQRT2 / 4;
-export const FROG_BASE: readonly CreaseSegment[] = [
-  ...[0, 1, 2, 3].flatMap((t) => {
-    const [left, right] = [
-      p(FROG_S, 0.5 - FROG_S),
-      p(1 - FROG_S, 0.5 - FROG_S),
-    ];
-    return [
-      crease(turn(p(0, 0), t), turn(left, t), "M"),
-      crease(turn(p(1, 0), t), turn(right, t), "M"),
-      crease(turn(p(0.5, 0), t), turn(left, t), "M"),
-      crease(turn(p(0.5, 0), t), turn(right, t), "M"),
-      crease(CENTRE, turn(left, t), "M"),
-      crease(CENTRE, turn(right, t), "M"),
-      crease(turn(left, t), turn(p(FROG_S, 0), t), "V"),
-      crease(turn(right, t), turn(p(1 - FROG_S, 0), t), "V"),
+/** Where a squash line from the centre, 22.5 degrees off a midline, meets the edge. */
+const FROG_CUT = 0.5 - 0.5 * Math.tan(Math.PI / 8);
+/**
+ * Flaps in folding order, the anchor's last so the base stays put. Found by
+ * deriving: squash 2 also folds the diagonal half (1,1) and opens (0,1),
+ * which squash 3 folds again with (0,0), as the frog base has them.
+ */
+const FROG_ORDER = [1, 2, 3, 0] as const;
+const SQUASH_HALVES: Readonly<
+  Record<
+    number,
+    Omit<Extract<FoldStep, { kind: "collapse" }>, "kind" | "instruction">
+  >
+> = {
+  2: {
+    add: [crease(p(1, 1), CENTRE, "V")],
+    open: [{ from: p(0, 1), to: CENTRE }],
+  },
+  3: { add: [crease(p(0, 1), CENTRE, "V"), crease(p(0, 0), CENTRE, "M")] },
+};
+export const FROG_BASE_STEPS: readonly FoldStep[] = [
+  {
+    kind: "creases",
+    instruction:
+      "Fold a square base: crease both diagonals and both midlines, then collapse the sheet into a small square, open end down.",
+    segments: SQUARE_BASE,
+    howTo: SQUARE_BASE_HOW,
+  },
+  ...FROG_ORDER.map((t, i): FoldStep => ({
+    kind: "collapse",
+    instruction:
+      i === 0
+        ? "Lift one flap upright, open it, and squash it flat so its middle crease lies on the centre line."
+        : "Turn to the next flap and squash it the same way.",
+    add: [
+      crease(CENTRE, turn(p(FROG_CUT, 0), t), "M"),
+      crease(CENTRE, turn(p(1 - FROG_CUT, 0), t), "M"),
       crease(turn(p(0.5, 0), t), CENTRE, "V"),
-      crease(turn(p(0, 0), t), CENTRE, t === 0 ? "M" : "V"),
-    ];
+      ...(SQUASH_HALVES[t]?.add ?? []),
+    ],
+    open: SQUASH_HALVES[t]?.open ?? [],
+  })),
+  ...FROG_ORDER.map((t, i): FoldStep => {
+    // Each side of the flap: its corner, its point S, where its hinge
+    // meets the edge, and where its squash line did.
+    const sides = [
+      [p(0, 0), p(FROG_S, 0.5 - FROG_S), p(FROG_S, 0), p(FROG_CUT, 0)],
+      [
+        p(1, 0),
+        p(1 - FROG_S, 0.5 - FROG_S),
+        p(1 - FROG_S, 0),
+        p(1 - FROG_CUT, 0),
+      ],
+    ].map((side) => side.map((q) => turn(q, t)));
+    return {
+      kind: "collapse",
+      instruction:
+        i === 0
+          ? "Petal-fold a squashed flap: fold its lower edges to the centre line and unfold, then lift its bottom point up so the sides fold in, and flatten it into a long diamond."
+          : "Turn to the next squashed flap and petal-fold it the same way.",
+      add: sides.flatMap(([corner, s, foot]) => [
+        crease(corner!, s!, "M"),
+        crease(turn(p(0.5, 0), t), s!, "M"),
+        crease(s!, foot!, "V"),
+      ]),
+      open: sides.map(([, s, , cut]) => ({ from: s!, to: cut! })),
+    };
   }),
 ];
 
@@ -507,13 +555,7 @@ export const fourLegs = (d: FourLegsDesign, summary: string): ModelShape => ({
   sequence: {
     anchor: p(0.5, 0.06),
     steps: [
-      {
-        kind: "creases",
-        instruction:
-          "Fold a frog base, closed point up: a square base with every flap squashed and petal-folded.",
-        segments: FROG_BASE,
-        howTo: FROG_BASE_HOW,
-      },
+      ...FROG_BASE_STEPS,
       ...FROG_NARROW_STEPS,
       {
         kind: "turn",
