@@ -1,5 +1,6 @@
 import {
   animalBody,
+  animalLegs,
   animalTail,
   fishOnKite,
   fourLegs,
@@ -146,8 +147,8 @@ export interface Sheet {
   readonly model: ModelShape;
   /** Its square's side as a fraction of the first sheet's. */
   readonly scale: number;
-  /** Where a later sheet tucks into the first: its front or its rear. */
-  readonly tuck: "front" | "rear" | null;
+  /** Where a later sheet tucks into the first: its front, its rear, or under either end. */
+  readonly tuck: "front" | "rear" | "fore-legs" | "hind-legs" | null;
 }
 
 /**
@@ -157,6 +158,8 @@ export interface Sheet {
 export const NECK_SHEET_SCALE = 0.6;
 /** The tail's square against the body's: a tail about as long as the body. */
 export const TAIL_SHEET_SCALE = 0.26;
+/** Each pair of legs' square: legs a little longer than the body is deep. */
+export const LEG_SHEET_SCALE = 0.5;
 
 const whole = (model: ModelShape): Sheet => ({
   label: "",
@@ -178,7 +181,7 @@ export const designSheets = (d: Design, summary: string): Sheet[] => {
     case "standing":
       return [
         {
-          label: "Body and legs",
+          label: "Body",
           model: animalBody(summary),
           scale: 1,
           tuck: null,
@@ -198,6 +201,17 @@ export const designSheets = (d: Design, summary: string): Sheet[] => {
           scale: TAIL_SHEET_SCALE,
           tuck: "rear",
         },
+        ...(
+          [
+            ["Front legs", "front", "fore-legs"],
+            ["Hind legs", "rear", "hind-legs"],
+          ] as const
+        ).map(([label, end, tuck]) => ({
+          label,
+          model: animalLegs(end),
+          scale: LEG_SHEET_SCALE,
+          tuck,
+        })),
       ];
   }
 };

@@ -655,31 +655,91 @@ export const animalTail = (): ModelShape => ({
   },
 });
 
-/** Where the back's fold goes in: the base's back is at 0.5, its legs end at 0.125. */
-const ANIMAL_BACK = 0.45;
+/**
+ * The back's new line and the base's lower edge. Anchored in the far half,
+ * the base lies upside down in the folded frame (back at 0.5, points to
+ * 0.875) and the view turns it over: that side's band closes neatly.
+ */
+const ANIMAL_BACK = 0.55;
+const ANIMAL_BELLY = 0.75;
 export const animalBody = (summary: string): ModelShape => ({
   summary,
-  viewDeg: 0,
+  viewDeg: 180,
   sequence: {
-    // Below the back's new line, so the body, not the sunk strip, stays put.
-    anchor: p(0.5, 0.3),
+    // Inside the back's new line, so the body, not the band, stays put.
+    anchor: p(0.5, 0.7),
     steps: [
       {
         kind: "creases",
         instruction:
-          "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down as legs.",
+          "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down.",
         segments: ANIMAL_BODY,
         howTo: ANIMAL_BODY_HOW,
       },
       {
-        // The base's back stands twice as tall as its legs are long; wrapping
-        // a band of the top down over both halves lowers it by a third. (Sunk
+        // The base's back stands twice as tall as its points are long;
+        // wrapping a band of the top down over both halves lowers it. (Sunk
         // inside instead, it opens a notch where the edges meet at the top.)
         kind: "outside-reverse",
         instruction:
           "Fold a band along the top down over the outside, on both sides at once, so the back is lower and longer-looking.",
         line: { from: p(0.1, ANIMAL_BACK), to: p(0.9, ANIMAL_BACK) },
-        toward: p(0.5, 0.49),
+        toward: p(0.5, 0.51),
+      },
+      {
+        // The points' outer layers run on up into the body, so they cannot
+        // be narrowed; pushed inside, they leave a closed block for legs.
+        kind: "inside-reverse",
+        instruction:
+          "Push all four points up inside the body along its lower edge, leaving a neat closed block.",
+        line: { from: p(0.2, ANIMAL_BELLY), to: p(0.8, ANIMAL_BELLY) },
+        toward: p(0.375, 0.85),
+      },
+    ],
+  },
+});
+
+/** Edges folded behind to the diagonal from `corner` again: points of 11.25 degrees. */
+const sharpen = (
+  corner: Point2,
+  deg: number,
+  instruction: string,
+): FoldStep[] =>
+  [-11.25, 11.25].map((turn, i) => ({
+    kind: "mountain",
+    instruction: i === 0 ? instruction : "Then the other edge.",
+    line: through(corner, along(corner, deg + turn, 1)),
+    toward: along(corner, deg + 1.5 * turn, 0.8),
+  }));
+
+/**
+ * A pair of legs: the slim diamond sharpened at both ends, folded in half
+ * lengthwise, then across its middle a little off square so the halves part
+ * as a near and a far leg. The fold across tucks up into the body.
+ */
+export const animalLegs = (end: "front" | "rear"): ModelShape => ({
+  summary: `These legs: their fold tucks up into the ${end} of the body.`,
+  // Hanging down, the front pair leaning a little forward (left), the hind back.
+  viewDeg: end === "front" ? 208 : 218,
+  sequence: {
+    anchor: p(0.6, 0.45),
+    steps: [
+      ...SLIM_DIAMOND,
+      ...sharpen(p(0, 0), 45, "Fold the edges behind to the diagonal again."),
+      ...sharpen(p(1, 1), 225, "Do the same at the other end."),
+      {
+        kind: "mountain",
+        instruction:
+          "Fold it in half behind along the long diagonal: a thin stick.",
+        line: through(p(0.2, 0.2), p(0.8, 0.8)),
+        toward: p(0.3, 0.7),
+      },
+      {
+        kind: "valley",
+        instruction:
+          "Fold the stick in half across its middle, a little off square, so the two halves part as two legs. Tuck the fold up into the body.",
+        line: across(CENTRE, -39, 0.3),
+        toward: p(0.2, 0.2),
       },
     ],
   },
