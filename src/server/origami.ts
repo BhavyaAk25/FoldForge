@@ -15,6 +15,7 @@ import {
 import type { ModelShape } from "@/core/origami/families";
 import { difficultyOf, type Difficulty } from "@/core/origami/difficulty";
 import { applyIsometry } from "@/core/origami/fold-rules";
+import { curlCollisions } from "@/core/origami/curl";
 import {
   designSheets,
   parseDesignId,
@@ -216,6 +217,11 @@ const build = (id: string): Built | null => {
   }
   const animation = animateSequence(derived.value, model.sequence.anchor);
   const pattern = derived.value.at(-1)!.pattern;
+  // A curl is proven in 3D: no curled paper passes through other paper.
+  if (curlCollisions({ ...animation, vertices: pattern.vertices }) > 0) {
+    if (!resolved.library) return null;
+    throw new Error(`Origami model ${id} curls through its own paper.`);
+  }
   const hasBase = derived.value[0]!.step.kind === "creases";
   const instructions = derived.value.map((step, index): InstructionStep => {
     const move = hasBase ? index - 1 : index;

@@ -3,6 +3,8 @@ import { applyIsometry, type Isometry } from "./fold-rules";
 import { solveLayerOrder } from "./layers";
 import {
   assignmentsIn,
+  curlLines,
+  curlRegion,
   faceAt,
   faceCentroid,
   foldedTransforms,
@@ -55,6 +57,16 @@ export interface FoldMove {
    * axis (which is then relative to it), so the paper moves as one sheet.
    */
   readonly turn: FaceAxis | null;
+  /**
+   * A curl: its bend lines, each with the faces past it, which turn
+   * `endDeg` about it (the flat keyframes do not change). Null otherwise.
+   */
+  readonly bends: readonly CurlBend[] | null;
+}
+
+export interface CurlBend {
+  readonly line: FoldLine;
+  readonly moving: readonly boolean[];
 }
 
 export interface FaceAxis {
@@ -338,8 +350,41 @@ export const animateSequence = (
       throw new Error("A base step appeared after the first step.");
     const before = keyframes.at(-1)!;
     const after = transformsAt(pattern);
-    const moving = after.map((t, face) => !same(t, before.transforms[face]!));
-    const swing: 1 | -1 = step.kind === "mountain" ? -1 : 1;
+    // A curl leaves every face where it lies flat; each bend turns the faces
+    // on its far side (of those taking part) in 3D.
+    const region =
+      step.kind === "curl" ? curlRegion(finalPattern, after, step) : null;
+    const bends =
+      step.kind === "curl"
+        ? curlLines(step).map((line): CurlBend => {
+            const d = {
+              x: line.to.x - line.from.x,
+              y: line.to.y - line.from.y,
+            };
+            const side = (q: Point2) =>
+              Math.sign(d.x * (q.y - line.from.y) - d.y * (q.x - line.from.x));
+            return {
+              line,
+              moving: finalPattern.faces.map(
+                (_, face) =>
+                  (region?.[face] ?? false) &&
+                  side(
+                    applyIsometry(
+                      after[face]!,
+                      faceCentroid(finalPattern, face),
+                    ),
+                  ) === side(step.toward),
+              ),
+            };
+          })
+        : null;
+    const moving =
+      bends?.[0]?.moving ??
+      after.map((t, face) => !same(t, before.transforms[face]!));
+    const swing: 1 | -1 =
+      step.kind === "mountain" || (step.kind === "curl" && step.degrees < 0)
+        ? -1
+        : 1;
     const reverse =
       step.kind === "inside-reverse" ||
       step.kind === "outside-reverse" ||
@@ -347,7 +392,9 @@ export const animateSequence = (
     const endDeg =
       step.kind === "valley" || step.kind === "mountain"
         ? (step.openDeg ?? 180)
-        : 180;
+        : step.kind === "curl"
+          ? Math.abs(step.degrees) / step.bends
+          : 180;
     if (step.kind === "collapse") collapses.push(moves.length);
     moves.push({
       line:
@@ -359,10 +406,13 @@ export const animateSequence = (
       endDeg,
       axes: null,
       turn: null,
+      bends,
     });
     keyframes.push({
       transforms: after,
-      layers: restack(before.layers, moving, swing, reverse),
+      layers: bends
+        ? before.layers
+        : restack(before.layers, moving, swing, reverse),
     });
     states.push(pattern);
   }
@@ -370,8 +420,14 @@ export const animateSequence = (
   // already proved one exists); the fold-history order only breaks ties so
   // consecutive states look alike. A 3D form's one keyframe is the flat,
   // unfolded sheet, where nothing overlaps.
-  const stacked = keyframes.map((k, i) => {
+  const stacked: FoldKeyframe[] = [];
+  keyframes.forEach((k, i) => {
+    stacked.push(solvedKeyframe(k, i));
+  });
+  function solvedKeyframe(k: FoldKeyframe, i: number): FoldKeyframe {
     if (form) return k;
+    // A curl leaves the flat state as it was: so is its stacking.
+    if (i > 0 && moves[i - 1]!.bends) return stacked[i - 1]!;
     const solved = solveLayerOrder(
       finalPattern,
       k.transforms,
@@ -380,7 +436,7 @@ export const animateSequence = (
     );
     if (!solved) throw new Error("A derived state has no layer order.");
     return { transforms: k.transforms, layers: solved.levels };
-  });
+  }
   // A collapse: each face's motion from its two keyframes. The motion most
   // faces share is the whole model turning (often none); every face then
   // turns over its own axis relative to that, toward the viewer if it ends

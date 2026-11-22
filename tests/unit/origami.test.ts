@@ -31,6 +31,7 @@ import {
   type FoldStep,
 } from "@/core/origami/sequence";
 import { simulateFolding } from "@/core/origami/simulate";
+import { curlCollisions } from "@/core/origami/curl";
 import { OrigamiPayloadSchema } from "@/lib/origami-contract";
 
 const p = (x: number, y: number) => ({ x, y });
@@ -413,10 +414,70 @@ describe("page turns", () => {
     const derived = deriveSequence(lily.sequence);
     if (!derived.ok) throw new Error(derived.error.kind);
     const petals = animateSequence(derived.value, lily.sequence.anchor)
-      .moves.slice(-4)
+      .moves.filter((move) => !move.bends)
+      .slice(-4)
       .map((move) => move.endDeg * move.swing);
     expect(new Set(petals).size).toBe(4);
   });
+
+  // The lily's petals curl outward: flat lines in the proof, checked in 3D.
+  // Curled inward they pass through each other; a bend line that stops
+  // partway across a petal would tear it; nothing folds after a curl.
+  const lily = ORIGAMI_MODELS.find((m) => m.id === "lily")!;
+  const curls = lily.sequence.steps.filter((s) => s.kind === "curl");
+  const recurled = (sign: number, extra: readonly FoldStep[] = []) => ({
+    ...lily.sequence,
+    steps: [
+      ...lily.sequence.steps.map((s) =>
+        s.kind === "curl" ? { ...s, degrees: sign * s.degrees * 1.6 } : s,
+      ),
+      ...extra,
+    ],
+  });
+  it.each([
+    ["outward", lily.sequence, "ok", 0],
+    ["inward", recurled(-1), "ok", "some"],
+    [
+      "along a short line",
+      recurled(1, [
+        {
+          ...curls[0]!,
+          line: { from: p(0.49, 0.1), to: p(0.51, 0.1) },
+        } as FoldStep,
+      ]),
+      "curl_tears",
+      null,
+    ],
+    [
+      "then folded",
+      recurled(1, [
+        {
+          kind: "valley",
+          instruction: "",
+          line: { from: p(0, 0.3), to: p(1, 0.3) },
+          toward: p(0.5, 0.4),
+        },
+      ]),
+      "curl_not_last",
+      null,
+    ],
+  ] as const)(
+    "curls the lily's petals %s",
+    (_, sequence, outcome, crossings) => {
+      const derived = deriveSequence(sequence);
+      expect(derived.ok ? "ok" : derived.error.kind).toBe(outcome);
+      if (!derived.ok) return;
+      const pattern = derived.value.at(-1)!.pattern;
+      const animation = animateSequence(derived.value, sequence.anchor);
+      expect(pattern.edges.some((e) => e.assignment === "F")).toBe(true);
+      const count = curlCollisions({
+        ...animation,
+        vertices: pattern.vertices,
+      });
+      if (crossings === 0) expect(count).toBe(0);
+      else expect(count).toBeGreaterThan(0);
+    },
+  );
 
   it("refuses a turn about a line with no hinge on it", () => {
     const missed = turn({ from: p(0.6, -0.5), to: p(0.6, 1) });

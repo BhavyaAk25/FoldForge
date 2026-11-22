@@ -1280,10 +1280,13 @@ const BOX: OrigamiModel = {
 /** How far the outer and the inner petal on each side open. */
 const LILY_OUTER_DEG = 140;
 const LILY_INNER_DEG = 65;
+/** Where each petal's curl starts and how far it turns in all. */
+const LILY_CURL_FROM = 0.06;
+const LILY_CURL_DEG = 100;
 const LILY: OrigamiModel = {
   id: "lily",
   summary:
-    "The traditional lily from the frog base: a slender stem and four petals folded open. Curl each petal over a pencil to finish it.",
+    "The traditional lily from the frog base: a slender stem and four petals folded open, their tips curled outward.",
   viewDeg: 180,
   sequence: {
     anchor: p(0.5, 0.06),
@@ -1311,6 +1314,29 @@ const LILY: OrigamiModel = {
         toward: p(0.52, -0.2),
         layers: frogCorner(corner),
         openDeg: i < 2 ? LILY_OUTER_DEG : LILY_INNER_DEG,
+      })),
+      // Folded flat, the petals lie over the stem with their tips at 0.2;
+      // each curls outward, away from the stem, over its last third.
+      ...(
+        [
+          [1, 3],
+          [2, 0],
+        ] as const
+      ).map(([a, b], i): FoldStep => ({
+        kind: "curl",
+        instruction:
+          i === 0
+            ? "Curl the tip of each petal you opened toward you outward over a pencil."
+            : "Curl the other two petals' tips outward the same way.",
+        line: { from: p(0.3, LILY_CURL_FROM), to: p(0.8, LILY_CURL_FROM) },
+        toward: p(0.5, 0.2),
+        // Just inside each petal's corner of the sheet.
+        tips: [a, b].map((c) =>
+          p(c === 1 || c === 2 ? 0.98 : 0.02, c >= 2 ? 0.98 : 0.02),
+        ),
+        degrees: i === 0 ? LILY_CURL_DEG : -LILY_CURL_DEG,
+        bends: 6,
+        spacing: 0.022,
       })),
     ],
   },
