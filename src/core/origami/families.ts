@@ -1,5 +1,5 @@
 import type { CreaseSegment, Point2 } from "./crease-pattern";
-import { ANIMAL_BODY_HOW, SQUARE_BASE_HOW } from "./how-to";
+import { SQUARE_BASE_HOW } from "./how-to";
 import type { FaceSample, FoldLine, FoldSequence, FoldStep } from "./sequence";
 
 /**
@@ -663,7 +663,7 @@ const mirrored = (s: CreaseSegment, mx: boolean, my: boolean) => {
   const m = ({ x, y }: Point2) => p(mx ? 1 - x : x, my ? 1 - y : y);
   return crease(m(s.from), m(s.to), s.assignment as "M" | "V");
 };
-export const ANIMAL_BODY: readonly CreaseSegment[] = [
+const ANIMAL_BODY: readonly CreaseSegment[] = [
   ...[false, true].flatMap((mx) =>
     [false, true].flatMap((my) => BODY_CORNER.map((s) => mirrored(s, mx, my))),
   ),
@@ -703,7 +703,9 @@ export const animalTail = (): ModelShape => ({
  * 0.875) and the view turns it over: that side's band closes neatly.
  */
 const ANIMAL_BACK = 0.55;
-const ANIMAL_BELLY = 0.75;
+// A hair below the lower edge: the cupboard fold lies on the edge itself,
+// and a reverse fold cannot open between layers along an existing fold.
+const ANIMAL_BELLY = 0.755;
 export const animalBody = (summary: string): ModelShape => ({
   summary,
   viewDeg: 180,
@@ -711,12 +713,39 @@ export const animalBody = (summary: string): ModelShape => ({
     // Inside the back's new line, so the body, not the band, stays put.
     anchor: p(0.5, 0.7),
     steps: [
-      {
-        kind: "creases",
+      ...([0.25, 0.75] as const).map((y, i): FoldStep => ({
+        kind: "valley",
         instruction:
-          "Fold each edge in to the centre, squashing every corner out as a point, then fold the whole in half so the four points hang down.",
-        segments: ANIMAL_BODY,
-        howTo: ANIMAL_BODY_HOW,
+          i === 0
+            ? "Fold the bottom edge up to the centre line."
+            : "Fold the top edge down to the centre line too.",
+        line: { from: p(-0.1, y), to: p(1.1, y) },
+        toward: p(0.5, y === 0.25 ? 0.1 : 0.9),
+      })),
+      // Each side's half of the double boat base at once: the edge folds in
+      // to the centre and the two corners trapped under the folds above
+      // pull out as points, opening those folds' ends.
+      ...[false, true].map((right): FoldStep => ({
+        kind: "collapse",
+        instruction: right
+          ? "Do the same on the right: a double boat base with four points."
+          : "Fold the left edge in to the centre line, pulling the two corners trapped inside out as triangular points.",
+        add: ANIMAL_BODY.filter(
+          (s) =>
+            [s.from, s.to].every((q) => (right ? q.x >= 0.5 : q.x <= 0.5)) &&
+            !(s.from.y === 0.5 && s.to.y === 0.5),
+        ),
+        open: [0.25, 0.75].map((y) => ({
+          from: p(right ? 0.75 : 0, y),
+          to: p(right ? 1 : 0.25, y),
+        })),
+      })),
+      {
+        kind: "mountain",
+        instruction:
+          "Fold it in half behind along its length, so the four points hang down.",
+        line: { from: p(-0.1, 0.5), to: p(1.1, 0.5) },
+        toward: p(0.5, 0.4),
       },
       {
         // The base's back stands twice as tall as its points are long;
@@ -728,15 +757,23 @@ export const animalBody = (summary: string): ModelShape => ({
         line: { from: p(0.1, ANIMAL_BACK), to: p(0.9, ANIMAL_BACK) },
         toward: p(0.5, 0.51),
       },
-      {
-        // The points' outer layers run on up into the body, so they cannot
-        // be narrowed; pushed inside, they leave a closed block for legs.
+      // The points' outer layers run on up into the body, so they cannot
+      // be narrowed; pushed inside, they leave a closed block for legs.
+      // One end at a time: pushed in at once, the layer order may leave
+      // one end's points outside the near half.
+      ...[0.375, 0.625].map((x, i): FoldStep => ({
         kind: "inside-reverse",
         instruction:
-          "Push all four points up inside the body along its lower edge, leaving a neat closed block.",
-        line: { from: p(0.2, ANIMAL_BELLY), to: p(0.8, ANIMAL_BELLY) },
-        toward: p(0.375, 0.85),
-      },
+          i === 0
+            ? "Push the two points at one end up inside the body along its lower edge."
+            : "Push the other two in the same way, leaving a neat closed block.",
+        line: {
+          from: p(i === 0 ? 0.2 : 0.5, ANIMAL_BELLY),
+          to: p(i === 0 ? 0.5 : 0.8, ANIMAL_BELLY),
+        },
+        toward: p(x, 0.85),
+        layers: (f) => (i === 0 ? f.folded.x < 0.5 : f.folded.x > 0.5),
+      })),
     ],
   },
 });
