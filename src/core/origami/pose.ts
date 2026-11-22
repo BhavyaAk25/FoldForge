@@ -187,25 +187,148 @@ const collapsedFace = (
   return points.flatMap((p) => [p.x, p.y, p.z]);
 };
 
+/** A face corner in the flat frame: x, y, and h, its height off the face's flat plane. */
+interface Lifted {
+  readonly x: number;
+  readonly y: number;
+  readonly h: number;
+}
+
 /**
- * Pose during move `index`. A face last turned by an earlier fold that stops
- * short of flat (a wing opened to 90 degrees) stays at that angle.
+ * A rigid turn of a face's corners by `deg` about an in-plane line, lifting
+ * toward `swing`; `side` is the side of the line the face lies on.
  */
-const movePose = (input: PoseInput, index: number, u: number): number[] =>
-  input.faces.flatMap((face, f) => {
-    const move = input.moves[index]!;
-    if (move.axes) return collapsedFace(input, f, index, u);
-    if (move.moving[f]) return turnedFace(input, f, index, u);
-    for (let j = index - 1; j >= 0; j -= 1) {
-      if (!input.moves[j]!.moving[f]) continue;
-      if (input.moves[j]!.endDeg < 180) return turnedFace(input, f, j, 1);
+const bend = (
+  points: readonly Lifted[],
+  line: FoldLine,
+  deg: number,
+  swing: 1 | -1,
+  side: number,
+): Lifted[] => {
+  const { origin, along, normal } = frameOf(line);
+  const [c, s] = [
+    Math.cos((deg * Math.PI) / 180),
+    Math.sin((deg * Math.PI) / 180),
+  ];
+  return points.map((p) => {
+    const o = { x: p.x - origin.x, y: p.y - origin.y };
+    const t = o.x * along.x + o.y * along.y;
+    const u = side * (o.x * normal.x + o.y * normal.y);
+    const [u2, h2] = [u * c - swing * p.h * s, swing * u * s + p.h * c];
+    return {
+      x: origin.x + along.x * t + normal.x * side * u2,
+      y: origin.y + along.y * t + normal.y * side * u2,
+      h: h2,
+    };
+  });
+};
+
+/** Which side of a line a point lies on: +1 or -1. */
+const sideOf = (line: FoldLine, q: Point2): number =>
+  Math.sign(
+    (line.to.x - line.from.x) * (q.y - line.from.y) -
+      (line.to.y - line.from.y) * (q.x - line.from.x),
+  ) || 1;
+
+/**
+ * A face that does not fold in move `index`: where it lies flat, unless
+ * folds since its last full fold left it turned. Curls (the move itself
+ * when `curlU` is given, then earlier ones) bend it in the flat frame,
+ * outermost line first; a fold that stopped short of flat before them
+ * then turns the curled face from its place before that fold.
+ */
+const restingFace = (
+  input: PoseInput,
+  face: number,
+  index: number,
+  curlU: number | null,
+): number[] => {
+  const curls: { move: FoldMove; u: number }[] =
+    curlU === null ? [] : [{ move: input.moves[index]!, u: curlU }];
+  let partial: number | null = null;
+  for (let j = index - 1; j >= 0; j -= 1) {
+    const move = input.moves[j]!;
+    if (!move.moving[face]) continue;
+    if (move.bends) curls.push({ move, u: 1 });
+    else {
+      if (move.endDeg < 180) partial = j;
       break;
     }
-    const keyframe = input.keyframes[index]!;
-    return face.flatMap((v) => {
-      const p = applyIsometry(keyframe.transforms[f]!, input.vertices[v]!);
-      return [p.x, p.y, (keyframe.layers[f] ?? 0) * gapFor(input)];
+  }
+  if (curls.length === 0 && partial !== null)
+    return turnedFace(input, face, partial, 1);
+  const keyframe = input.keyframes[index]!;
+  const corners = input.faces[face]!;
+  let points: Lifted[] = corners.map((v) => ({
+    ...applyIsometry(keyframe.transforms[face]!, input.vertices[v]!),
+    h: 0,
+  }));
+  const centre = {
+    x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+    y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+  };
+  for (const { move, u } of curls)
+    for (const b of [...move.bends!].reverse())
+      if (b.moving[face])
+        points = bend(
+          points,
+          b.line,
+          move.endDeg * ease(u),
+          move.swing,
+          sideOf(b.line, centre),
+        );
+  let base = (keyframe.layers[face] ?? 0) * gapFor(input);
+  if (partial !== null) {
+    // Back to the face's place before that fold (turned over about its
+    // line), then turned by the fold's own angle, as `turnedFace` does.
+    const move = input.moves[partial]!;
+    const { origin, normal } = frameOf(move.line);
+    const flipped = points.map((p) => {
+      const d = (p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y;
+      return { x: p.x - 2 * d * normal.x, y: p.y - 2 * d * normal.y, h: -p.h };
     });
+    const mirrored = {
+      x:
+        centre.x -
+        2 *
+          ((centre.x - origin.x) * normal.x +
+            (centre.y - origin.y) * normal.y) *
+          normal.x,
+      y:
+        centre.y -
+        2 *
+          ((centre.x - origin.x) * normal.x +
+            (centre.y - origin.y) * normal.y) *
+          normal.y,
+    };
+    points = bend(
+      flipped,
+      move.line,
+      move.endDeg,
+      move.swing,
+      sideOf(move.line, mirrored),
+    );
+    base = (input.keyframes[partial]!.layers[face] ?? 0) * gapFor(input);
+  }
+  return points.flatMap((p) => [p.x, p.y, base + p.h]);
+};
+
+/**
+ * Pose during move `index`. A face last turned by an earlier fold that stops
+ * short of flat (a wing opened to 90 degrees) stays at that angle; curled
+ * faces keep their curl.
+ */
+const movePose = (input: PoseInput, index: number, u: number): number[] =>
+  input.faces.flatMap((_, f) => {
+    const move = input.moves[index]!;
+    if (move.axes) return collapsedFace(input, f, index, u);
+    if (move.moving[f] && !move.bends) return turnedFace(input, f, index, u);
+    return restingFace(
+      input,
+      f,
+      index,
+      move.bends && move.moving[f] ? u : null,
+    );
   });
 
 export const stepCount = (input: PoseInput): number =>

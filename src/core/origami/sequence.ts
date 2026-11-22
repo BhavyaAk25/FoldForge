@@ -106,6 +106,24 @@ export type FoldStep =
       readonly line: FoldLine;
       readonly toward: Point2;
       readonly layers?: (face: FaceSample) => boolean;
+    }
+  | {
+      /**
+       * A finish: the paper past `line` curls toward `toward` (as over a
+       * pencil), not creased. It bends a little at each of `bends` parallel
+       * lines `spacing` apart, `degrees` in all (positive toward the viewer).
+       * The lines are flat in the crease proof; `curlCollisions` proves the
+       * curled shape in 3D.
+       */
+      readonly kind: "curl";
+      readonly instruction: string;
+      readonly line: FoldLine;
+      readonly toward: Point2;
+      /** Paper points in the flaps that curl: each flap is the paper joined to one past the line. */
+      readonly tips: readonly Point2[];
+      readonly degrees: number;
+      readonly bends: number;
+      readonly spacing: number;
     };
 
 export interface FoldSequence {
@@ -141,6 +159,10 @@ export type SequenceError =
   | { readonly kind: "form_not_alone"; readonly step: number }
   /** The 3D form's faces do not meet: rigid paper cannot hold it. */
   | { readonly kind: "form_open"; readonly step: number }
+  /** A curl would tear: the curling paper is joined to paper that stays off its line. */
+  | { readonly kind: "curl_tears"; readonly step: number }
+  /** A curl is a finish: a fold after it would flatten it again. */
+  | { readonly kind: "curl_not_last"; readonly step: number }
   | {
       readonly kind: "not_flat_foldable";
       readonly step: number;
@@ -364,7 +386,7 @@ interface AppliedFold {
  */
 const applyFold = (
   state: FoldedState,
-  step: Extract<FoldStep, { toward: Point2 }>,
+  step: Exclude<Extract<FoldStep, { toward: Point2 }>, { kind: "curl" }>,
   split: number,
 ): AppliedFold | null => {
   const { cp, transforms } = state;
@@ -631,6 +653,75 @@ const checkedPattern = (
   return ok(built.value);
 };
 
+/** A curl's bend lines: its line, then copies stepped toward `toward`. */
+export const curlLines = (
+  step: Extract<FoldStep, { kind: "curl" }>,
+): FoldLine[] => {
+  const d = sub(step.line.to, step.line.from);
+  const length = Math.hypot(d.x, d.y);
+  const side = Math.sign(cross(d, sub(step.toward, step.line.from)));
+  const n = { x: (-d.y / length) * side, y: (d.x / length) * side };
+  return Array.from({ length: step.bends }, (_, i) => ({
+    from: {
+      x: step.line.from.x + n.x * step.spacing * i,
+      y: step.line.from.y + n.y * step.spacing * i,
+    },
+    to: {
+      x: step.line.to.x + n.x * step.spacing * i,
+      y: step.line.to.y + n.y * step.spacing * i,
+    },
+  }));
+};
+
+/**
+ * The faces that curl: those joined to a tip without crossing the first bend
+ * line. Null if that paper reaches back past the line, so bending it would
+ * tear it from paper that stays.
+ */
+export const curlRegion = (
+  cp: CreasePatternV1,
+  transforms: readonly Isometry[],
+  step: Extract<FoldStep, { kind: "curl" }>,
+): boolean[] | null => {
+  const [line] = curlLines(step);
+  const d = sub(line!.to, line!.from);
+  const offset = (q: Point2) =>
+    cross(d, sub(q, line!.from)) / Math.hypot(d.x, d.y);
+  const beyond = Math.sign(offset(step.toward));
+  const facesOf = new Map<string, number[]>();
+  cp.faces.forEach((face, f) =>
+    face.forEach((v, i) => {
+      const w = face[(i + 1) % face.length]!;
+      const key = v < w ? `${v}-${w}` : `${w}-${v}`;
+      facesOf.set(key, [...(facesOf.get(key) ?? []), f]);
+    }),
+  );
+  const region = cp.faces.map(() => false);
+  const queue = step.tips.map((tip) => faceAt(cp, tip));
+  while (queue.length > 0) {
+    const f = queue.pop()!;
+    if (f < 0 || region[f]) continue;
+    const folded = applyIsometry(
+      transforms[f]!,
+      centroid(polygon(cp, cp.faces[f]!)),
+    );
+    if (Math.sign(offset(folded)) !== beyond) return null;
+    region[f] = true;
+    const face = cp.faces[f]!;
+    face.forEach((v, i) => {
+      const w = face[(i + 1) % face.length]!;
+      const onLine = [v, w].every(
+        (x) =>
+          Math.abs(offset(applyIsometry(transforms[f]!, cp.vertices[x]!))) <
+          1e-6,
+      );
+      if (!onLine)
+        queue.push(...(facesOf.get(v < w ? `${v}-${w}` : `${w}-${v}`) ?? []));
+    });
+  }
+  return region;
+};
+
 export const deriveSequence = (
   sequence: FoldSequence,
 ): Result<DerivedStep[], SequenceError> => {
@@ -639,6 +730,8 @@ export const deriveSequence = (
   for (const [index, step] of sequence.steps.entries()) {
     if (step.kind === "creases" && index > 0)
       return err({ kind: "base_not_first", step: index });
+    if (step.kind !== "curl" && sequence.steps[index - 1]?.kind === "curl")
+      return err({ kind: "curl_not_last", step: index });
     let added: readonly CreaseSegment[] =
       step.kind === "creases" ? step.segments : [];
     let result: Result<CreasePatternV1, SequenceError>;
@@ -688,6 +781,84 @@ export const deriveSequence = (
           break;
         }
       }
+    } else if (step.kind === "curl") {
+      // Every bend line marks all the layers it crosses with flat lines; the
+      // marks are kept only on the paper that curls. The folded state does
+      // not change, only where the paper bends in 3D, so one state serves
+      // every line (they are parallel, so they never cross each other).
+      const current = buildCreasePattern(segments);
+      if (!current.ok)
+        return err({ kind: "pattern", step: index, error: current.error });
+      const transforms = foldedTransforms(current.value, sequence.anchor);
+      if (!transforms) return err({ kind: "anchor_lost", step: index });
+      // Marking a line reads no layer order (that is only for reverse folds).
+      const state: FoldedState = {
+        cp: current.value,
+        transforms,
+        order: { levels: transforms.map(() => 0), above: () => null },
+      };
+      const lines: CreaseSegment[] = [];
+      for (const line of curlLines(step)) {
+        const probe = applyFold(
+          state,
+          { kind: "valley", instruction: "", line, toward: step.toward },
+          Infinity,
+        );
+        if (!probe) return err({ kind: "fold_misses", step: index });
+        lines.push(
+          ...probe.added.map((a) => ({ ...a, assignment: "F" as const })),
+        );
+      }
+      const marking = [...segmentsOf(current.value), ...lines];
+      const marked = buildCreasePattern(marking);
+      if (!marked.ok)
+        return err({ kind: "pattern", step: index, error: marked.error });
+      const placed = foldedTransforms(marked.value, sequence.anchor);
+      if (!placed) return err({ kind: "anchor_lost", step: index });
+      const region = curlRegion(marked.value, placed, step);
+      if (!region || !region.some(Boolean))
+        return err({ kind: "curl_tears", step: index });
+      const isNew = (from: Point2, to: Point2) =>
+        !current.value.edges.some((e) =>
+          onSegment(
+            { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
+            {
+              from: current.value.vertices[e.a]!,
+              to: current.value.vertices[e.b]!,
+              assignment: "F",
+            },
+          ),
+        );
+      const touching = (e: { a: number; b: number }) =>
+        marked.value.faces.some(
+          (face, f) => region[f] && face.includes(e.a) && face.includes(e.b),
+        );
+      const marks = marked.value.edges.flatMap((e): CreaseSegment[] => {
+        const [from, to] = [
+          marked.value.vertices[e.a]!,
+          marked.value.vertices[e.b]!,
+        ];
+        return e.assignment === "F" && isNew(from, to) && touching(e)
+          ? [{ from, to, assignment: "F" }]
+          : [];
+      });
+      added = marks;
+      const next = [...segments, ...marks];
+      // Flat lines split faces without moving them: the folded state, and so
+      // its proven layer order, is the one before; the fold rules still hold.
+      const built = buildCreasePattern(next);
+      if (!built.ok)
+        return err({ kind: "pattern", step: index, error: built.error });
+      const report = checkFoldRules(built.value);
+      result = report.flatFoldable
+        ? ok(built.value)
+        : err({
+            kind: "not_flat_foldable",
+            step: index,
+            pattern: built.value,
+            failures: report.failures,
+          });
+      if (result.ok) segments = next;
     } else {
       const current = buildCreasePattern(segments);
       if (!current.ok)
